@@ -16,7 +16,12 @@ export const dynamic = "force-dynamic";
  * CORS surface either. When the access token has expired it silently spends the
  * refresh token and replays the request once.
  */
-async function forward(req: NextRequest, path: string[], accessToken: string | null) {
+async function forward(
+  req: NextRequest,
+  path: string[],
+  accessToken: string | null,
+  body: ArrayBuffer | undefined,
+) {
   const url = new URL(`${API_URL}/api/${path.join("/")}`);
   url.search = req.nextUrl.search;
 
@@ -26,13 +31,10 @@ async function forward(req: NextRequest, path: string[], accessToken: string | n
   headers.set("accept", "application/json");
   if (accessToken) headers.set("authorization", `Bearer ${accessToken}`);
 
-  const hasBody = !["GET", "HEAD"].includes(req.method);
-  const body = hasBody ? await req.arrayBuffer() : undefined;
-
   return fetch(url, {
     method: req.method,
     headers,
-    body: hasBody && body && body.byteLength > 0 ? body : undefined,
+    body: body && body.byteLength > 0 ? body : undefined,
     cache: "no-store",
     redirect: "manual",
   });
@@ -59,9 +61,15 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
   const accessToken = req.cookies.get(ACCESS_COOKIE)?.value ?? null;
   const refreshToken = req.cookies.get(REFRESH_COOKIE)?.value ?? null;
 
+  // Buffer the body once. A Request body is a stream that can only be read a
+  // single time, and the 401 path below replays the request — reading it again
+  // there would throw, losing the write and stranding the caller with a refresh
+  // token that has already been rotated away.
+  const body = ["GET", "HEAD"].includes(req.method) ? undefined : await req.arrayBuffer();
+
   let upstream: Response;
   try {
-    upstream = await forward(req, path, accessToken);
+    upstream = await forward(req, path, accessToken, body);
   } catch {
     return NextResponse.json(
       {
@@ -76,11 +84,14 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
   }
 
   let rotated: Awaited<ReturnType<typeof refresh>> = null;
+  let refreshFailed = false;
 
   if (upstream.status === 401 && refreshToken && path.join("/") !== "auth/refresh") {
     rotated = await refresh(refreshToken);
     if (rotated) {
-      upstream = await forward(req, path, rotated.access_token);
+      upstream = await forward(req, path, rotated.access_token, body);
+    } else {
+      refreshFailed = true;
     }
   }
 
@@ -96,8 +107,11 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
     res.cookies.set(ACCESS_COOKIE, rotated.access_token, cookieOptions(rotated.expires_in));
     res.cookies.set(REFRESH_COOKIE, rotated.refresh_token, cookieOptions(rotated.refresh_expires_in));
   }
-  // A refresh token that no longer works should not keep being retried.
-  if (upstream.status === 401 && !rotated && refreshToken) {
+  // Clear the session only when the refresh itself failed — that is the one
+  // signal that the refresh token is genuinely spent. A 401 that we never got
+  // to retry (or one from a request racing a sibling that already rotated the
+  // token) must not log the user out.
+  if (upstream.status === 401 && refreshFailed) {
     res.cookies.delete(ACCESS_COOKIE);
     res.cookies.delete(REFRESH_COOKIE);
   }

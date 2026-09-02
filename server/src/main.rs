@@ -15,6 +15,7 @@ mod tests;
 
 use std::sync::Arc;
 
+use axum::http::HeaderValue;
 use axum::routing::get;
 use axum::{Json, Router};
 use serde_json::json;
@@ -88,13 +89,25 @@ async fn main() -> anyhow::Result<()> {
 }
 
 pub(crate) fn api_router(state: AppState) -> Router {
-    let cors = if state.config.cors_origins.is_empty() {
+    // Honour the allowlist rather than inverting it. The previous form built an
+    // `allow_origin(Any)` layer on the *non-empty* branch, so configuring
+    // CORS_ORIGINS to lock the API down did the exact opposite.
+    let origins: Vec<HeaderValue> = state
+        .config
+        .cors_origins
+        .iter()
+        .filter_map(|o| o.parse::<HeaderValue>().ok())
+        .collect();
+
+    let cors = if origins.is_empty() {
+        // Nothing configured: the browser reaches this API only through the
+        // Next.js proxy, which is same-origin, so no CORS grant is needed.
         CorsLayer::new()
     } else {
         CorsLayer::new()
             .allow_methods(Any)
             .allow_headers(Any)
-            .allow_origin(Any)
+            .allow_origin(origins)
     };
 
     let api = Router::new()

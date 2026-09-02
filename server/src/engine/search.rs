@@ -263,25 +263,38 @@ pub async fn reindex_org(
         if !def.global_search || def.read_only {
             continue;
         }
-        let page = crate::engine::repo::list(
-            pool,
-            registry,
-            def,
-            ctx,
-            &crate::engine::repo::ListQuery {
-                page: 1,
-                per_page: 500,
-                search: None,
-                sort: None,
-                filters: Vec::new(),
-            },
-        )
-        .await?;
+        // Page through everything. Indexing only the first page after having
+        // just deleted the entity's rows would leave most of the workspace
+        // permanently unsearchable, while reporting success.
+        let mut page_no = 1;
+        loop {
+            let page = crate::engine::repo::list(
+                pool,
+                registry,
+                def,
+                ctx,
+                &crate::engine::repo::ListQuery {
+                    page: page_no,
+                    per_page: 200,
+                    search: None,
+                    sort: None,
+                    filters: Vec::new(),
+                },
+            )
+            .await?;
 
-        for record in &page.data {
-            let Some(id) = record.get("id").and_then(|v| v.as_str()) else { continue };
-            index_record(pool, def, &ctx.org_id, id, record).await?;
-            count += 1;
+            if page.data.is_empty() {
+                break;
+            }
+            for record in &page.data {
+                let Some(id) = record.get("id").and_then(|v| v.as_str()) else { continue };
+                index_record(pool, def, &ctx.org_id, id, record).await?;
+                count += 1;
+            }
+            if page_no >= page.total_pages {
+                break;
+            }
+            page_no += 1;
         }
     }
 

@@ -289,7 +289,7 @@ async fn ar_aging(state: &AppState, ctx: &Ctx) -> AppResult<(Vec<Value>, Vec<Val
                 SUM(i.balance_due) AS total,
                 COUNT(*) AS invoices
            FROM invoices i
-           JOIN accounts a ON a.id = i.account_id
+           JOIN accounts a ON a.id = i.account_id AND a.org_id = i.org_id
           WHERE i.org_id = ?2
             AND i.deleted_at IS NULL
             AND i.status NOT IN ('paid', 'void', 'draft')
@@ -361,7 +361,7 @@ async fn top_customers(
                 SUM(i.balance_due) AS outstanding,
                 COUNT(*) AS invoices
            FROM invoices i
-           JOIN accounts a ON a.id = i.account_id
+           JOIN accounts a ON a.id = i.account_id AND a.org_id = i.org_id
           WHERE i.org_id = ? AND i.deleted_at IS NULL AND i.status <> 'void'
             AND i.invoice_date BETWEEN ? AND ?
           GROUP BY a.id, a.name
@@ -432,7 +432,8 @@ async fn sales_by_owner(state: &AppState, ctx: &Ctx) -> AppResult<(Vec<Value>, V
                 SUM(CASE WHEN d.stage = 'closed_lost' THEN d.amount ELSE 0 END) AS lost,
                 COUNT(*) AS deals
            FROM deals d
-           LEFT JOIN users u ON u.id = d.owner_id
+           LEFT JOIN memberships m ON m.user_id = d.owner_id AND m.org_id = d.org_id AND m.deleted_at IS NULL
+           LEFT JOIN users u ON u.id = m.user_id
           WHERE d.org_id = ? AND d.deleted_at IS NULL
           GROUP BY d.owner_id, u.name
           ORDER BY won DESC, open_value DESC",
@@ -528,8 +529,8 @@ async fn project_time(
                 SUM(t.hours) AS total_hours,
                 COUNT(*) AS entries
            FROM timesheets t
-           JOIN projects p ON p.id = t.project_id
-           LEFT JOIN accounts a ON a.id = p.account_id
+           JOIN projects p ON p.id = t.project_id AND p.org_id = t.org_id
+           LEFT JOIN accounts a ON a.id = p.account_id AND a.org_id = p.org_id
           WHERE t.org_id = ? AND t.deleted_at IS NULL
             AND t.work_date BETWEEN ? AND ?
           GROUP BY p.id, p.name, a.name
@@ -602,7 +603,8 @@ async fn ticket_load(state: &AppState, ctx: &Ctx) -> AppResult<(Vec<Value>, Vec<
                 SUM(CASE WHEN t.status NOT IN ('resolved','closed') THEN 1 ELSE 0 END) AS open_total,
                 SUM(CASE WHEN t.status IN ('resolved','closed') THEN 1 ELSE 0 END) AS resolved
            FROM tickets t
-           LEFT JOIN users u ON u.id = t.assignee_id
+           LEFT JOIN memberships m ON m.user_id = t.assignee_id AND m.org_id = t.org_id AND m.deleted_at IS NULL
+           LEFT JOIN users u ON u.id = m.user_id
           WHERE t.org_id = ? AND t.deleted_at IS NULL
           GROUP BY t.assignee_id, u.name
           ORDER BY open_total DESC",

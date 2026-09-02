@@ -40,6 +40,14 @@ fn now() -> String {
     Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
 }
 
+/// Only called after `validate` has confirmed the entity exists.
+fn def_for<'a>(state: &'a AppState, entity: &str) -> &'a EntityDef {
+    state
+        .registry
+        .get(entity)
+        .expect("validate() rejects an unknown entity before this point")
+}
+
 // ----------------------------------------------------------------- shapes ---
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -638,6 +646,48 @@ fn yes() -> bool {
     true
 }
 
+/// Rewrite a rule's condition values into the scale records are stored in.
+///
+/// The browser sends what a person typed — `1000` meaning a thousand pounds —
+/// while the record holds `100000` minor units. Comparing those directly makes
+/// every money threshold fire at a hundredth of its intended value, so the
+/// conversion happens once, here, on the way in. Applied to approval rules too,
+/// which share this evaluator.
+pub fn normalise_conditions(def: &EntityDef, conditions: &Value) -> Value {
+    let Some(obj) = conditions.as_object() else {
+        return conditions.clone();
+    };
+    let mut out = obj.clone();
+    let Some(rules) = obj.get("rules").and_then(|r| r.as_array()) else {
+        return Value::Object(out);
+    };
+
+    let scaled: Vec<Value> = rules
+        .iter()
+        .map(|r| {
+            let mut rule = r.as_object().cloned().unwrap_or_default();
+            let name = rule.get("field").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+            let op = rule.get("op").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+            if matches!(op.as_str(), "is_empty" | "is_not_empty" | "changed") {
+                return Value::Object(rule);
+            }
+            if let Some(field) = def.field(&name) {
+                if matches!(field.kind, FieldKind::Money | FieldKind::Percent | FieldKind::Quantity) {
+                    if let Some(v) = rule.get("value") {
+                        if let Ok(Bind::Int(n)) = to_bind(field, v) {
+                            rule.insert("value".into(), Value::Number(n.into()));
+                        }
+                    }
+                }
+            }
+            Value::Object(rule)
+        })
+        .collect();
+
+    out.insert("rules".into(), Value::Array(scaled));
+    Value::Object(out)
+}
+
 /// Reject a rule that names anything the registry does not have, at save time.
 /// A rule that silently never matches is worse than one that will not save.
 fn validate(state: &AppState, body: &AutomationBody) -> AppResult<()> {
@@ -669,6 +719,15 @@ fn validate(state: &AppState, body: &AutomationBody) -> AppResult<()> {
                     format!("conditions.{i}.op"),
                     format!("`{}` is not a comparison", rule.op),
                 ));
+            }
+            // A condition is compared against the stored value, which for
+            // money, percent and quantity is a scaled integer. What the admin
+            // typed is a plain decimal, so it has to be scaled the same way —
+            // otherwise "amount >= 1000" quietly means ten pounds.
+            if !matches!(rule.op.as_str(), "is_empty" | "is_not_empty" | "changed") {
+                if let Err(e) = to_bind(field, &rule.value) {
+                    errors.push(FieldError::new(format!("conditions.{i}.value"), e.message));
+                }
             }
             // A select condition comparing against a value outside the list can
             // never be true; say so now.
@@ -821,7 +880,7 @@ async fn create(
     .bind(&body.description)
     .bind(&body.entity)
     .bind(&body.trigger)
-    .bind(body.conditions.to_string())
+    .bind(normalise_conditions(def_for(&state, &body.entity), &body.conditions).to_string())
     .bind(body.actions.to_string())
     .bind(i64::from(body.is_active))
     .bind(&ts)
@@ -905,7 +964,7 @@ async fn update(
     .bind(&merged.description)
     .bind(&merged.entity)
     .bind(&merged.trigger)
-    .bind(merged.conditions.to_string())
+    .bind(normalise_conditions(def_for(&state, &merged.entity), &merged.conditions).to_string())
     .bind(merged.actions.to_string())
     .bind(i64::from(merged.is_active))
     .bind(now())

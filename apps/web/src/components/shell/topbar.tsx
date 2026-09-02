@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { LogOut, Moon, Search, Sun } from "lucide-react";
 
 import { Avatar } from "@/components/ui/avatar";
@@ -18,6 +19,7 @@ import type { Session } from "@/lib/meta";
 
 export function Topbar({ session, onSearch }: { session?: Session; onSearch: () => void }) {
   const router = useRouter();
+  const qc = useQueryClient();
   const [dark, setDark] = React.useState(false);
 
   React.useEffect(() => {
@@ -37,6 +39,11 @@ export function Topbar({ session, onSearch }: { session?: Session; onSearch: () 
 
   const signOut = async () => {
     await fetch("/api/session/logout", { method: "POST" }).catch(() => undefined);
+    // Empty the cache, not just invalidate it. `router.replace` does not remount
+    // the provider, so on a shared machine the next person to sign in would
+    // otherwise hydrate the shell from this user's cached records — including
+    // modules their own role cannot reach, since `["meta"]` never refetches.
+    qc.clear();
     router.replace("/login");
     router.refresh();
   };

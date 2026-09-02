@@ -45,12 +45,6 @@ pub fn before_create(entity: &str, body: &mut Map<String, Value>) {
     }
 }
 
-/// Column on a line-item entity that points at its parent document, or `None`
-/// for entities that stand on their own.
-pub fn parent_key(entity: &str) -> Option<&'static str> {
-    document_link(entity).map(|l| l.foreign_key)
-}
-
 pub fn needs_number(entity: &str) -> Option<&'static str> {
     NUMBERED.iter().find(|(e, _)| *e == entity).map(|(_, k)| *k)
 }
@@ -174,8 +168,28 @@ pub async fn after_write(pool: &SqlitePool, ctx: &Ctx, entity: &str, id: &str) -
     }
 }
 
-/// A deleted line still needs its parent retotalled, so callers capture the
-/// parent id before the delete and pass it here.
+/// Column whose value a delete has to re-derive from, for every entity that
+/// contributes to a stored total somewhere else.
+///
+/// Line items feed a document's totals, payments feed an invoice's balance,
+/// stock moves feed an item's level, timesheets feed a task's hours. Deleting
+/// any of them has to recompute the thing it fed, or the parent keeps reporting
+/// a number that no longer has rows behind it.
+pub fn parent_key(entity: &str) -> Option<&'static str> {
+    if let Some(link) = document_link(entity) {
+        return Some(link.foreign_key);
+    }
+    match entity {
+        "books.payments" => Some("invoice_id"),
+        "inventory.stock_moves" => Some("item_id"),
+        "projects.timesheets" => Some("task_id"),
+        "projects.tasks" => Some("project_id"),
+        _ => None,
+    }
+}
+
+/// A deleted row still needs whatever it fed into recomputed, so callers
+/// capture the parent id before the delete and pass it here.
 pub async fn after_child_delete(
     pool: &SqlitePool,
     ctx: &Ctx,
@@ -183,9 +197,15 @@ pub async fn after_child_delete(
     parent_id: &str,
 ) -> AppResult<()> {
     if let Some(link) = document_link(entity) {
-        recalc_document(pool, ctx, &link, parent_id).await?;
+        return recalc_document(pool, ctx, &link, parent_id).await;
     }
-    Ok(())
+    match entity {
+        "books.payments" => recalc_invoice_balance(pool, ctx, parent_id).await,
+        "inventory.stock_moves" => recalc_item_stock(pool, ctx, parent_id).await,
+        "projects.timesheets" => recalc_task_hours(pool, ctx, parent_id).await,
+        "projects.tasks" => recalc_project_progress(pool, ctx, parent_id).await,
+        _ => Ok(()),
+    }
 }
 
 async fn scalar<T>(pool: &SqlitePool, sql: &'static str, org: &str, id: &str) -> AppResult<Option<T>>
@@ -322,12 +342,16 @@ pub async fn recalc_invoice_balance(pool: &SqlitePool, ctx: &Ctx, invoice_id: &s
 
     let today = Utc::now().format("%Y-%m-%d").to_string();
     let new_status = match status.as_str() {
+        // Decisions, not derived state.
         "draft" | "void" => status.clone(),
         _ if total > 0 && paid >= total => "paid".to_string(),
         _ if paid > 0 => "partial".to_string(),
         _ if !due_date.is_empty() && due_date < today => "overdue".to_string(),
-        // Falling out of overdue (the due date moved) returns it to `sent`.
-        "overdue" => "sent".to_string(),
+        // Nothing paid and not yet due. Every payment-derived state has to be
+        // able to fall back out of itself, or reversing a payment would leave
+        // the invoice reporting `paid` with the full amount outstanding —
+        // money written off silently, and invisible to the ageing report.
+        "paid" | "partial" | "overdue" => "sent".to_string(),
         other => other.to_string(),
     };
 
@@ -390,7 +414,7 @@ async fn recalc_deal(pool: &SqlitePool, ctx: &Ctx, deal_id: &str) -> AppResult<(
 
 /// Stock on hand is the sum of the movement ledger, so the number on the item
 /// can always be explained by the rows behind it.
-async fn recalc_item_stock(pool: &SqlitePool, ctx: &Ctx, item_id: &str) -> AppResult<()> {
+pub async fn recalc_item_stock(pool: &SqlitePool, ctx: &Ctx, item_id: &str) -> AppResult<()> {
     sqlx::query(
         "UPDATE items SET stock_on_hand = (
              SELECT COALESCE(SUM(quantity), 0) FROM stock_moves
@@ -406,7 +430,7 @@ async fn recalc_item_stock(pool: &SqlitePool, ctx: &Ctx, item_id: &str) -> AppRe
     Ok(())
 }
 
-async fn recalc_task_hours(pool: &SqlitePool, ctx: &Ctx, task_id: &str) -> AppResult<()> {
+pub async fn recalc_task_hours(pool: &SqlitePool, ctx: &Ctx, task_id: &str) -> AppResult<()> {
     sqlx::query(
         "UPDATE project_tasks SET logged_hours = (
              SELECT COALESCE(SUM(hours), 0) FROM timesheets
@@ -430,7 +454,11 @@ async fn recalc_project_progress_from_task(pool: &SqlitePool, ctx: &Ctx, task_id
     else {
         return Ok(());
     };
+    recalc_project_progress(pool, ctx, &project_id).await
+}
 
+/// Progress is the share of a project's tasks that are done.
+pub async fn recalc_project_progress(pool: &SqlitePool, ctx: &Ctx, project_id: &str) -> AppResult<()> {
     let row = sqlx::query(
         "SELECT COUNT(*) AS total, SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) AS done
          FROM project_tasks WHERE org_id = ? AND project_id = ? AND deleted_at IS NULL",

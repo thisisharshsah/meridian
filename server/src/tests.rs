@@ -1809,7 +1809,7 @@ async fn expense_awaiting_approval(app: &Router, state: &AppState, owner: &str, 
                 "name": "Large expense sign-off",
                 "entity": "books.expenses",
                 "conditions": {"match":"all","rules":[
-                    {"field":"amount","op":"gte","value":100000},
+                    {"field":"amount","op":"gte","value":"1000"},
                     {"field":"status","op":"eq","value":"submitted"}
                 ]},
                 "approver_role_id": finance,
@@ -2090,6 +2090,261 @@ async fn a_webhook_cannot_be_pointed_at_the_servers_own_network() {
     )
     .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[tokio::test]
+async fn a_money_threshold_means_what_the_person_typed() {
+    let (app, _state) = test_app().await;
+    let owner = new_org(&app, "scale").await;
+
+    // "1000" in the form means a thousand pounds. Records store money in minor
+    // units, so a rule comparing the typed decimal against the stored integer
+    // straight would fire at ten pounds — a hundredfold error, silently.
+    let (status, rule) = call(
+        &app,
+        send(
+            "POST",
+            "/api/settings/automations",
+            &owner,
+            json!({
+                "name": "Flag big deals",
+                "entity": "crm.deals",
+                "trigger": "on_create",
+                "conditions": {"match":"all","rules":[{"field":"amount","op":"gte","value":"1000"}]},
+                "actions": [{"type":"set_field","field":"next_step","value":"Review with finance"}]
+            }),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{rule}");
+
+    // Comfortably under the threshold, and above it only if the scale is wrong.
+    let (_, small) = call(
+        &app,
+        send("POST", "/api/e/crm.deals", &owner, json!({ "name": "Small", "amount": "50.00" })),
+    )
+    .await;
+    assert_eq!(
+        small["next_step"], Value::Null,
+        "a £50 deal must not trip a £1000 threshold"
+    );
+
+    let (_, big) = call(
+        &app,
+        send("POST", "/api/e/crm.deals", &owner, json!({ "name": "Big", "amount": "2500.00" })),
+    )
+    .await;
+    assert_eq!(big["next_step"], json!("Review with finance"));
+
+    // Exactly on the boundary counts, since the operator is "at least".
+    let (_, exact) = call(
+        &app,
+        send("POST", "/api/e/crm.deals", &owner, json!({ "name": "Exact", "amount": "1000.00" })),
+    )
+    .await;
+    assert_eq!(exact["next_step"], json!("Review with finance"));
+
+    // The same input box feeds set_field, which was already scaled — the two
+    // must agree about what "1000" means.
+    let (_, action_rule) = call(
+        &app,
+        send(
+            "POST",
+            "/api/settings/automations",
+            &owner,
+            json!({
+                "name": "Set an amount",
+                "entity": "crm.deals",
+                "trigger": "on_update",
+                "conditions": {"match":"all","rules":[{"field":"next_step","op":"eq","value":"bump"}]},
+                "actions": [{"type":"set_field","field":"amount","value":"1000"}]
+            }),
+        ),
+    )
+    .await;
+    assert_eq!(action_rule["id"].is_string(), true);
+
+    let (_, target) = call(
+        &app,
+        send("POST", "/api/e/crm.deals", &owner, json!({ "name": "Target", "amount": "1.00" })),
+    )
+    .await;
+    let id = target["id"].as_str().unwrap();
+    let (_, bumped) = call(
+        &app,
+        send("PATCH", &format!("/api/e/crm.deals/{id}"), &owner, json!({ "next_step": "bump" })),
+    )
+    .await;
+    assert_eq!(bumped["amount"], json!(100_000), "an action writing 1000 means £1000 too");
+}
+
+#[tokio::test]
+async fn deleting_a_payment_puts_the_money_back_on_the_invoice() {
+    let (app, _state) = test_app().await;
+    let owner = new_org(&app, "unpay").await;
+
+    let (_, acct) = call(
+        &app,
+        send("POST", "/api/e/crm.accounts", &owner, json!({ "name": "Payer" })),
+    )
+    .await;
+    let (_, inv) = call(
+        &app,
+        send(
+            "POST",
+            "/api/e/books.invoices",
+            &owner,
+            json!({
+                "account_id": acct["id"], "status": "sent",
+                "invoice_date": "2026-01-01", "due_date": "2099-01-01"
+            }),
+        ),
+    )
+    .await;
+    let inv_id = inv["id"].as_str().unwrap().to_string();
+    call(
+        &app,
+        send(
+            "POST",
+            "/api/e/books.invoice_items",
+            &owner,
+            json!({ "invoice_id": inv_id, "description": "Work", "quantity": "1", "unit_price": "324.00" }),
+        ),
+    )
+    .await;
+
+    let (_, payment) = call(
+        &app,
+        send(
+            "POST",
+            "/api/e/books.payments",
+            &owner,
+            json!({
+                "invoice_id": inv_id, "account_id": acct["id"],
+                "amount": "324.00", "payment_date": "2026-01-05", "method": "cash"
+            }),
+        ),
+    )
+    .await;
+    let (_, paid) = call(&app, get(&format!("/api/e/books.invoices/{inv_id}"), &owner)).await;
+    assert_eq!(paid["status"], json!("paid"));
+    assert_eq!(paid["balance_due"], json!(0));
+
+    // Reversing the payment must put the debt back. Leaving the invoice on
+    // "paid" would write off real money and hide it from the ageing report.
+    let payment_id = payment["id"].as_str().unwrap();
+    let (status, _) = call(
+        &app,
+        send("DELETE", &format!("/api/e/books.payments/{payment_id}"), &owner, Value::Null),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (_, after) = call(&app, get(&format!("/api/e/books.invoices/{inv_id}"), &owner)).await;
+    assert_eq!(after["amount_paid"], json!(0), "the payment is gone");
+    assert_eq!(after["balance_due"], json!(32_400), "so the balance is owed again");
+    assert_ne!(after["status"], json!("paid"));
+
+    // And it is a receivable again.
+    let (_, aging) = call(&app, get("/api/reports/ar_aging", &owner)).await;
+    assert_eq!(aging["totals"]["total"], json!(32_400));
+}
+
+#[tokio::test]
+async fn deleting_a_stock_move_corrects_the_level() {
+    let (app, _state) = test_app().await;
+    let owner = new_org(&app, "unstock").await;
+
+    let (_, item) = call(
+        &app,
+        send("POST", "/api/e/inventory.items", &owner, json!({ "name": "Widget", "sku": "W-1" })),
+    )
+    .await;
+    let item_id = item["id"].as_str().unwrap().to_string();
+
+    let (_, move_in) = call(
+        &app,
+        send(
+            "POST",
+            "/api/e/inventory.stock_moves",
+            &owner,
+            json!({ "item_id": item_id, "move_type": "purchase", "quantity": "100", "moved_on": "2026-01-01" }),
+        ),
+    )
+    .await;
+    let (_, item) = call(&app, get(&format!("/api/e/inventory.items/{item_id}"), &owner)).await;
+    assert_eq!(item["stock_on_hand"], json!(100_000));
+
+    let move_id = move_in["id"].as_str().unwrap();
+    call(
+        &app,
+        send("DELETE", &format!("/api/e/inventory.stock_moves/{move_id}"), &owner, Value::Null),
+    )
+    .await;
+
+    let (_, item) = call(&app, get(&format!("/api/e/inventory.items/{item_id}"), &owner)).await;
+    assert_eq!(
+        item["stock_on_hand"], json!(0),
+        "the level must stay explainable by the movements behind it"
+    );
+}
+
+#[tokio::test]
+async fn reports_do_not_join_across_tenants() {
+    let (app, _state) = test_app().await;
+    let alice = new_org(&app, "join-alice").await;
+    let bob = new_org(&app, "join-bob").await;
+
+    // Alice's account, whose name must never surface in Bob's reports.
+    let (_, secret) = call(
+        &app,
+        send("POST", "/api/e/crm.accounts", &alice, json!({ "name": "ALICE SECRET CUSTOMER" })),
+    )
+    .await;
+    let secret_id = secret["id"].as_str().unwrap().to_string();
+
+    // Bob points one of his own invoices at it. The engine scopes reads by
+    // org_id, so Bob cannot *read* that account — but a report joining
+    // `accounts` without an org predicate would still pull its name through.
+    let (status, inv) = call(
+        &app,
+        send(
+            "POST",
+            "/api/e/books.invoices",
+            &bob,
+            json!({
+                "account_id": secret_id, "status": "sent",
+                "invoice_date": "2026-01-01", "due_date": "2020-01-01"
+            }),
+        ),
+    )
+    .await;
+
+    if status == StatusCode::OK {
+        call(
+            &app,
+            send(
+                "POST",
+                "/api/e/books.invoice_items",
+                &bob,
+                json!({ "invoice_id": inv["id"], "description": "x", "quantity": "1", "unit_price": "500.00" }),
+            ),
+        )
+        .await;
+
+        for report in ["ar_aging", "top_customers"] {
+            let (_, out) = call(&app, get(&format!("/api/reports/{report}"), &bob)).await;
+            let body = out.to_string();
+            assert!(
+                !body.contains("ALICE SECRET CUSTOMER"),
+                "{report} leaked another tenant's account name: {body}"
+            );
+        }
+    }
+
+    // Alice's own report is unaffected.
+    let (_, mine) = call(&app, get("/api/reports/ar_aging", &alice)).await;
+    assert_eq!(mine["rows"].as_array().map(|r| r.len()), Some(0));
 }
 
 #[tokio::test]

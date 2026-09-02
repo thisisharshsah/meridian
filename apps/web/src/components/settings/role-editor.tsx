@@ -472,6 +472,19 @@ function compact(granted: Set<string>, catalog: Catalog | undefined): string[] {
 
   const out = new Set<string>();
 
+  // The matrix only renders entities the catalogue lists, so anything granted
+  // outside it — an embedded entity, or a grant written before a module was
+  // hidden — has to be carried through untouched. Rebuilding purely from the
+  // visible rows would silently revoke it on the next save.
+  const visible = new Set(catalog.modules.flatMap((m) => m.entities.map((e) => e.key)));
+  const visibleModules = new Set(catalog.modules.map((m) => m.key));
+  for (const g of granted) {
+    const target = g
+      .replace(/\.(view|create|edit|delete)$/, "")
+      .replace(/\.\*$/, "");
+    if (!visible.has(target) && !visibleModules.has(target)) out.add(g);
+  }
+
   for (const m of catalog.modules) {
     const entityStates = m.entities.map((e) => ({
       key: e.key,

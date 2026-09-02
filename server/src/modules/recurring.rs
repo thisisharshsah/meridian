@@ -220,7 +220,13 @@ async fn generate(
     .fetch_optional(&state.pool)
     .await?;
     if let Some(row) = already {
-        return Ok(row.try_get::<String, _>("id").unwrap_or_default());
+        // The invoice for this date exists, so a previous attempt got at least
+        // that far before being interrupted. Finish the job rather than
+        // returning early: leaving `next_run_date` where it is would make the
+        // profile re-bill this same date forever and never move on.
+        let invoice_id: String = row.try_get("id").unwrap_or_default();
+        advance_schedule(state, ctx, profile_id, billing_date, &invoice_id, &profile).await?;
+        return Ok(invoice_id);
     }
 
     let text = |c: &str| profile.try_get::<Option<String>, _>(c).ok().flatten();
@@ -327,6 +333,28 @@ async fn generate(
         }
     }
 
+    advance_schedule(state, ctx, profile_id, billing_date, &invoice_id, &profile).await?;
+
+    Ok(invoice_id)
+}
+
+/// Move a profile on to its next period after an invoice has been written.
+///
+/// Split out so the retry path can reach it too: a job interrupted after the
+/// invoice committed but before this ran would otherwise find the invoice
+/// already there on its next attempt, return early, and leave `next_run_date`
+/// pinned to a date that can never produce another invoice — the profile stops
+/// billing silently and forever.
+async fn advance_schedule(
+    state: &AppState,
+    ctx: &Ctx,
+    profile_id: &str,
+    billing_date: &str,
+    invoice_id: &str,
+    profile: &sqlx::sqlite::SqliteRow,
+) -> AppResult<()> {
+    let text = |c: &str| profile.try_get::<Option<String>, _>(c).ok().flatten();
+
     // The next date is the n-th occurrence from the schedule's start, not an
     // offset from the invoice just written, so a late sweep cannot shift the
     // schedule and a clamped month cannot drift it.
@@ -338,7 +366,21 @@ async fn generate(
         .unwrap_or_else(|| {
             NaiveDate::parse_from_str(billing_date, "%Y-%m-%d").unwrap_or_else(|_| today())
         });
-    let next = occurrence_date(start, &frequency, every_n, occurrences);
+
+    // Anchoring to the start date is right, but an edited start date can put
+    // the n-th occurrence behind the date just billed, which would either
+    // re-bill the same period or skip several. Never move the schedule
+    // backwards past what has already been invoiced.
+    let billed = NaiveDate::parse_from_str(billing_date, "%Y-%m-%d").unwrap_or_else(|_| today());
+    let mut next = occurrence_date(start, &frequency, every_n, occurrences);
+    if next <= billed {
+        let mut k = occurrences;
+        while next <= billed && k < occurrences + 1200 {
+            k += 1;
+            next = occurrence_date(start, &frequency, every_n, k);
+        }
+    }
+
     let max: Option<i64> = profile.try_get::<Option<i64>, _>("max_occurrences").ok().flatten();
     let end: Option<String> = text("end_date");
 
@@ -353,7 +395,7 @@ async fn generate(
     )
     .bind(next.to_string())
     .bind(occurrences)
-    .bind(&invoice_id)
+    .bind(invoice_id)
     .bind(now())
     .bind(if finished { "ended" } else { "active" })
     .bind(now())
@@ -380,7 +422,7 @@ async fn generate(
         sweep_one(&state.pool, &ctx.org_id, profile_id).await?;
     }
 
-    Ok(invoice_id)
+    Ok(())
 }
 
 fn minor(v: i64) -> Value {

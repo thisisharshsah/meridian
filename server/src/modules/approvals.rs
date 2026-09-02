@@ -22,7 +22,7 @@ use crate::common::audit;
 use crate::common::ids::new_id;
 use crate::engine::value::{bind_one, to_bind};
 use crate::error::{AppError, AppResult, FieldError};
-use crate::modules::automations::{evaluate, Conditions, OPS};
+use crate::modules::automations::{evaluate, normalise_conditions, Conditions, OPS};
 use crate::state::AppState;
 
 pub fn router() -> Router<AppState> {
@@ -38,6 +38,14 @@ pub fn router() -> Router<AppState> {
 
 fn now() -> String {
     Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
+}
+
+/// Only called after `validate` has confirmed the entity exists.
+fn def_for<'a>(state: &'a AppState, entity: &str) -> &'a crate::engine::schema::EntityDef {
+    state
+        .registry
+        .get(entity)
+        .expect("validate() rejects an unknown entity before this point")
 }
 
 // ---------------------------------------------------------------- raising ---
@@ -459,6 +467,15 @@ fn validate(state: &AppState, body: &RuleBody) -> AppResult<()> {
                     format!("`{}` is not a comparison", rule.op),
                 ));
             }
+            // Scaled kinds must be coercible, or the threshold means something
+            // other than what was typed. See automations::normalise_conditions.
+            if !matches!(rule.op.as_str(), "is_empty" | "is_not_empty" | "changed") {
+                if let Some(f) = def.field(&rule.field) {
+                    if let Err(e) = to_bind(f, &rule.value) {
+                        errors.push(FieldError::new(format!("conditions.{i}.value"), e.message));
+                    }
+                }
+            }
         }
     } else {
         errors.push(FieldError::new("conditions", "Conditions are malformed"));
@@ -550,7 +567,7 @@ async fn create_rule(
     .bind(body.name.trim())
     .bind(&body.description)
     .bind(&body.entity)
-    .bind(body.conditions.to_string())
+    .bind(normalise_conditions(def_for(&state, &body.entity), &body.conditions).to_string())
     .bind(&body.approver_role_id)
     .bind(&body.approver_user_id)
     .bind(&body.decision_field)
@@ -635,7 +652,7 @@ async fn update_rule(
     .bind(merged.name.trim())
     .bind(&merged.description)
     .bind(&merged.entity)
-    .bind(merged.conditions.to_string())
+    .bind(normalise_conditions(def_for(&state, &merged.entity), &merged.conditions).to_string())
     .bind(&merged.approver_role_id)
     .bind(&merged.approver_user_id)
     .bind(&merged.decision_field)
