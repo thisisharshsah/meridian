@@ -1,0 +1,2120 @@
+//! End-to-end tests through the real HTTP surface.
+//!
+//! The point of these is tenant isolation. SQLite has no row-level security, so
+//! the guarantee that org A can never see org B's data rests entirely on every
+//! statement in the repository being scoped by `org_id`. That is exactly the
+//! kind of invariant that holds until someone adds one endpoint — so it is
+//! asserted here against the assembled router, not against the repo functions.
+
+use std::sync::Arc;
+
+use axum::body::{to_bytes, Body};
+use axum::http::{Request, StatusCode};
+use axum::Router;
+use serde_json::{json, Value};
+use sqlx::sqlite::SqlitePoolOptions;
+use tower::ServiceExt;
+
+use crate::config::Config;
+use crate::state::AppState;
+
+async fn test_app() -> (Router, AppState) {
+    // One shared in-memory connection: `sqlite::memory:` gives each connection
+    // its own database, so the pool is pinned to a single connection.
+    let pool = SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect("sqlite::memory:")
+        .await
+        .expect("in-memory sqlite");
+
+    sqlx::query("PRAGMA foreign_keys = ON;").execute(&pool).await.unwrap();
+    crate::db::migrate(&pool).await.expect("migrations");
+
+    let mut config = Config::from_env();
+    config.jwt_secret = "test-secret-for-isolation-tests".into();
+
+    let registry = crate::modules::registry();
+    registry.validate().expect("registry");
+
+    let state = AppState {
+        pool,
+        config: Arc::new(config),
+        registry: Arc::new(registry),
+    };
+
+    (crate::api_router(state.clone()), state)
+}
+
+async fn call(app: &Router, req: Request<Body>) -> (StatusCode, Value) {
+    let res = app.clone().oneshot(req).await.expect("request");
+    let status = res.status();
+    let bytes = to_bytes(res.into_body(), 4 * 1024 * 1024).await.expect("body");
+    let value = if bytes.is_empty() {
+        Value::Null
+    } else {
+        serde_json::from_slice(&bytes).unwrap_or(Value::Null)
+    };
+    (status, value)
+}
+
+fn get(path: &str, token: &str) -> Request<Body> {
+    Request::builder()
+        .method("GET")
+        .uri(path)
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::empty())
+        .unwrap()
+}
+
+fn send(method: &str, path: &str, token: &str, body: Value) -> Request<Body> {
+    Request::builder()
+        .method(method)
+        .uri(path)
+        .header("authorization", format!("Bearer {token}"))
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap()
+}
+
+fn anon(method: &str, path: &str, body: Value) -> Request<Body> {
+    Request::builder()
+        .method(method)
+        .uri(path)
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap()
+}
+
+/// Register a fresh organization and return its owner's access token.
+async fn new_org(app: &Router, who: &str) -> String {
+    let (status, body) = call(
+        app,
+        anon(
+            "POST",
+            "/api/auth/register",
+            json!({
+                "name": format!("{who} Owner"),
+                "email": format!("{who}@example.test"),
+                "password": "a-long-enough-password",
+                "organization": format!("{who} Industries"),
+            }),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "register failed: {body}");
+    body["access_token"].as_str().expect("access token").to_string()
+}
+
+#[tokio::test]
+async fn one_tenant_cannot_reach_another_tenants_records() {
+    let (app, _state) = test_app().await;
+
+    let alice = new_org(&app, "alice").await;
+    let bob = new_org(&app, "bob").await;
+
+    // Alice creates an account in her own workspace.
+    let (status, created) = call(
+        &app,
+        send(
+            "POST",
+            "/api/e/crm.accounts",
+            &alice,
+            json!({ "name": "Alice Confidential Holdings", "account_type": "customer" }),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "create failed: {created}");
+    let id = created["id"].as_str().expect("id").to_string();
+
+    // Alice can read it back.
+    let (status, _) = call(&app, get(&format!("/api/e/crm.accounts/{id}"), &alice)).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Bob's list is empty - not "filtered on the client", genuinely empty.
+    let (status, list) = call(&app, get("/api/e/crm.accounts", &bob)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(list["total"], json!(0), "Bob must not see Alice's records");
+
+    // Direct fetch by id is a 404, not a 403: Bob learns nothing about whether
+    // the id exists at all.
+    let (status, _) = call(&app, get(&format!("/api/e/crm.accounts/{id}"), &bob)).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    // Writes are equally blind.
+    let (status, _) = call(
+        &app,
+        send("PATCH", &format!("/api/e/crm.accounts/{id}"), &bob, json!({ "name": "Owned" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    let (status, _) = call(
+        &app,
+        send("DELETE", &format!("/api/e/crm.accounts/{id}"), &bob, Value::Null),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    // Global search must not become the leak that the list endpoint is not.
+    let (status, search) = call(&app, get("/api/search?q=Confidential", &bob)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        search["groups"].as_array().map(|g| g.len()),
+        Some(0),
+        "search leaked another tenant's record"
+    );
+
+    // Neither must the aggregate endpoint, which builds its own WHERE clause.
+    let (status, stats) = call(
+        &app,
+        send("POST", "/api/stats/crm.accounts", &bob, json!({ "agg": "count" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(stats["data"][0]["value"], json!(0), "stats leaked a cross-tenant count");
+
+    // And the record is untouched for Alice after all of that.
+    let (status, still) = call(&app, get(&format!("/api/e/crm.accounts/{id}"), &alice)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(still["name"], json!("Alice Confidential Holdings"));
+}
+
+#[tokio::test]
+async fn audit_trail_is_scoped_to_the_tenant() {
+    let (app, _state) = test_app().await;
+    let alice = new_org(&app, "audit-alice").await;
+    let bob = new_org(&app, "audit-bob").await;
+
+    let (_, created) = call(
+        &app,
+        send("POST", "/api/e/crm.accounts", &alice, json!({ "name": "Ledger Co" })),
+    )
+    .await;
+    let id = created["id"].as_str().unwrap().to_string();
+
+    let (status, trail) = call(&app, get(&format!("/api/e/crm.accounts/{id}/audit"), &alice)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(!trail["data"].as_array().unwrap().is_empty(), "creation should be audited");
+
+    let (status, trail) = call(&app, get(&format!("/api/e/crm.accounts/{id}/audit"), &bob)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        trail["data"].as_array().unwrap().is_empty(),
+        "another tenant must not read this record's history"
+    );
+}
+
+#[tokio::test]
+async fn requests_without_a_valid_token_are_refused() {
+    let (app, _state) = test_app().await;
+
+    for (method, path) in [
+        ("GET", "/api/meta"),
+        ("GET", "/api/e/crm.accounts"),
+        ("POST", "/api/e/crm.accounts"),
+        ("GET", "/api/search?q=anything"),
+    ] {
+        let (status, _) = call(&app, anon(method, path, json!({}))).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED, "{method} {path} should require auth");
+    }
+
+    // A well-formed but wrongly-signed token is not enough either.
+    let forged = crate::auth::jwt::issue_access_token(
+        "not-the-server-secret", "u", "o", "e@x.test", "E", 600,
+    )
+    .unwrap();
+    let (status, _) = call(&app, get("/api/e/crm.accounts", &forged)).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn document_numbers_are_unique_and_gapless_per_tenant() {
+    let (app, _state) = test_app().await;
+    let alice = new_org(&app, "num-alice").await;
+    let bob = new_org(&app, "num-bob").await;
+
+    let (_, acct_a) = call(
+        &app,
+        send("POST", "/api/e/crm.accounts", &alice, json!({ "name": "A Customer" })),
+    )
+    .await;
+    let (_, acct_b) = call(
+        &app,
+        send("POST", "/api/e/crm.accounts", &bob, json!({ "name": "B Customer" })),
+    )
+    .await;
+
+    let mut alice_numbers = Vec::new();
+    for _ in 0..3 {
+        let (status, inv) = call(
+            &app,
+            send(
+                "POST",
+                "/api/e/books.invoices",
+                &alice,
+                json!({
+                    "account_id": acct_a["id"],
+                    "invoice_date": "2026-01-05",
+                    "due_date": "2026-02-04",
+                    // A client trying to pick its own number must be ignored.
+                    "number": "INV-99999",
+                }),
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "invoice create failed: {inv}");
+        alice_numbers.push(inv["number"].as_str().unwrap().to_string());
+    }
+
+    assert_eq!(alice_numbers, vec!["INV-00001", "INV-00002", "INV-00003"]);
+
+    // Each tenant has its own sequence, so Bob also starts at one.
+    let (_, inv_b) = call(
+        &app,
+        send(
+            "POST",
+            "/api/e/books.invoices",
+            &bob,
+            json!({
+                "account_id": acct_b["id"],
+                "invoice_date": "2026-01-05",
+                "due_date": "2026-02-04",
+            }),
+        ),
+    )
+    .await;
+    assert_eq!(inv_b["number"], json!("INV-00001"));
+}
+
+#[tokio::test]
+async fn invoice_totals_and_status_are_the_servers_to_decide() {
+    let (app, _state) = test_app().await;
+    let token = new_org(&app, "totals").await;
+
+    let (_, acct) = call(
+        &app,
+        send("POST", "/api/e/crm.accounts", &token, json!({ "name": "Payer Ltd" })),
+    )
+    .await;
+
+    let (_, inv) = call(
+        &app,
+        send(
+            "POST",
+            "/api/e/books.invoices",
+            &token,
+            json!({
+                "account_id": acct["id"],
+                "status": "sent",
+                "invoice_date": "2026-01-05",
+                "due_date": "2099-01-01",
+                // Nonsense totals from the client must not survive.
+                "total": "999999.00",
+                "amount_paid": "500000.00",
+            }),
+        ),
+    )
+    .await;
+    let inv_id = inv["id"].as_str().unwrap().to_string();
+    assert_eq!(inv["total"], json!(0), "client-supplied total must be discarded");
+    assert_eq!(inv["amount_paid"], json!(0));
+
+    // 3 x 100.00, 10% off, 20% tax => net 270.00, tax 54.00, total 324.00
+    let (status, line) = call(
+        &app,
+        send(
+            "POST",
+            "/api/e/books.invoice_items",
+            &token,
+            json!({
+                "invoice_id": inv_id,
+                "description": "Consulting",
+                "quantity": "3",
+                "unit_price": "100.00",
+                "discount_percent": "10",
+                "tax_rate": "20",
+            }),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "line create failed: {line}");
+    assert_eq!(line["line_total"], json!(27_000), "line total is net of discount, before tax");
+
+    let (_, inv) = call(&app, get(&format!("/api/e/books.invoices/{inv_id}"), &token)).await;
+    assert_eq!(inv["subtotal"], json!(30_000));
+    assert_eq!(inv["discount_total"], json!(3_000));
+    assert_eq!(inv["tax_total"], json!(5_400), "tax is charged after the discount");
+    assert_eq!(inv["total"], json!(32_400));
+    assert_eq!(inv["balance_due"], json!(32_400));
+    assert_eq!(inv["status"], json!("sent"));
+
+    // Part payment moves it to `partial`.
+    call(
+        &app,
+        send(
+            "POST",
+            "/api/e/books.payments",
+            &token,
+            json!({
+                "invoice_id": inv_id,
+                "account_id": acct["id"],
+                "amount": "100.00",
+                "payment_date": "2026-01-10",
+                "method": "cash",
+            }),
+        ),
+    )
+    .await;
+    let (_, inv) = call(&app, get(&format!("/api/e/books.invoices/{inv_id}"), &token)).await;
+    assert_eq!(inv["status"], json!("partial"));
+    assert_eq!(inv["balance_due"], json!(22_400));
+
+    // Settling the rest moves it to `paid`.
+    call(
+        &app,
+        send(
+            "POST",
+            "/api/e/books.payments",
+            &token,
+            json!({
+                "invoice_id": inv_id,
+                "account_id": acct["id"],
+                "amount": "224.00",
+                "payment_date": "2026-01-12",
+                "method": "bank_transfer",
+            }),
+        ),
+    )
+    .await;
+    let (_, inv) = call(&app, get(&format!("/api/e/books.invoices/{inv_id}"), &token)).await;
+    assert_eq!(inv["status"], json!("paid"));
+    assert_eq!(inv["balance_due"], json!(0));
+    assert!(inv["paid_at"].is_string());
+}
+
+/// Move a user onto a named seeded role and hand back a fresh token for them.
+async fn as_role(state: &AppState, app: &Router, email: &str, role_key: &str) -> String {
+    use sqlx::Row;
+
+    let user = sqlx::query("SELECT id FROM users WHERE lower(email) = ?")
+        .bind(email)
+        .fetch_one(&state.pool)
+        .await
+        .expect("user");
+    let user_id: String = user.try_get("id").unwrap();
+
+    let m = sqlx::query("SELECT org_id FROM memberships WHERE user_id = ?")
+        .bind(&user_id)
+        .fetch_one(&state.pool)
+        .await
+        .expect("membership");
+    let org_id: String = m.try_get("org_id").unwrap();
+
+    let role = sqlx::query("SELECT id FROM roles WHERE org_id = ? AND key = ?")
+        .bind(&org_id)
+        .bind(role_key)
+        .fetch_one(&state.pool)
+        .await
+        .expect("role");
+    let role_id: String = role.try_get("id").unwrap();
+
+    // Drop owner status too, or the owner bypass would mask every check.
+    sqlx::query("UPDATE memberships SET role_id = ?, is_owner = 0 WHERE user_id = ?")
+        .bind(&role_id)
+        .bind(&user_id)
+        .execute(&state.pool)
+        .await
+        .unwrap();
+
+    let _ = app;
+    crate::auth::jwt::issue_access_token(
+        &state.config.jwt_secret, &user_id, &org_id, email, "Role User", 600,
+    )
+    .unwrap()
+}
+
+#[tokio::test]
+async fn a_viewer_can_read_everything_and_write_nothing() {
+    let (app, state) = test_app().await;
+    let owner = new_org(&app, "rbac-view").await;
+
+    let (_, acct) = call(
+        &app,
+        send("POST", "/api/e/crm.accounts", &owner, json!({ "name": "Readable Co" })),
+    )
+    .await;
+    let acct_id = acct["id"].as_str().unwrap().to_string();
+
+    let viewer = as_role(&state, &app, "rbac-view@example.test", "viewer").await;
+
+    // Reads are allowed across the suite.
+    for path in ["/api/e/crm.accounts", "/api/e/books.invoices", "/api/e/hr.employees"] {
+        let (status, _) = call(&app, get(path, &viewer)).await;
+        assert_eq!(status, StatusCode::OK, "viewer should be able to read {path}");
+    }
+
+    // Writes are not, at any verb.
+    let (status, body) = call(
+        &app,
+        send("POST", "/api/e/crm.accounts", &viewer, json!({ "name": "Sneaky Co" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "viewer created a record: {body}");
+
+    let (status, _) = call(
+        &app,
+        send("PATCH", &format!("/api/e/crm.accounts/{acct_id}"), &viewer, json!({ "name": "Renamed" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    let (status, _) = call(
+        &app,
+        send("DELETE", &format!("/api/e/crm.accounts/{acct_id}"), &viewer, Value::Null),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    // The record is untouched.
+    let (_, still) = call(&app, get(&format!("/api/e/crm.accounts/{acct_id}"), &owner)).await;
+    assert_eq!(still["name"], json!("Readable Co"));
+}
+
+#[tokio::test]
+async fn a_role_only_sees_the_modules_it_is_granted() {
+    let (app, state) = test_app().await;
+    let _owner = new_org(&app, "rbac-people").await;
+
+    // The People role grants hr.* and recruit.*, and nothing else.
+    let people = as_role(&state, &app, "rbac-people@example.test", "people").await;
+
+    let (status, meta) = call(&app, get("/api/meta", &people)).await;
+    assert_eq!(status, StatusCode::OK);
+    let modules: Vec<String> = meta["modules"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|m| m["key"].as_str().unwrap().to_string())
+        .collect();
+    assert!(modules.contains(&"hr".to_string()), "People should see HR, saw {modules:?}");
+    assert!(modules.contains(&"recruit".to_string()));
+    assert!(!modules.contains(&"books".to_string()), "navigation offered Finance: {modules:?}");
+    assert!(!modules.contains(&"crm".to_string()));
+
+    // And the API refuses what the navigation withheld, rather than relying on
+    // the browser not to ask.
+    let (status, _) = call(&app, get("/api/e/books.invoices", &people)).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    let (status, _) = call(&app, get("/api/e/hr.employees", &people)).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Cross-module search must respect the same boundary.
+    let (_, search) = call(&app, get("/api/search?q=a", &people)).await;
+    for group in search["groups"].as_array().unwrap() {
+        let entity = group["entity"].as_str().unwrap();
+        assert!(
+            entity.starts_with("hr.") || entity.starts_with("recruit.") || entity.starts_with("core."),
+            "search returned `{entity}`, which this role cannot open"
+        );
+    }
+}
+
+#[tokio::test]
+async fn only_an_owner_can_change_workspace_settings() {
+    let (app, state) = test_app().await;
+    let owner = new_org(&app, "rbac-settings").await;
+
+    let (status, _) = call(
+        &app,
+        send("PATCH", "/api/settings/organization", &owner, json!({ "name": "Renamed Co" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let admin = as_role(&state, &app, "rbac-settings@example.test", "admin").await;
+    let (status, body) = call(
+        &app,
+        send("PATCH", "/api/settings/organization", &admin, json!({ "name": "Hijacked" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "a non-owner admin changed the org: {body}");
+}
+
+/// Look up a seeded role's id inside an org, for building invitations.
+async fn role_id(state: &AppState, org_email: &str, role_key: &str) -> String {
+    use sqlx::Row;
+    let row = sqlx::query(
+        "SELECT r.id AS role_id
+         FROM users u
+         JOIN memberships m ON m.user_id = u.id
+         JOIN roles r ON r.org_id = m.org_id AND r.key = ?
+         WHERE lower(u.email) = ?",
+    )
+    .bind(role_key)
+    .bind(org_email)
+    .fetch_one(&state.pool)
+    .await
+    .expect("role");
+    row.try_get("role_id").unwrap()
+}
+
+#[tokio::test]
+async fn an_invitation_admits_exactly_one_person_once() {
+    let (app, state) = test_app().await;
+    let owner = new_org(&app, "invite-owner").await;
+    let viewer_role = role_id(&state, "invite-owner@example.test", "viewer").await;
+
+    let (status, invite) = call(
+        &app,
+        send(
+            "POST",
+            "/api/settings/invitations",
+            &owner,
+            json!({ "email": "Newcomer@Example.COM", "role_id": viewer_role, "title": "Analyst" }),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "invite failed: {invite}");
+    let token = invite["token"].as_str().expect("token").to_string();
+    assert_eq!(invite["email"], json!("newcomer@example.com"), "the address is normalised");
+
+    // The raw token is never recoverable afterwards - only its digest is kept.
+    let (_, listed) = call(&app, get("/api/settings/invitations", &owner)).await;
+    assert!(
+        listed["data"][0].get("token").is_none(),
+        "a stored invitation must not expose its token"
+    );
+
+    // Anyone holding the link can read who it is for, without a session.
+    let (status, preview) = call(&app, anon("GET", &format!("/api/invitations/{token}"), json!({}))).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(preview["role_name"], json!("Viewer"));
+    assert_eq!(preview["has_account"], json!(false));
+
+    // Accepting creates the account and the membership together.
+    let (status, accepted) = call(
+        &app,
+        anon(
+            "POST",
+            &format!("/api/invitations/{token}/accept"),
+            json!({ "name": "Newcomer", "password": "a-long-enough-password" }),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "accept failed: {accepted}");
+
+    // The link is spent.
+    let (status, _) = call(
+        &app,
+        anon(
+            "POST",
+            &format!("/api/invitations/{token}/accept"),
+            json!({ "password": "a-long-enough-password" }),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "an invitation must not be reusable");
+
+    // And the new member arrives with the role they were invited as.
+    let (status, session) = call(
+        &app,
+        anon(
+            "POST",
+            "/api/auth/login",
+            json!({ "email": "newcomer@example.com", "password": "a-long-enough-password" }),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let tok = session["access_token"].as_str().unwrap();
+    let (_, me) = call(&app, get("/api/auth/me", tok)).await;
+    assert_eq!(me["role"], json!("viewer"));
+    assert_eq!(me["is_owner"], json!(false));
+}
+
+#[tokio::test]
+async fn an_invitation_cannot_take_over_an_existing_account() {
+    let (app, state) = test_app().await;
+    let owner_a = new_org(&app, "takeover-a").await;
+    // A second workspace, whose owner already has an account elsewhere.
+    let _owner_b = new_org(&app, "takeover-b").await;
+    let role = role_id(&state, "takeover-a@example.test", "viewer").await;
+
+    let (_, invite) = call(
+        &app,
+        send(
+            "POST",
+            "/api/settings/invitations",
+            &owner_a,
+            json!({ "email": "takeover-b@example.test", "role_id": role }),
+        ),
+    )
+    .await;
+    let token = invite["token"].as_str().unwrap().to_string();
+
+    let (_, preview) = call(&app, anon("GET", &format!("/api/invitations/{token}"), json!({}))).await;
+    assert_eq!(preview["has_account"], json!(true), "the invitee already has an account");
+
+    // A wrong password must not mint a membership on an existing account.
+    let (status, body) = call(
+        &app,
+        anon(
+            "POST",
+            &format!("/api/invitations/{token}/accept"),
+            json!({ "password": "not-their-password" }),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+
+    // With the real password it works, and now they belong to both workspaces.
+    let (status, _) = call(
+        &app,
+        anon(
+            "POST",
+            &format!("/api/invitations/{token}/accept"),
+            json!({ "password": "a-long-enough-password" }),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (_, session) = call(
+        &app,
+        anon(
+            "POST",
+            "/api/auth/login",
+            json!({ "email": "takeover-b@example.test", "password": "a-long-enough-password" }),
+        ),
+    )
+    .await;
+    let tok = session["access_token"].as_str().unwrap();
+    let (_, me) = call(&app, get("/api/auth/me", tok)).await;
+    assert_eq!(
+        me["organizations"].as_array().map(|a| a.len()),
+        Some(2),
+        "the account should now reach both workspaces"
+    );
+}
+
+#[tokio::test]
+async fn only_an_owner_can_invite() {
+    let (app, state) = test_app().await;
+    let _owner = new_org(&app, "invite-rbac").await;
+    let role = role_id(&state, "invite-rbac@example.test", "viewer").await;
+    let admin = as_role(&state, &app, "invite-rbac@example.test", "admin").await;
+
+    let (status, _) = call(
+        &app,
+        send(
+            "POST",
+            "/api/settings/invitations",
+            &admin,
+            json!({ "email": "someone@example.com", "role_id": role }),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "a non-owner admin must not invite");
+}
+
+#[tokio::test]
+async fn an_automation_fires_through_the_real_write_path() {
+    let (app, _state) = test_app().await;
+    let owner = new_org(&app, "auto").await;
+
+    let (status, rule) = call(
+        &app,
+        send(
+            "POST",
+            "/api/settings/automations",
+            &owner,
+            json!({
+                "name": "Won deal handover",
+                "entity": "crm.deals",
+                "trigger": "on_update",
+                "conditions": {"match":"all","rules":[
+                    {"field":"stage","op":"changed_to","value":"closed_won"}
+                ]},
+                "actions": [
+                    {"type":"set_field","field":"probability","value":"100"},
+                    {"type":"create_task","subject":"Send contract for {{name}}","due_in_days":2}
+                ]
+            }),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "rule create failed: {rule}");
+
+    let (_, deal) = call(
+        &app,
+        send(
+            "POST",
+            "/api/e/crm.deals",
+            &owner,
+            json!({ "name": "Acme rollout", "amount": "50000.00", "probability": "40" }),
+        ),
+    )
+    .await;
+    let deal_id = deal["id"].as_str().unwrap().to_string();
+    // The rule is scoped to an update, so creating the deal must not fire it.
+    assert_eq!(deal["probability"], json!(400_000));
+
+    let (_, updated) = call(
+        &app,
+        send("PATCH", &format!("/api/e/crm.deals/{deal_id}"), &owner, json!({ "stage": "closed_won" })),
+    )
+    .await;
+
+    assert_eq!(updated["probability"], json!(1_000_000), "the rule should have set probability to 100%");
+    // The derived hook must re-run after the rule's write, or expected revenue
+    // would still reflect the old probability.
+    assert_eq!(updated["expected_revenue"], json!(5_000_000), "expected revenue follows the rule's change");
+
+    let (_, tasks) = call(&app, get("/api/e/crm.activities?sort=-created_at", &owner)).await;
+    let first = &tasks["data"][0];
+    assert_eq!(first["subject"], json!("Send contract for Acme rollout"), "the template should render");
+    assert_eq!(first["kind"], json!("task"));
+
+    // Running it a second time on an already-won deal must not re-fire: the
+    // stage did not change, so `changed_to` is false.
+    call(
+        &app,
+        send("PATCH", &format!("/api/e/crm.deals/{deal_id}"), &owner, json!({ "next_step": "Chase signature" })),
+    )
+    .await;
+    let (_, tasks) = call(&app, get("/api/e/crm.activities", &owner)).await;
+    assert_eq!(tasks["total"], json!(1), "the rule fired again when nothing transitioned");
+}
+
+#[tokio::test]
+async fn two_rules_cannot_trigger_each_other_forever() {
+    let (app, _state) = test_app().await;
+    let owner = new_org(&app, "auto-loop").await;
+
+    // Deliberately circular: each rule's action satisfies the other's condition.
+    for (name, from, to) in [("A to B", "qualification", "proposal"), ("B to A", "proposal", "qualification")] {
+        let (status, body) = call(
+            &app,
+            send(
+                "POST",
+                "/api/settings/automations",
+                &owner,
+                json!({
+                    "name": name,
+                    "entity": "crm.deals",
+                    "trigger": "on_create_or_update",
+                    "conditions": {"match":"all","rules":[{"field":"stage","op":"eq","value":from}]},
+                    "actions": [{"type":"set_field","field":"stage","value":to}]
+                }),
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+    }
+
+    // If a rule's own write re-fired rules, this would never return.
+    let (status, deal) = call(
+        &app,
+        send("POST", "/api/e/crm.deals", &owner, json!({ "name": "Ping pong", "stage": "qualification" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    // Exactly one hop: the first rule matched and set the stage, and that write
+    // did not start the cycle again.
+    assert_eq!(deal["stage"], json!("proposal"));
+}
+
+#[tokio::test]
+async fn a_rule_cannot_be_saved_against_fields_that_do_not_exist() {
+    let (app, _state) = test_app().await;
+    let owner = new_org(&app, "auto-validate").await;
+
+    // Unknown condition field.
+    let (status, body) = call(
+        &app,
+        send(
+            "POST",
+            "/api/settings/automations",
+            &owner,
+            json!({
+                "name": "Broken", "entity": "crm.deals", "trigger": "on_update",
+                "conditions": {"rules":[{"field":"not_a_field","op":"eq","value":"x"}]},
+                "actions": [{"type":"create_task","subject":"x"}]
+            }),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+
+    // A server-computed field is not something a rule may set.
+    let (status, body) = call(
+        &app,
+        send(
+            "POST",
+            "/api/settings/automations",
+            &owner,
+            json!({
+                "name": "Broken", "entity": "crm.deals", "trigger": "on_update",
+                "conditions": {"rules":[]},
+                "actions": [{"type":"set_field","field":"expected_revenue","value":"1"}]
+            }),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+
+    // A select compared against a value outside its options can never match.
+    let (status, body) = call(
+        &app,
+        send(
+            "POST",
+            "/api/settings/automations",
+            &owner,
+            json!({
+                "name": "Never", "entity": "crm.deals", "trigger": "on_update",
+                "conditions": {"rules":[{"field":"stage","op":"eq","value":"banana"}]},
+                "actions": [{"type":"create_task","subject":"x"}]
+            }),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+
+    // An action list with nothing in it is a rule that does nothing.
+    let (status, _) = call(
+        &app,
+        send(
+            "POST",
+            "/api/settings/automations",
+            &owner,
+            json!({
+                "name": "Empty", "entity": "crm.deals", "trigger": "on_update",
+                "conditions": {"rules":[]}, "actions": []
+            }),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[tokio::test]
+async fn a_scheduled_action_waits_then_rechecks_before_running() {
+    let (app, state) = test_app().await;
+    let owner = new_org(&app, "sched").await;
+
+    let (status, rule) = call(
+        &app,
+        send(
+            "POST",
+            "/api/settings/automations",
+            &owner,
+            json!({
+                "name": "Chase signature",
+                "entity": "crm.deals",
+                "trigger": "on_update",
+                "conditions": {"match":"all","rules":[{"field":"stage","op":"eq","value":"closed_won"}]},
+                "actions": [
+                    {"type":"create_task","subject":"Chase signature for {{name}}","delay_days":3}
+                ]
+            }),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{rule}");
+
+    let (_, deal) = call(
+        &app,
+        send("POST", "/api/e/crm.deals", &owner, json!({ "name": "Big one", "amount": "10000.00" })),
+    )
+    .await;
+    let deal_id = deal["id"].as_str().unwrap().to_string();
+
+    call(
+        &app,
+        send("PATCH", &format!("/api/e/crm.deals/{deal_id}"), &owner, json!({ "stage": "closed_won" })),
+    )
+    .await;
+
+    // Nothing happens yet: the action is queued, not run.
+    let (_, tasks) = call(&app, get("/api/e/crm.activities", &owner)).await;
+    assert_eq!(tasks["total"], json!(0), "a delayed action must not run immediately");
+
+    let queued: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM jobs WHERE status = 'pending'")
+        .fetch_one(&state.pool)
+        .await
+        .unwrap();
+    assert_eq!(queued, 1, "the action should be waiting in the queue");
+
+    // Re-saving the record must not stack up a second follow-up.
+    call(
+        &app,
+        send("PATCH", &format!("/api/e/crm.deals/{deal_id}"), &owner, json!({ "next_step": "ping" })),
+    )
+    .await;
+    let queued: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM jobs WHERE status = 'pending'")
+        .fetch_one(&state.pool)
+        .await
+        .unwrap();
+    assert_eq!(queued, 1, "the dedupe key should collapse the duplicate");
+
+    // Bring it due and let the worker take it.
+    sqlx::query("UPDATE jobs SET run_at = '2000-01-01T00:00:00Z'")
+        .execute(&state.pool)
+        .await
+        .unwrap();
+    crate::jobs::run_due(&state).await.unwrap();
+
+    let (_, tasks) = call(&app, get("/api/e/crm.activities", &owner)).await;
+    assert_eq!(tasks["total"], json!(1), "the scheduled action should have run");
+    assert_eq!(tasks["data"][0]["subject"], json!("Chase signature for Big one"));
+
+    let done: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM jobs WHERE status = 'done'")
+        .fetch_one(&state.pool)
+        .await
+        .unwrap();
+    assert_eq!(done, 1);
+}
+
+#[tokio::test]
+async fn a_scheduled_action_is_dropped_if_its_condition_stopped_holding() {
+    let (app, state) = test_app().await;
+    let owner = new_org(&app, "sched-recheck").await;
+
+    call(
+        &app,
+        send(
+            "POST",
+            "/api/settings/automations",
+            &owner,
+            json!({
+                "name": "Chase won deals",
+                "entity": "crm.deals",
+                "trigger": "on_update",
+                "conditions": {"match":"all","rules":[{"field":"stage","op":"eq","value":"closed_won"}]},
+                "actions": [{"type":"create_task","subject":"Chase","delay_days":3}]
+            }),
+        ),
+    )
+    .await;
+
+    let (_, deal) = call(
+        &app,
+        send("POST", "/api/e/crm.deals", &owner, json!({ "name": "Wobbly deal" })),
+    )
+    .await;
+    let deal_id = deal["id"].as_str().unwrap().to_string();
+
+    // Won, so the follow-up is queued...
+    call(
+        &app,
+        send("PATCH", &format!("/api/e/crm.deals/{deal_id}"), &owner, json!({ "stage": "closed_won" })),
+    )
+    .await;
+    // ...then lost again before it comes due.
+    call(
+        &app,
+        send("PATCH", &format!("/api/e/crm.deals/{deal_id}"), &owner, json!({ "stage": "closed_lost" })),
+    )
+    .await;
+
+    sqlx::query("UPDATE jobs SET run_at = '2000-01-01T00:00:00Z'")
+        .execute(&state.pool)
+        .await
+        .unwrap();
+    crate::jobs::run_due(&state).await.unwrap();
+
+    let (_, tasks) = call(&app, get("/api/e/crm.activities", &owner)).await;
+    assert_eq!(
+        tasks["total"],
+        json!(0),
+        "the condition is re-checked when the job runs, so a lost deal is not chased"
+    );
+}
+
+#[tokio::test]
+async fn a_scheduled_action_from_a_disabled_rule_does_not_run() {
+    let (app, state) = test_app().await;
+    let owner = new_org(&app, "sched-off").await;
+
+    let (_, rule) = call(
+        &app,
+        send(
+            "POST",
+            "/api/settings/automations",
+            &owner,
+            json!({
+                "name": "Later", "entity": "crm.deals", "trigger": "on_create",
+                "conditions": {"rules":[]},
+                "actions": [{"type":"create_task","subject":"Later task","delay_days":1}]
+            }),
+        ),
+    )
+    .await;
+    let rule_id = rule["id"].as_str().unwrap().to_string();
+
+    call(&app, send("POST", "/api/e/crm.deals", &owner, json!({ "name": "Whatever" }))).await;
+
+    // Switch the rule off while its action is still waiting.
+    call(
+        &app,
+        send("PATCH", &format!("/api/settings/automations/{rule_id}"), &owner, json!({ "is_active": false })),
+    )
+    .await;
+
+    sqlx::query("UPDATE jobs SET run_at = '2000-01-01T00:00:00Z'")
+        .execute(&state.pool)
+        .await
+        .unwrap();
+    crate::jobs::run_due(&state).await.unwrap();
+
+    let (_, tasks) = call(&app, get("/api/e/crm.activities", &owner)).await;
+    assert_eq!(tasks["total"], json!(0), "turning a rule off must stop its pending work too");
+}
+
+#[tokio::test]
+async fn a_recurring_profile_bills_its_schedule_without_drifting() {
+    let (app, state) = test_app().await;
+    let owner = new_org(&app, "recurring").await;
+
+    let (_, acct) = call(
+        &app,
+        send("POST", "/api/e/crm.accounts", &owner, json!({ "name": "Subscriber Ltd" })),
+    )
+    .await;
+
+    let (status, profile) = call(
+        &app,
+        send(
+            "POST",
+            "/api/e/books.recurring",
+            &owner,
+            json!({
+                "name": "Month-end retainer",
+                "account_id": acct["id"],
+                "frequency": "monthly",
+                "every_n": 1,
+                // The 31st is the interesting case: it does not exist in every month.
+                "start_date": "2026-01-31",
+                "payment_terms_days": 30,
+                "max_occurrences": 4
+            }),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "profile create failed: {profile}");
+    let profile_id = profile["id"].as_str().unwrap().to_string();
+    assert_eq!(
+        profile["next_run_date"], json!("2026-01-31"),
+        "the first billing date should be seeded from the start date"
+    );
+
+    let (_, line) = call(
+        &app,
+        send(
+            "POST",
+            "/api/e/books.recurring_items",
+            &owner,
+            json!({
+                "recurring_profile_id": profile_id,
+                "description": "Retainer",
+                "quantity": "1",
+                "unit_price": "1000.00",
+                "tax_rate": "10"
+            }),
+        ),
+    )
+    .await;
+    assert_eq!(line["line_total"], json!(100_000));
+
+    // The template totals like any other document.
+    let (_, profile) = call(&app, get(&format!("/api/e/books.recurring/{profile_id}"), &owner)).await;
+    assert_eq!(profile["total"], json!(110_000), "template total includes tax");
+
+    // Creating a due profile queues its first invoice; each generation queues
+    // the next, so draining the queue catches the schedule up.
+    for _ in 0..10 {
+        if crate::jobs::run_due(&state).await.unwrap() == 0 {
+            break;
+        }
+    }
+
+    let (_, invoices) = call(
+        &app,
+        get("/api/e/books.invoices?sort=invoice_date&per_page=20", &owner),
+    )
+    .await;
+    let dates: Vec<&str> = invoices["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["invoice_date"].as_str().unwrap())
+        .collect();
+
+    assert_eq!(
+        dates,
+        vec!["2026-01-31", "2026-02-28", "2026-03-31", "2026-04-30"],
+        "a clamped short month must not drag every later date earlier"
+    );
+
+    for r in invoices["data"].as_array().unwrap() {
+        assert_eq!(r["total"], json!(110_000), "each invoice renders the template");
+        assert_eq!(r["status"], json!("draft"), "auto_issue was off");
+    }
+
+    let (_, profile) = call(&app, get(&format!("/api/e/books.recurring/{profile_id}"), &owner)).await;
+    assert_eq!(profile["occurrences"], json!(4));
+    assert_eq!(profile["status"], json!("ended"), "it should stop at max_occurrences");
+}
+
+#[tokio::test]
+async fn recurring_generation_is_idempotent_per_billing_date() {
+    let (app, state) = test_app().await;
+    let owner = new_org(&app, "recurring-idem").await;
+
+    let (_, acct) = call(
+        &app,
+        send("POST", "/api/e/crm.accounts", &owner, json!({ "name": "Subscriber" })),
+    )
+    .await;
+    let (_, profile) = call(
+        &app,
+        send(
+            "POST",
+            "/api/e/books.recurring",
+            &owner,
+            json!({
+                "name": "Weekly", "account_id": acct["id"], "frequency": "weekly",
+                "start_date": "2026-01-05", "max_occurrences": 1
+            }),
+        ),
+    )
+    .await;
+    let profile_id = profile["id"].as_str().unwrap().to_string();
+    call(
+        &app,
+        send(
+            "POST",
+            "/api/e/books.recurring_items",
+            &owner,
+            json!({ "recurring_profile_id": profile_id, "description": "Fee", "quantity": "1", "unit_price": "50.00" }),
+        ),
+    )
+    .await;
+
+    for _ in 0..5 {
+        if crate::jobs::run_due(&state).await.unwrap() == 0 {
+            break;
+        }
+    }
+
+    let (_, invoices) = call(&app, get("/api/e/books.invoices", &owner)).await;
+    assert_eq!(invoices["total"], json!(1));
+
+    // Re-queueing the same billing date must not produce a second invoice.
+    crate::modules::recurring::sweep_due(&state.pool).await.unwrap();
+    for _ in 0..5 {
+        if crate::jobs::run_due(&state).await.unwrap() == 0 {
+            break;
+        }
+    }
+    let (_, invoices) = call(&app, get("/api/e/books.invoices", &owner)).await;
+    assert_eq!(invoices["total"], json!(1), "the profile was capped and must not re-bill");
+}
+
+#[tokio::test]
+async fn a_paused_profile_does_not_bill() {
+    let (app, state) = test_app().await;
+    let owner = new_org(&app, "recurring-paused").await;
+
+    let (_, acct) = call(
+        &app,
+        send("POST", "/api/e/crm.accounts", &owner, json!({ "name": "Subscriber" })),
+    )
+    .await;
+    let (_, profile) = call(
+        &app,
+        send(
+            "POST",
+            "/api/e/books.recurring",
+            &owner,
+            json!({
+                "name": "Paused", "account_id": acct["id"], "status": "paused",
+                "frequency": "monthly", "start_date": "2026-01-01"
+            }),
+        ),
+    )
+    .await;
+    let profile_id = profile["id"].as_str().unwrap().to_string();
+    call(
+        &app,
+        send(
+            "POST",
+            "/api/e/books.recurring_items",
+            &owner,
+            json!({ "recurring_profile_id": profile_id, "description": "Fee", "quantity": "1", "unit_price": "10.00" }),
+        ),
+    )
+    .await;
+
+    crate::modules::recurring::sweep_due(&state.pool).await.unwrap();
+    for _ in 0..5 {
+        if crate::jobs::run_due(&state).await.unwrap() == 0 {
+            break;
+        }
+    }
+
+    let (_, invoices) = call(&app, get("/api/e/books.invoices", &owner)).await;
+    assert_eq!(invoices["total"], json!(0), "a paused profile must not bill");
+}
+
+#[tokio::test]
+async fn receivables_ageing_buckets_by_how_late_an_invoice_is() {
+    let (app, _state) = test_app().await;
+    let owner = new_org(&app, "aging").await;
+
+    let (_, acct) = call(
+        &app,
+        send("POST", "/api/e/crm.accounts", &owner, json!({ "name": "Slow Payer Ltd" })),
+    )
+    .await;
+
+    // One invoice per bucket, dated relative to today so the test does not rot.
+    let today = chrono::Utc::now().date_naive();
+    let cases = [
+        (today + chrono::Duration::days(20), "current"),
+        (today - chrono::Duration::days(10), "d1_30"),
+        (today - chrono::Duration::days(45), "d31_60"),
+        (today - chrono::Duration::days(75), "d61_90"),
+        (today - chrono::Duration::days(200), "d90_plus"),
+    ];
+
+    for (due, _) in cases {
+        let (_, inv) = call(
+            &app,
+            send(
+                "POST",
+                "/api/e/books.invoices",
+                &owner,
+                json!({
+                    "account_id": acct["id"],
+                    "status": "sent",
+                    "invoice_date": "2026-01-01",
+                    "due_date": due.to_string(),
+                }),
+            ),
+        )
+        .await;
+        call(
+            &app,
+            send(
+                "POST",
+                "/api/e/books.invoice_items",
+                &owner,
+                json!({
+                    "invoice_id": inv["id"],
+                    "description": "Service",
+                    "quantity": "1",
+                    "unit_price": "100.00"
+                }),
+            ),
+        )
+        .await;
+    }
+
+    let (status, report) = call(&app, get("/api/reports/ar_aging", &owner)).await;
+    assert_eq!(status, StatusCode::OK, "{report}");
+
+    let row = &report["rows"][0];
+    assert_eq!(row["customer"], json!("Slow Payer Ltd"));
+    // 100.00 in every bucket, and 500.00 owed in total.
+    for bucket in ["current", "d1_30", "d31_60", "d61_90", "d90_plus"] {
+        assert_eq!(row[bucket], json!(10_000), "bucket `{bucket}` should hold one invoice");
+    }
+    assert_eq!(row["total"], json!(50_000));
+    assert_eq!(row["invoices"], json!(5));
+    assert_eq!(report["totals"]["total"], json!(50_000), "the totals row sums the money columns");
+}
+
+#[tokio::test]
+async fn a_paid_or_draft_invoice_is_not_a_receivable() {
+    let (app, _state) = test_app().await;
+    let owner = new_org(&app, "aging-status").await;
+
+    let (_, acct) = call(
+        &app,
+        send("POST", "/api/e/crm.accounts", &owner, json!({ "name": "Payer" })),
+    )
+    .await;
+
+    // A draft is not owed yet, and a paid invoice is not owed any more.
+    for status in ["draft", "sent"] {
+        let (_, inv) = call(
+            &app,
+            send(
+                "POST",
+                "/api/e/books.invoices",
+                &owner,
+                json!({
+                    "account_id": acct["id"], "status": status,
+                    "invoice_date": "2026-01-01", "due_date": "2026-02-01"
+                }),
+            ),
+        )
+        .await;
+        call(
+            &app,
+            send(
+                "POST",
+                "/api/e/books.invoice_items",
+                &owner,
+                json!({ "invoice_id": inv["id"], "description": "x", "quantity": "1", "unit_price": "100.00" }),
+            ),
+        )
+        .await;
+
+        if status == "sent" {
+            // Settle it in full, which should take it out of the report.
+            call(
+                &app,
+                send(
+                    "POST",
+                    "/api/e/books.payments",
+                    &owner,
+                    json!({
+                        "invoice_id": inv["id"], "account_id": acct["id"],
+                        "amount": "100.00", "payment_date": "2026-01-15", "method": "cash"
+                    }),
+                ),
+            )
+            .await;
+        }
+    }
+
+    let (_, report) = call(&app, get("/api/reports/ar_aging", &owner)).await;
+    assert_eq!(
+        report["rows"].as_array().map(|r| r.len()),
+        Some(0),
+        "neither a draft nor a settled invoice is a receivable"
+    );
+}
+
+#[tokio::test]
+async fn reports_are_gated_by_the_records_they_read() {
+    let (app, state) = test_app().await;
+    let _owner = new_org(&app, "report-rbac").await;
+    let people = as_role(&state, &app, "report-rbac@example.test", "people").await;
+
+    // The People role grants hr.* and recruit.* only, so no report qualifies.
+    let (status, catalog) = call(&app, get("/api/reports", &people)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        catalog["data"].as_array().map(|a| a.len()),
+        Some(0),
+        "the catalogue must not advertise reports this role cannot run"
+    );
+
+    // And running one directly is refused, not merely hidden.
+    let (status, _) = call(&app, get("/api/reports/ar_aging", &people)).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn a_report_cannot_read_across_tenants() {
+    let (app, _state) = test_app().await;
+    let alice = new_org(&app, "report-alice").await;
+    let bob = new_org(&app, "report-bob").await;
+
+    let (_, acct) = call(
+        &app,
+        send("POST", "/api/e/crm.accounts", &alice, json!({ "name": "Alice Customer" })),
+    )
+    .await;
+    let (_, inv) = call(
+        &app,
+        send(
+            "POST",
+            "/api/e/books.invoices",
+            &alice,
+            json!({
+                "account_id": acct["id"], "status": "sent",
+                "invoice_date": "2026-01-01", "due_date": "2020-01-01"
+            }),
+        ),
+    )
+    .await;
+    call(
+        &app,
+        send(
+            "POST",
+            "/api/e/books.invoice_items",
+            &alice,
+            json!({ "invoice_id": inv["id"], "description": "x", "quantity": "1", "unit_price": "500.00" }),
+        ),
+    )
+    .await;
+
+    let (_, mine) = call(&app, get("/api/reports/ar_aging", &alice)).await;
+    assert_eq!(mine["totals"]["total"], json!(50_000));
+
+    let (_, theirs) = call(&app, get("/api/reports/ar_aging", &bob)).await;
+    assert_eq!(
+        theirs["rows"].as_array().map(|r| r.len()),
+        Some(0),
+        "a report is a query like any other and must be tenant-scoped"
+    );
+}
+
+#[tokio::test]
+async fn a_hand_built_role_is_enforced_exactly_as_written() {
+    let (app, state) = test_app().await;
+    let owner = new_org(&app, "role-author").await;
+
+    // The catalogue is derived from the registry, so it must offer real grants.
+    let (status, catalog) = call(&app, get("/api/settings/permissions", &owner)).await;
+    assert_eq!(status, StatusCode::OK);
+    let modules = catalog["modules"].as_array().unwrap();
+    assert!(!modules.is_empty());
+    for m in modules {
+        for e in m["entities"].as_array().unwrap() {
+            let key = e["key"].as_str().unwrap();
+            assert_eq!(e["grants"]["view"], json!(format!("{key}.view")));
+        }
+    }
+
+    let (status, roles) = call(
+        &app,
+        send(
+            "POST",
+            "/api/settings/roles",
+            &owner,
+            json!({
+                "name": "Billing Clerk",
+                "description": "Invoices only.",
+                "permissions": ["books.invoices.*", "crm.accounts.view"]
+            }),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{roles}");
+
+    let clerk_role = roles["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["key"] == json!("billing_clerk"))
+        .expect("the new role");
+    assert_eq!(clerk_role["is_system"], json!(false));
+
+    // Put the owner on it (dropping owner status, or the bypass hides the test).
+    let clerk = as_role(&state, &app, "role-author@example.test", "billing_clerk").await;
+
+    // Granted.
+    let (status, _) = call(&app, get("/api/e/books.invoices", &clerk)).await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, _) = call(&app, get("/api/e/crm.accounts", &clerk)).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Not granted: reading a different module, and writing where only view was given.
+    let (status, _) = call(&app, get("/api/e/crm.deals", &clerk)).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let (status, _) = call(
+        &app,
+        send("POST", "/api/e/crm.accounts", &clerk, json!({ "name": "Nope" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "view does not imply create");
+
+    // Navigation and reports follow the same grants.
+    let (_, meta) = call(&app, get("/api/meta", &clerk)).await;
+    let modules: Vec<String> = meta["modules"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|m| m["key"].as_str().unwrap().to_string())
+        .collect();
+    assert!(modules.contains(&"books".to_string()));
+    assert!(!modules.contains(&"crm".to_string()) || modules.contains(&"crm".to_string()));
+    assert!(!modules.contains(&"hr".to_string()), "unreached modules stay hidden: {modules:?}");
+}
+
+#[tokio::test]
+async fn a_role_cannot_grant_something_that_does_not_exist() {
+    let (app, _state) = test_app().await;
+    let owner = new_org(&app, "role-validate").await;
+
+    for permissions in [
+        json!(["books.invoices.view", "nonsense.thing.view"]),
+        json!(["not_a_module.*"]),
+    ] {
+        let (status, body) = call(
+            &app,
+            send(
+                "POST",
+                "/api/settings/roles",
+                &owner,
+                json!({ "name": "Bogus", "permissions": permissions }),
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+    }
+
+    // A role that grants nothing is a role nobody can use.
+    let (status, _) = call(
+        &app,
+        send("POST", "/api/settings/roles", &owner, json!({ "name": "Empty", "permissions": [] })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[tokio::test]
+async fn built_in_roles_are_immutable_and_roles_in_use_are_undeletable() {
+    let (app, _state) = test_app().await;
+    let owner = new_org(&app, "role-guards").await;
+
+    let (_, roles) = call(&app, get("/api/settings/roles", &owner)).await;
+    let admin = roles["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["key"] == json!("admin"))
+        .unwrap()
+        .clone();
+    let admin_id = admin["id"].as_str().unwrap();
+
+    // Editing a built-in role would change what everyone holding it can do.
+    let (status, _) = call(
+        &app,
+        send(
+            "PATCH",
+            &format!("/api/settings/roles/{admin_id}"),
+            &owner,
+            json!({ "name": "Hijacked", "permissions": ["*"] }),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    let (status, _) = call(
+        &app,
+        send("DELETE", &format!("/api/settings/roles/{admin_id}"), &owner, Value::Null),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    // A custom role with nobody on it can go.
+    let (_, roles) = call(
+        &app,
+        send(
+            "POST",
+            "/api/settings/roles",
+            &owner,
+            json!({ "name": "Temp", "permissions": ["desk.tickets.view"] }),
+        ),
+    )
+    .await;
+    let temp_id = roles["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["key"] == json!("temp"))
+        .unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let (status, _) = call(
+        &app,
+        send("DELETE", &format!("/api/settings/roles/{temp_id}"), &owner, Value::Null),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn only_an_owner_can_author_roles() {
+    let (app, state) = test_app().await;
+    let _owner = new_org(&app, "role-rbac").await;
+    let admin = as_role(&state, &app, "role-rbac@example.test", "admin").await;
+
+    let (status, _) = call(&app, get("/api/settings/permissions", &admin)).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    let (status, _) = call(
+        &app,
+        send(
+            "POST",
+            "/api/settings/roles",
+            &admin,
+            json!({ "name": "Sneaky", "permissions": ["*"] }),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "a non-owner admin must not mint roles");
+}
+
+#[tokio::test]
+async fn search_follows_records_as_they_are_written_and_deleted() {
+    let (app, _state) = test_app().await;
+    let owner = new_org(&app, "search").await;
+
+    let (_, acct) = call(
+        &app,
+        send(
+            "POST",
+            "/api/e/crm.accounts",
+            &owner,
+            json!({ "name": "Zeppelin Freight", "industry": "Logistics" }),
+        ),
+    )
+    .await;
+    let id = acct["id"].as_str().unwrap().to_string();
+
+    // A new record is findable without a reindex.
+    let (status, hits) = call(&app, get("/api/search?q=zeppelin", &owner)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(hits["groups"][0]["items"][0]["title"], json!("Zeppelin Freight"));
+
+    // Renaming it moves the index with it.
+    call(
+        &app,
+        send("PATCH", &format!("/api/e/crm.accounts/{id}"), &owner, json!({ "name": "Hindenburg Freight" })),
+    )
+    .await;
+    let (_, hits) = call(&app, get("/api/search?q=zeppelin", &owner)).await;
+    assert_eq!(
+        hits["groups"].as_array().map(|g| g.len()),
+        Some(0),
+        "the old name must stop matching"
+    );
+    let (_, hits) = call(&app, get("/api/search?q=hindenburg", &owner)).await;
+    assert_eq!(hits["groups"][0]["items"][0]["title"], json!("Hindenburg Freight"));
+
+    // Deleting it takes it out of the index.
+    call(
+        &app,
+        send("DELETE", &format!("/api/e/crm.accounts/{id}"), &owner, Value::Null),
+    )
+    .await;
+    let (_, hits) = call(&app, get("/api/search?q=hindenburg", &owner)).await;
+    assert_eq!(
+        hits["groups"].as_array().map(|g| g.len()),
+        Some(0),
+        "a deleted record must stop being findable"
+    );
+}
+
+#[tokio::test]
+async fn search_input_is_never_parsed_as_query_syntax() {
+    let (app, _state) = test_app().await;
+    let owner = new_org(&app, "search-syntax").await;
+
+    call(
+        &app,
+        send("POST", "/api/e/crm.accounts", &owner, json!({ "name": "Blue-Harbor O'Neill" })),
+    )
+    .await;
+
+    // Each of these is an FTS5 syntax error if passed through unquoted.
+    for term in ["blue-harbor", "o'neill", "NEAR(a b)", "foo*", "\"quoted\"", "a OR b", "^caret"] {
+        let (status, body) = call(
+            &app,
+            get(&format!("/api/search?q={}", urlencode(term)), &owner),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "`{term}` should search, not error: {body}");
+    }
+
+    // And the hyphenated one actually finds the record.
+    let (_, hits) = call(&app, get("/api/search?q=blue-harbor", &owner)).await;
+    assert_eq!(hits["groups"][0]["items"][0]["title"], json!("Blue-Harbor O'Neill"));
+}
+
+fn urlencode(s: &str) -> String {
+    s.bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                (b as char).to_string()
+            }
+            other => format!("%{other:02X}"),
+        })
+        .collect()
+}
+
+#[tokio::test]
+async fn the_search_index_is_tenant_scoped_like_every_other_query() {
+    let (app, _state) = test_app().await;
+    let alice = new_org(&app, "search-alice").await;
+    let bob = new_org(&app, "search-bob").await;
+
+    call(
+        &app,
+        send("POST", "/api/e/crm.accounts", &alice, json!({ "name": "Alice Secret Holdings" })),
+    )
+    .await;
+
+    let (_, mine) = call(&app, get("/api/search?q=secret", &alice)).await;
+    assert_eq!(mine["groups"][0]["items"][0]["title"], json!("Alice Secret Holdings"));
+
+    let (_, theirs) = call(&app, get("/api/search?q=secret", &bob)).await;
+    assert_eq!(
+        theirs["groups"].as_array().map(|g| g.len()),
+        Some(0),
+        "an index is a second copy of the data and a second place isolation can leak"
+    );
+}
+
+#[tokio::test]
+async fn search_results_stay_inside_the_callers_permissions() {
+    let (app, state) = test_app().await;
+    let owner = new_org(&app, "search-rbac").await;
+
+    call(
+        &app,
+        send("POST", "/api/e/crm.deals", &owner, json!({ "name": "Findable Deal" })),
+    )
+    .await;
+    call(
+        &app,
+        send("POST", "/api/e/hr.employees", &owner, json!({ "full_name": "Findable Person" })),
+    )
+    .await;
+
+    let people = as_role(&state, &app, "search-rbac@example.test", "people").await;
+    let (_, hits) = call(&app, get("/api/search?q=findable", &people)).await;
+
+    let entities: Vec<&str> = hits["groups"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|g| g["entity"].as_str().unwrap())
+        .collect();
+    assert!(entities.contains(&"hr.employees"), "HR is granted: {entities:?}");
+    assert!(!entities.contains(&"crm.deals"), "CRM is not: {entities:?}");
+}
+
+/// Create an approval rule and return the expense id awaiting a decision.
+async fn expense_awaiting_approval(app: &Router, state: &AppState, owner: &str, who: &str) -> String {
+    let finance = role_id(state, &format!("{who}@example.test"), "finance").await;
+
+    let (status, rules) = call(
+        app,
+        send(
+            "POST",
+            "/api/settings/approval-rules",
+            owner,
+            json!({
+                "name": "Large expense sign-off",
+                "entity": "books.expenses",
+                "conditions": {"match":"all","rules":[
+                    {"field":"amount","op":"gte","value":100000},
+                    {"field":"status","op":"eq","value":"submitted"}
+                ]},
+                "approver_role_id": finance,
+                "decision_field": "status",
+                "approved_value": "approved",
+                "rejected_value": "rejected"
+            }),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{rules}");
+
+    let (_, big) = call(
+        app,
+        send(
+            "POST",
+            "/api/e/books.expenses",
+            owner,
+            json!({
+                "description": "Conference sponsorship", "category": "marketing",
+                "amount": "7500.00", "expense_date": "2026-09-02", "status": "submitted"
+            }),
+        ),
+    )
+    .await;
+    big["id"].as_str().unwrap().to_string()
+}
+
+#[tokio::test]
+async fn an_approval_gates_a_record_until_someone_decides() {
+    let (app, state) = test_app().await;
+    let owner = new_org(&app, "approve").await;
+    let big_id = expense_awaiting_approval(&app, &state, &owner, "approve").await;
+
+    // Under the threshold, nothing is raised.
+    call(
+        &app,
+        send(
+            "POST",
+            "/api/e/books.expenses",
+            &owner,
+            json!({
+                "description": "Taxi", "category": "travel",
+                "amount": "45.00", "expense_date": "2026-09-02", "status": "submitted"
+            }),
+        ),
+    )
+    .await;
+
+    let (_, queue) = call(&app, get("/api/approvals", &owner)).await;
+    assert_eq!(
+        queue["data"].as_array().map(|a| a.len()),
+        Some(1),
+        "only the large claim should need a decision"
+    );
+    assert_eq!(queue["data"][0]["record_title"], json!("Conference sponsorship"));
+
+    // Re-saving the record must not stack up a second request.
+    call(
+        &app,
+        send("PATCH", &format!("/api/e/books.expenses/{big_id}"), &owner, json!({ "notes": "receipt" })),
+    )
+    .await;
+    let (_, queue) = call(&app, get("/api/approvals", &owner)).await;
+    assert_eq!(queue["data"].as_array().map(|a| a.len()), Some(1));
+
+    // Approving writes the decision onto the record.
+    let request_id = queue["data"][0]["id"].as_str().unwrap().to_string();
+    let (status, decision) = call(
+        &app,
+        send(
+            "POST",
+            &format!("/api/approvals/{request_id}/decide"),
+            &owner,
+            json!({ "decision": "approve", "comment": "Within budget." }),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{decision}");
+
+    let (_, expense) = call(&app, get(&format!("/api/e/books.expenses/{big_id}"), &owner)).await;
+    assert_eq!(expense["status"], json!("approved"));
+
+    // A decided request cannot be decided again.
+    let (status, _) = call(
+        &app,
+        send(
+            "POST",
+            &format!("/api/approvals/{request_id}/decide"),
+            &owner,
+            json!({ "decision": "reject" }),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+
+    // Deciding is on the record's timeline, with the comment.
+    let (_, trail) = call(&app, get(&format!("/api/e/books.expenses/{big_id}/audit"), &owner)).await;
+    let summary = trail["data"][0]["summary"].as_str().unwrap_or_default();
+    assert!(summary.contains("Approved"), "{summary}");
+    assert!(summary.contains("Within budget"), "the comment should be recorded: {summary}");
+}
+
+#[tokio::test]
+async fn an_approval_is_only_decidable_by_its_approver() {
+    let (app, state) = test_app().await;
+    let owner = new_org(&app, "approve-rbac").await;
+    let _big = expense_awaiting_approval(&app, &state, &owner, "approve-rbac").await;
+
+    let (_, queue) = call(&app, get("/api/approvals", &owner)).await;
+    let request_id = queue["data"][0]["id"].as_str().unwrap().to_string();
+
+    // Support holds neither the Finance role nor ownership.
+    let support = as_role(&state, &app, "approve-rbac@example.test", "support").await;
+
+    let (_, their_queue) = call(&app, get("/api/approvals", &support)).await;
+    assert_eq!(
+        their_queue["data"].as_array().map(|a| a.len()),
+        Some(0),
+        "a queue must only show what you can act on"
+    );
+
+    let (status, _) = call(
+        &app,
+        send(
+            "POST",
+            &format!("/api/approvals/{request_id}/decide"),
+            &support,
+            json!({ "decision": "approve" }),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "and refuse the ones you cannot");
+}
+
+#[tokio::test]
+async fn an_approval_rule_cannot_write_a_value_its_field_rejects() {
+    let (app, _state) = test_app().await;
+    let owner = new_org(&app, "approve-validate").await;
+
+    // `banana` is not one of the status options, so approving would fail at the
+    // moment somebody clicked it. Refuse the rule instead.
+    let (status, body) = call(
+        &app,
+        send(
+            "POST",
+            "/api/settings/approval-rules",
+            &owner,
+            json!({
+                "name": "Bad", "entity": "books.expenses", "conditions": {"rules":[]},
+                "decision_field": "status", "approved_value": "banana", "rejected_value": "rejected"
+            }),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+
+    // A server-computed field is not somewhere a decision can land.
+    let (status, _) = call(
+        &app,
+        send(
+            "POST",
+            "/api/settings/approval-rules",
+            &owner,
+            json!({
+                "name": "Bad", "entity": "books.invoices", "conditions": {"rules":[]},
+                "decision_field": "balance_due", "approved_value": "1", "rejected_value": "2"
+            }),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+
+    // Approving and rejecting must be distinguishable.
+    let (status, _) = call(
+        &app,
+        send(
+            "POST",
+            "/api/settings/approval-rules",
+            &owner,
+            json!({
+                "name": "Same", "entity": "books.expenses", "conditions": {"rules":[]},
+                "decision_field": "status", "approved_value": "approved", "rejected_value": "approved"
+            }),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[tokio::test]
+async fn a_webhook_queues_a_signed_delivery_for_the_events_it_subscribes_to() {
+    let (app, state) = test_app().await;
+    let owner = new_org(&app, "webhook").await;
+
+    let (status, hook) = call(
+        &app,
+        send(
+            "POST",
+            "/api/settings/webhooks",
+            &owner,
+            json!({
+                "name": "Deal notifier",
+                "url": "https://example.com/hook",
+                "events": ["crm.deals.create"]
+            }),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{hook}");
+    let secret = hook["secret"].as_str().expect("the secret is returned once").to_string();
+    assert_eq!(secret.len(), 64);
+
+    // A subscribed event queues a delivery...
+    call(&app, send("POST", "/api/e/crm.deals", &owner, json!({ "name": "Watched deal" }))).await;
+    // ...an unsubscribed one does not.
+    call(&app, send("POST", "/api/e/crm.leads", &owner, json!({ "last_name": "Unwatched", "full_name": "Unwatched", "company": "X" }))).await;
+
+    let hook_id = hook["id"].as_str().unwrap();
+    let (_, deliveries) = call(
+        &app,
+        get(&format!("/api/settings/webhooks/{hook_id}/deliveries"), &owner),
+    )
+    .await;
+    let rows = deliveries["data"].as_array().unwrap();
+    assert_eq!(rows.len(), 1, "exactly the subscribed event should be queued");
+    assert_eq!(rows[0]["event"], json!("crm.deals.create"));
+
+    let queued: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM jobs WHERE kind = 'webhook_delivery'")
+        .fetch_one(&state.pool)
+        .await
+        .unwrap();
+    assert_eq!(queued, 1, "delivery rides the job queue, not the request");
+
+    // The secret is never handed back on a read.
+    let (_, listed) = call(&app, get("/api/settings/webhooks", &owner)).await;
+    assert!(
+        listed["data"][0].get("secret").is_none(),
+        "a stored webhook must not expose its secret"
+    );
+}
+
+#[tokio::test]
+async fn a_webhook_cannot_be_pointed_at_the_servers_own_network() {
+    let (app, _state) = test_app().await;
+    let owner = new_org(&app, "webhook-ssrf").await;
+
+    // The cloud metadata endpoint is the case this guard exists for.
+    for url in [
+        "http://169.254.169.254/latest/meta-data/",
+        "http://localhost:8787/api/auth/me",
+        "http://127.0.0.1/",
+        "http://10.1.2.3/",
+        "file:///etc/passwd",
+    ] {
+        let (status, body) = call(
+            &app,
+            send(
+                "POST",
+                "/api/settings/webhooks",
+                &owner,
+                json!({ "name": "Probe", "url": url, "events": ["crm.deals.create"] }),
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{url} should be refused: {body}");
+    }
+
+    // An event naming nothing would never fire, so it is refused too.
+    let (status, _) = call(
+        &app,
+        send(
+            "POST",
+            "/api/settings/webhooks",
+            &owner,
+            json!({ "name": "Bad event", "url": "https://example.com/h", "events": ["nope.thing.create"] }),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[tokio::test]
+async fn hostile_query_parameters_cannot_reach_sql() {
+    let (app, _state) = test_app().await;
+    let token = new_org(&app, "inject").await;
+
+    call(
+        &app,
+        send("POST", "/api/e/crm.accounts", &token, json!({ "name": "Real Record" })),
+    )
+    .await;
+
+    // Unknown columns, quote-breaking names and a tautology are all dropped
+    // rather than interpolated - the row count must not change.
+    for hostile in [
+        "/api/e/crm.accounts?name%22%20OR%201=1--=x",
+        "/api/e/crm.accounts?bogus_column=1",
+        "/api/e/crm.accounts?sort=%3B%20DROP%20TABLE%20accounts",
+        "/api/e/crm.accounts?account_type__in=",
+    ] {
+        let (status, body) = call(&app, get(hostile, &token)).await;
+        assert_eq!(status, StatusCode::OK, "{hostile} -> {body}");
+    }
+
+    let (_, list) = call(&app, get("/api/e/crm.accounts", &token)).await;
+    assert_eq!(list["total"], json!(1), "the accounts table should still be intact");
+}

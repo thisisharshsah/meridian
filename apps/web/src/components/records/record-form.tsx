@@ -1,0 +1,165 @@
+"use client";
+
+import * as React from "react";
+import { toast } from "sonner";
+
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { FieldRow, FormError } from "@/components/form/field";
+import { FieldInput } from "@/components/records/field-input";
+import { ApiError } from "@/lib/api";
+import type { EntityMeta, FieldDef } from "@/lib/meta";
+import { useCreate, useUpdate, type Record_ } from "@/lib/queries";
+
+/**
+ * Create/edit dialog generated from the entity metadata. Field-level errors
+ * come back from the Rust validator keyed by field name, so server rules and
+ * form rules never disagree.
+ */
+export function RecordForm({
+  meta,
+  record,
+  open,
+  onOpenChange,
+  defaults,
+  onSaved,
+}: {
+  meta: EntityMeta;
+  record?: Record_ | null;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  defaults?: Record<string, unknown>;
+  onSaved?: (r: Record_) => void;
+}) {
+  const editing = !!record?.id;
+  const create = useCreate(meta.key);
+  const update = useUpdate(meta.key);
+
+  const editable = React.useMemo(() => meta.fields.filter((f) => !f.readonly), [meta.fields]);
+
+  const [values, setValues] = React.useState<Record<string, unknown>>({});
+  const [errors, setErrors] = React.useState<Record<string, string>>({});
+  const [formError, setFormError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const seed: Record<string, unknown> = {};
+    for (const f of editable) {
+      seed[f.name] = record
+        ? (record[f.name] ?? null)
+        : // A new record starts from the caller's defaults (the board column
+          // you clicked "Add" in), then the field's own declared default.
+          (defaults?.[f.name] ?? f.default ?? null);
+    }
+    setValues(seed);
+    setErrors({});
+    setFormError(null);
+  }, [open, record, defaults, editable]);
+
+  const setValue = (name: string, v: unknown) => {
+    setValues((s) => ({ ...s, [name]: v }));
+    setErrors((e) => (e[name] ? { ...e, [name]: "" } : e));
+  };
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError(null);
+    setErrors({});
+
+    // Send only what the user actually filled in, so unset optional fields
+    // fall back to the column defaults rather than being written as null.
+    const payload: Record<string, unknown> = {};
+    for (const f of editable) {
+      const v = values[f.name];
+      if (editing) {
+        payload[f.name] = v;
+      } else if (v !== null && v !== undefined && v !== "") {
+        payload[f.name] = v;
+      }
+    }
+
+    try {
+      const saved = editing
+        ? await update.mutateAsync({ id: record!.id, body: payload })
+        : await create.mutateAsync(payload);
+      toast.success(editing ? `${meta.label} updated` : `${meta.label} created`);
+      onOpenChange(false);
+      onSaved?.(saved);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        const map = err.fieldMap;
+        setErrors(map);
+        if (!Object.keys(map).length) setFormError(err.message);
+        else setFormError(null);
+      } else {
+        setFormError("Something went wrong. Please try again.");
+      }
+    }
+  };
+
+  const pending = create.isPending || update.isPending;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent size="lg">
+        <form onSubmit={submit} className="flex min-h-0 flex-col">
+          <DialogHeader>
+            <DialogTitle>
+              {editing ? `Edit ${meta.label.toLowerCase()}` : `New ${meta.label.toLowerCase()}`}
+            </DialogTitle>
+            <DialogDescription>
+              {editing ? "Update the details below." : `Add a ${meta.label.toLowerCase()} to ${meta.label_plural.toLowerCase()}.`}
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogBody>
+            <FormError message={formError} />
+            <div className="grid gap-4 sm:grid-cols-2">
+              {editable.map((f, i) => (
+                <FieldRow
+                  key={f.name}
+                  label={f.label}
+                  htmlFor={`field-${f.name}`}
+                  required={f.required}
+                  error={errors[f.name] || undefined}
+                  hint={f.help ?? undefined}
+                  className={spanClass(f)}
+                >
+                  <FieldInput
+                    field={f}
+                    value={values[f.name]}
+                    onChange={(v) => setValue(f.name, v)}
+                    invalid={!!errors[f.name]}
+                    autoFocus={i === 0}
+                  />
+                </FieldRow>
+              ))}
+            </div>
+          </DialogBody>
+
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" loading={pending}>
+              {editing ? "Save changes" : `Create ${meta.label.toLowerCase()}`}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Long text gets the full width; everything else pairs up. */
+function spanClass(f: FieldDef) {
+  return f.kind.type === "long_text" ? "sm:col-span-2" : undefined;
+}

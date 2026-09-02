@@ -1,0 +1,128 @@
+use crate::engine::schema::*;
+
+pub fn register(r: &mut Registry) {
+    r.add_module(ModuleDef {
+        key: "hr",
+        label: "People",
+        icon: "UserCog",
+        color: "purple",
+        description: "Employees, departments and leave.",
+    });
+
+    r.add(EntityDef {
+        key: "hr.departments",
+        table: "departments",
+        module: "hr",
+        label: "Department",
+        label_plural: "Departments",
+        icon: "Network",
+        title_field: "name",
+        fields: vec![
+            text("name", "Department").required().in_list(),
+            text("code", "Code").in_list(),
+            reference("head_id", "Head", "hr.employees").in_list(),
+            long_text("description", "Description"),
+        ],
+        default_sort: ("name", SortDir::Asc),
+        children: vec![ChildDef {
+            entity: "hr.employees",
+            foreign_key: "department_id",
+            label: "Employees",
+            inline: false,
+        }],
+        has_activities: false,
+        has_notes: false,
+        global_search: true,
+        embedded: false,
+        read_only: false,
+    });
+
+    r.add(EntityDef {
+        key: "hr.employees",
+        table: "employees",
+        module: "hr",
+        label: "Employee",
+        label_plural: "Employees",
+        icon: "IdCard",
+        title_field: "full_name",
+        fields: vec![
+            text("full_name", "Name").required().in_list(),
+            text("employee_code", "Employee ID").in_list(),
+            email("work_email", "Work email").in_list(),
+            email("personal_email", "Personal email"),
+            phone("phone", "Phone"),
+            reference("user_id", "Login", "core.users"),
+            reference("department_id", "Department", "hr.departments").in_list(),
+            text("designation", "Designation").in_list(),
+            reference("manager_id", "Manager", "hr.employees").in_list(),
+            select("employment_type", "Employment", vec![
+                opt("full_time", "Full time", "brand"),
+                opt("part_time", "Part time", "info"),
+                opt("contract", "Contract", "warning"),
+                opt("intern", "Intern", "purple"),
+            ]).required().with_default("full_time").in_list(),
+            select("status", "Status", vec![
+                opt("active", "Active", "success"),
+                opt("on_leave", "On leave", "warning"),
+                opt("notice", "Notice period", "danger"),
+                opt("exited", "Exited", "neutral"),
+            ]).required().with_default("active").in_list(),
+            date("date_of_joining", "Joined").in_list(),
+            date("date_of_birth", "Date of birth"),
+            money("annual_salary", "Annual salary"),
+            text("location", "Location").in_list(),
+            long_text("notes", "Notes"),
+        ],
+        default_sort: ("full_name", SortDir::Asc),
+        children: vec![ChildDef {
+            entity: "hr.leave_requests",
+            foreign_key: "employee_id",
+            label: "Leave",
+            inline: false,
+        }],
+        has_activities: false,
+        has_notes: true,
+        global_search: true,
+        embedded: false,
+        read_only: false,
+    });
+
+    r.add(EntityDef {
+        key: "hr.leave_requests",
+        table: "leave_requests",
+        module: "hr",
+        label: "Leave request",
+        label_plural: "Leave",
+        icon: "CalendarOff",
+        title_field: "reason",
+        fields: vec![
+            reference("employee_id", "Employee", "hr.employees").required().in_list(),
+            select("leave_type", "Type", vec![
+                opt("annual", "Annual", "brand"),
+                opt("sick", "Sick", "danger"),
+                opt("unpaid", "Unpaid", "neutral"),
+                opt("parental", "Parental", "purple"),
+                opt("comp_off", "Comp off", "info"),
+            ]).required().with_default("annual").in_list(),
+            select("status", "Status", vec![
+                opt("pending", "Pending", "warning"),
+                opt("approved", "Approved", "success"),
+                opt("rejected", "Rejected", "danger"),
+                opt("cancelled", "Cancelled", "neutral"),
+            ]).required().with_default("pending").in_list(),
+            date("start_date", "From").required().in_list(),
+            date("end_date", "To").required().in_list(),
+            quantity("days", "Days").in_list(),
+            text("reason", "Reason").in_list(),
+            reference("approver_id", "Approver", "core.users"),
+            datetime("decided_at", "Decided at").readonly(),
+        ],
+        default_sort: ("start_date", SortDir::Desc),
+        children: vec![],
+        has_activities: false,
+        has_notes: false,
+        global_search: false,
+        embedded: false,
+        read_only: false,
+    });
+}

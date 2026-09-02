@@ -1,0 +1,9 @@
+packages:
+  - "apps/*"
+
+# Native packages that legitimately need their install scripts.
+onlyBuiltDependencies:
+  - "@tailwindcss/oxide"
+  - unrs-resolver
+  - sharp
+  - esbuild

@@ -1,0 +1,49 @@
+use std::env;
+
+#[derive(Debug, Clone)]
+pub struct Config {
+    /// SQLite connection string, e.g. `sqlite://../data/suite.db?mode=rwc`
+    pub database_url: String,
+    pub bind_addr: String,
+    pub jwt_secret: String,
+    /// Access-token lifetime in seconds.
+    pub access_ttl_secs: i64,
+    /// Refresh-token lifetime in seconds.
+    pub refresh_ttl_secs: i64,
+    pub cors_origins: Vec<String>,
+}
+
+impl Config {
+    pub fn from_env() -> Self {
+        let _ = dotenvy::dotenv();
+
+        let database_url = env::var("DATABASE_URL")
+            .unwrap_or_else(|_| "sqlite://../data/suite.db?mode=rwc".to_string());
+
+        let jwt_secret = env::var("JWT_SECRET").unwrap_or_else(|_| {
+            // Dev fallback: stable so tokens survive a restart, loud so it is not shipped.
+            tracing::warn!("JWT_SECRET is unset - using an insecure development secret");
+            "dev-insecure-secret-change-me".to_string()
+        });
+
+        Config {
+            database_url,
+            bind_addr: env::var("BIND_ADDR").unwrap_or_else(|_| "127.0.0.1:8787".to_string()),
+            jwt_secret,
+            access_ttl_secs: env::var("ACCESS_TTL_SECS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(60 * 60),
+            refresh_ttl_secs: env::var("REFRESH_TTL_SECS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(60 * 60 * 24 * 30),
+            cors_origins: env::var("CORS_ORIGINS")
+                .unwrap_or_else(|_| "http://localhost:3000".to_string())
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect(),
+        }
+    }
+}

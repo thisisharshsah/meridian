@@ -1,0 +1,34 @@
+# deps
+node_modules/
+.pnpm-store/
+
+# next
+.next/
+out/
+next-env.d.ts
+
+# typescript incremental build cache — machine state, not source
+*.tsbuildinfo
+
+# rust
+target/
+**/*.rs.bk
+
+# data
+data/*.db
+data/*.db-shm
+data/*.db-wal
+*.sqlite
+*.sqlite3
+
+# env
+.env
+.env.local
+.env*.local
+
+# os / editor
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.log
