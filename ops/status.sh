@@ -50,7 +50,9 @@ else
 fi
 
 echo "── public (business.aurovie.com via Cloudflare) ─"
-code() { curl -s -m 12 -o /dev/null -w '%{http_code}' "$1" 2>/dev/null || echo "---"; }
+# curl prints 000 *and* exits non-zero when it cannot connect, so a `||`
+# fallback would append to the code rather than replace it.
+code() { curl -s -m 12 -o /dev/null -w '%{http_code}' "$1" 2>/dev/null; }
 printf '  login page            : HTTP %s\n' "$(code https://business.aurovie.com/login)"
 printf '  / (unauthenticated)   : HTTP %s  (expect 307 → /login)\n' "$(code https://business.aurovie.com/)"
 printf '  /api/e/crm.deals      : HTTP %s  (expect 401 — no session)\n' "$(code https://business.aurovie.com/api/e/crm.deals)"
