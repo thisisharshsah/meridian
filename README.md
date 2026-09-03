@@ -342,6 +342,37 @@ pnpm build       # release build of both halves
 Configuration lives in [`server/.env.example`](server/.env.example). Set a real
 `JWT_SECRET` before running this anywhere but your own machine.
 
+## Running in production
+
+`business.aurovie.com`, behind a dedicated Cloudflare tunnel. Three launchd
+agents, each supervised independently so one can restart without the others:
+
+| Agent | What it runs | Port |
+|---|---|---|
+| `com.meridian.api` | [`ops/run-api.sh`](ops/run-api.sh) → the release binary | `127.0.0.1:7011` |
+| `com.meridian.web` | [`ops/run-web.sh`](ops/run-web.sh) → `next start` | `127.0.0.1:7010` |
+| `com.meridian.tunnel` | `cloudflared --config ~/.cloudflared/business.yml` | — |
+
+Both processes bind **loopback only**: the tunnel is the sole route in, and the
+API is not routed through it at all. Next reverse-proxies `/api/*` to the API
+in-process and attaches the session cookie server-side, so an exposed API would
+be a surface that expects its caller to have already been authenticated.
+
+7000 itself is unusable on macOS — ControlCenter's AirPlay receiver holds it.
+
+The tunnel is deliberately its own, not an ingress rule on an existing one: a
+config error in a shared tunnel takes down everything else it serves.
+
+Secrets live in `server/.env.production` at mode 0600 and are read by the runner
+scripts rather than passed through plist `EnvironmentVariables`, which would put
+them in any backup of `~/Library/LaunchAgents`. That file is gitignored.
+
+```bash
+launchctl list | grep meridian                 # status
+tail -f ~/Library/Logs/meridian/{api,web}.log  # logs
+launchctl kickstart -k gui/$(id -u)/com.meridian.api   # restart one
+```
+
 ## Moving to Postgres
 
 The schema was written to port. IDs are UUIDv7 text, timestamps are RFC3339
