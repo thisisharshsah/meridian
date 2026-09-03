@@ -18,7 +18,19 @@ impl Minor {
     }
 }
 
+/// The largest magnitude any single scaled value may hold.
+///
+/// Well inside `i64` (about 9.2e18) with six orders of magnitude to spare, so a
+/// document can sum a great many lines without the total going anywhere near
+/// the edge. In minor units this is roughly 92 billion of the major unit —
+/// past any real invoice, and short of where the arithmetic stops being exact.
+pub const MAX_SCALED: i64 = 9_223_372_036_854;
+
 /// Round-half-up on a rational amount expressed in minor units.
+///
+/// Saturates rather than wrapping: `as i64` on an out-of-range `i128` silently
+/// produces a number of the wrong sign, which on a money path means an invoice
+/// that reads as a credit.
 pub fn round_div(numerator: i128, denominator: i128) -> i64 {
     if denominator == 0 {
         return 0;
@@ -27,7 +39,7 @@ pub fn round_div(numerator: i128, denominator: i128) -> i64 {
     let n = numerator.abs();
     let d = denominator.abs();
     let q = (n * 2 + d) / (d * 2);
-    let q = q as i64;
+    let q = i64::try_from(q).unwrap_or(i64::MAX);
     if negative {
         -q
     } else {
@@ -53,6 +65,15 @@ pub fn line_subtotal(qty_scaled: i64, unit_price_minor: i64) -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn round_div_saturates_instead_of_wrapping() {
+        // `as i64` here would produce a negative number, turning an invoice
+        // line into a credit note.
+        assert_eq!(round_div(i128::from(i64::MAX) * 4, 1), i64::MAX);
+        assert_eq!(round_div(i128::from(i64::MIN) * 4, 1), -i64::MAX);
+        assert_eq!(round_div(5, 0), 0, "a zero denominator is not a panic");
+    }
 
     #[test]
     fn rounds_half_up() {

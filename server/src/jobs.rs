@@ -74,14 +74,31 @@ pub async fn enqueue(
 pub fn spawn(state: AppState) {
     tokio::spawn(async move {
         loop {
-            if let Err(e) = release_stale_locks(&state.pool).await {
-                tracing::error!(error = %e, "could not release stale job locks");
+            // Each tick runs inside its own task. A panic anywhere under
+            // `execute` would otherwise end this loop for the life of the
+            // process — silently, because nothing joins the handle — and every
+            // scheduled action, recurring invoice and webhook would simply
+            // stop happening with no error anywhere.
+            let tick = tokio::spawn({
+                let state = state.clone();
+                async move {
+                    if let Err(e) = release_stale_locks(&state.pool).await {
+                        tracing::error!(error = %e, "could not release stale job locks");
+                    }
+                    match run_due(&state).await {
+                        Ok(0) => {}
+                        Ok(n) => tracing::debug!(jobs = n, "ran scheduled jobs"),
+                        Err(e) => tracing::error!(error = %e, "job worker failed"),
+                    }
+                }
+            });
+
+            if let Err(e) = tick.await {
+                // The job that caused it stays `running` until the stale-lock
+                // sweep hands it back, so the work is not lost.
+                tracing::error!(error = %e, "job tick panicked; the worker continues");
             }
-            match run_due(&state).await {
-                Ok(0) => {}
-                Ok(n) => tracing::debug!(jobs = n, "ran scheduled jobs"),
-                Err(e) => tracing::error!(error = %e, "job worker failed"),
-            }
+
             tokio::time::sleep(POLL).await;
         }
     });

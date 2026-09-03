@@ -202,10 +202,13 @@ fn total_numeric(rows: &[Value], columns: &[Value]) -> Value {
         if !matches!(kind, MONEY | INT | QUANTITY) {
             continue;
         }
+        // `sum()` panics on overflow in a debug build and wraps in release.
+        // The inputs are tenant data, so neither is an acceptable failure mode
+        // for a read-only report.
         let sum: i64 = rows
             .iter()
             .filter_map(|r| r.get(key).and_then(|v| v.as_i64()))
-            .sum();
+            .fold(0i64, |acc, v| acc.saturating_add(v));
         totals.insert(key.to_string(), Value::Number(sum.into()));
     }
     Value::Object(totals)

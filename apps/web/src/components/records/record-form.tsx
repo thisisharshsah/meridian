@@ -49,6 +49,13 @@ export function RecordForm({
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [formError, setFormError] = React.useState<string | null>(null);
 
+  // `defaults` is deliberately absent from the dependency list below: every
+  // caller passes a freshly allocated object literal, so including it re-runs
+  // the effect on any parent re-render and erases whatever has been typed. The
+  // latest value is read through a ref instead.
+  const defaultsRef = React.useRef(defaults);
+  defaultsRef.current = defaults;
+
   React.useEffect(() => {
     if (!open) return;
     const seed: Record<string, unknown> = {};
@@ -57,12 +64,12 @@ export function RecordForm({
         ? (record[f.name] ?? null)
         : // A new record starts from the caller's defaults (the board column
           // you clicked "Add" in), then the field's own declared default.
-          (defaults?.[f.name] ?? f.default ?? null);
+          (defaultsRef.current?.[f.name] ?? f.default ?? null);
     }
     setValues(seed);
     setErrors({});
     setFormError(null);
-  }, [open, record, defaults, editable]);
+  }, [open, record, editable]);
 
   const setValue = (name: string, v: unknown) => {
     setValues((s) => ({ ...s, [name]: v }));
@@ -139,6 +146,7 @@ export function RecordForm({
                     onChange={(v) => setValue(f.name, v)}
                     invalid={!!errors[f.name]}
                     autoFocus={i === 0}
+                    label={record?.[`${f.name}__label`] as string | undefined}
                   />
                 </FieldRow>
               ))}

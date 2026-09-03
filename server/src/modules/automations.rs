@@ -298,13 +298,14 @@ pub async fn run(
         let (later, now_actions): (Vec<&ActionSpec>, Vec<&ActionSpec>) =
             actions.iter().partition(|a| a.delay_days.unwrap_or(0) > 0);
 
-        for action in &later {
+        for (slot, action) in later.iter().enumerate() {
             let days = action.delay_days.unwrap_or(0).clamp(1, 3650);
             let run_at = (Utc::now() + Duration::days(days))
                 .to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
-            // One outstanding job per (rule, record, action) - re-saving a
-            // record should not stack up duplicate follow-ups.
-            let dedupe = Some(format!("auto:{id}:{record_id}:{}", action.r#type));
+            // One outstanding job per (rule, record, action slot). Keyed by
+            // slot as well as type, or a rule with two delayed tasks would
+            // enqueue one and silently drop the other while reporting both.
+            let dedupe = Some(format!("auto:{id}:{record_id}:{}:{slot}", action.r#type));
             if let Err(e) = crate::jobs::enqueue(
                 &state.pool,
                 &ctx.org_id,

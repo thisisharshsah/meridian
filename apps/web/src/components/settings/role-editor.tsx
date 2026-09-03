@@ -244,37 +244,41 @@ function RoleDialog({
    * would contradict — otherwise unchecking a box under a `module.*` grant
    * would appear to do nothing.
    */
+  /**
+   * Expand every wildcard that covers *anything* into explicit grants, then
+   * apply the one change.
+   *
+   * The subtlety: a broad grant like `crm.*` or `crm.*.view` covers sibling
+   * entities too. Deleting it and re-expanding only the entity that was
+   * clicked silently revokes the action everywhere else in that module — the
+   * screen shows one box changing while several others quietly turn off.
+   */
+  const expandAll = (prev: Set<string>): Set<string> => {
+    const next = new Set(prev);
+    const modules = catalog.data?.modules ?? [];
+    const everything = prev.has("*");
+
+    for (const m of modules) {
+      const moduleAll = everything || prev.has(`${m.key}.*`);
+      for (const e of m.entities) {
+        const entityAll = moduleAll || prev.has(`${e.key}.*`);
+        for (const a of ACTIONS) {
+          if (entityAll || prev.has(`${m.key}.*.${a}`) || prev.has(`${e.key}.${a}`)) {
+            next.add(`${e.key}.${a}`);
+          }
+        }
+      }
+      next.delete(`${m.key}.*`);
+      for (const a of ACTIONS) next.delete(`${m.key}.*.${a}`);
+      for (const e of m.entities) next.delete(`${e.key}.*`);
+    }
+    next.delete("*");
+    return next;
+  };
+
   const toggle = (entityKey: string, action: ActionName, on: boolean) => {
     setGranted((prev) => {
-      const next = new Set(prev);
-      const module = entityKey.split(".")[0];
-      const broad = ["*", `${module}.*`, `${module}.*.${action}`, `${entityKey}.*`];
-
-      if (broad.some((g) => next.has(g))) {
-        // Expand every wildcard that covers this entity into explicit grants,
-        // then apply the change to the one box that was clicked.
-        const expanded = new Set(next);
-        for (const g of broad) expanded.delete(g);
-        for (const a of ACTIONS) {
-          if (prev.has("*") || prev.has(`${module}.*`) || prev.has(`${entityKey}.*`) || prev.has(`${module}.*.${a}`)) {
-            expanded.add(`${entityKey}.${a}`);
-          }
-        }
-        // A blanket grant covered other entities too; keep them explicit.
-        if (prev.has("*") || prev.has(`${module}.*`)) {
-          for (const m of catalog.data?.modules ?? []) {
-            for (const e of m.entities) {
-              if (e.key === entityKey) continue;
-              if (prev.has("*") || (prev.has(`${module}.*`) && m.key === module)) {
-                expanded.add(`${e.key}.*`);
-              }
-            }
-          }
-        }
-        next.clear();
-        for (const g of expanded) next.add(g);
-      }
-
+      const next = expandAll(prev);
       if (on) next.add(`${entityKey}.${action}`);
       else next.delete(`${entityKey}.${action}`);
       return next;
@@ -287,14 +291,14 @@ function RoleDialog({
 
   const toggleModule = (module: CatalogModule, on: boolean) => {
     setGranted((prev) => {
-      const next = new Set(prev);
-      next.delete("*");
-      next.delete(`${module.key}.*`);
-      next.delete(`${module.key}.*.view`);
+      // Same expansion first. Clearing a module while the role holds `*` would
+      // otherwise drop `*` and grant nothing back, wiping every other module.
+      const next = expandAll(prev);
       for (const e of module.entities) {
-        next.delete(`${e.key}.*`);
-        for (const a of ACTIONS) next.delete(`${e.key}.${a}`);
-        if (on) next.add(`${e.key}.*`);
+        for (const a of ACTIONS) {
+          if (on) next.add(`${e.key}.${a}`);
+          else next.delete(`${e.key}.${a}`);
+        }
       }
       return next;
     });

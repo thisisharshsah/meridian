@@ -144,6 +144,7 @@ pub async fn after_write(pool: &SqlitePool, ctx: &Ctx, entity: &str, id: &str) -
             Ok(())
         }
         "books.invoices" => recalc_invoice_balance(pool, ctx, id).await,
+        "books.bills" => recalc_bill_balance(pool, ctx, id).await,
         "inventory.stock_moves" => {
             let item_id: Option<String> =
                 scalar(pool, "SELECT item_id FROM stock_moves WHERE org_id = ? AND id = ?", &ctx.org_id, id).await?;
@@ -243,7 +244,11 @@ async fn recalc_document(
     link: &DocumentLink,
     doc_id: &str,
 ) -> AppResult<()> {
-    let mut tx = pool.begin().await?;
+    // BEGIN IMMEDIATE, not the default deferred BEGIN. Reading the lines first
+    // and only then writing is a read-to-write upgrade, which SQLite refuses
+    // with SQLITE_BUSY_SNAPSHOT without consulting the busy handler — so it
+    // fails outright under concurrency rather than waiting its turn.
+    let mut tx = pool.begin_with("BEGIN IMMEDIATE").await?;
 
     let sql = format!(
         "SELECT id, quantity, unit_price, discount_percent, tax_rate
@@ -271,9 +276,12 @@ async fn recalc_document(
         let net = gross - discount;
         let tax = apply_percent(net, tax_rate);
 
-        subtotal += gross;
-        discount_total += discount;
-        tax_total += tax;
+        // Saturating, not wrapping: values are bounded on the way in, but a
+        // document with enough lines should degrade to an obviously wrong
+        // large number rather than a negative one.
+        subtotal = subtotal.saturating_add(gross);
+        discount_total = discount_total.saturating_add(discount);
+        tax_total = tax_total.saturating_add(tax);
         line_updates.push((id, net));
     }
 
@@ -287,7 +295,7 @@ async fn recalc_document(
             .await?;
     }
 
-    let total = subtotal - discount_total + tax_total;
+    let total = subtotal.saturating_sub(discount_total).saturating_add(tax_total);
     let sql = format!(
         "UPDATE {} SET subtotal = ?, discount_total = ?, tax_total = ?, total = ?, updated_at = ?
          WHERE org_id = ? AND id = ?",
@@ -315,13 +323,21 @@ async fn recalc_document(
 /// Roll payments up onto the invoice and move its status accordingly.
 /// `draft` and `void` are left alone: those are decisions, not derived state.
 pub async fn recalc_invoice_balance(pool: &SqlitePool, ctx: &Ctx, invoice_id: &str) -> AppResult<()> {
+    // One transaction for the whole read-compute-write. Two payments landing
+    // together would otherwise each read the sum before the other's row was
+    // visible, and the second write would clobber the first — an invoice
+    // showing one payment when two were taken. The immediate BEGIN takes the
+    // write lock up front so SQLite queues the second caller rather than
+    // failing it with SQLITE_BUSY_SNAPSHOT partway through.
+    let mut tx = pool.begin_with("BEGIN IMMEDIATE").await?;
+
     let paid: i64 = sqlx::query(
         "SELECT COALESCE(SUM(amount), 0) AS paid FROM payments
          WHERE org_id = ? AND invoice_id = ? AND deleted_at IS NULL",
     )
     .bind(&ctx.org_id)
     .bind(invoice_id)
-    .fetch_one(pool)
+    .fetch_one(&mut *tx)
     .await?
     .try_get("paid")
     .unwrap_or(0);
@@ -329,7 +345,7 @@ pub async fn recalc_invoice_balance(pool: &SqlitePool, ctx: &Ctx, invoice_id: &s
     let Some(inv) = sqlx::query("SELECT total, status, due_date FROM invoices WHERE org_id = ? AND id = ?")
         .bind(&ctx.org_id)
         .bind(invoice_id)
-        .fetch_optional(pool)
+        .fetch_optional(&mut *tx)
         .await?
     else {
         return Ok(());
@@ -371,6 +387,56 @@ pub async fn recalc_invoice_balance(pool: &SqlitePool, ctx: &Ctx, invoice_id: &s
     .bind(now())
     .bind(&ctx.org_id)
     .bind(invoice_id)
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    Ok(())
+}
+
+/// A bill's outstanding balance and status.
+///
+/// `balance_due` is readonly, so the client's value is stripped on write — and
+/// nothing was filling it in, leaving every unpaid bill reporting a balance of
+/// zero. Unlike an invoice there is no payments table for bills yet, so
+/// `amount_paid` is entered directly and the balance derives from it.
+pub async fn recalc_bill_balance(pool: &SqlitePool, ctx: &Ctx, bill_id: &str) -> AppResult<()> {
+    let Some(row) = sqlx::query(
+        "SELECT total, amount_paid, status, due_date FROM bills WHERE org_id = ? AND id = ?",
+    )
+    .bind(&ctx.org_id)
+    .bind(bill_id)
+    .fetch_optional(pool)
+    .await?
+    else {
+        return Ok(());
+    };
+
+    let total: i64 = row.try_get("total").unwrap_or(0);
+    let paid: i64 = row.try_get("amount_paid").unwrap_or(0);
+    let status: String = row.try_get("status").unwrap_or_else(|_| "open".into());
+    let due_date: String = row.try_get("due_date").unwrap_or_default();
+    let balance = total.saturating_sub(paid);
+
+    let today = Utc::now().format("%Y-%m-%d").to_string();
+    let new_status = match status.as_str() {
+        // `void` is a decision, not derived state.
+        "void" => status.clone(),
+        _ if total > 0 && paid >= total => "paid".to_string(),
+        _ if paid > 0 => "partial".to_string(),
+        _ if !due_date.is_empty() && due_date < today => "overdue".to_string(),
+        "paid" | "partial" | "overdue" => "open".to_string(),
+        other => other.to_string(),
+    };
+
+    sqlx::query(
+        "UPDATE bills SET balance_due = ?, status = ?, updated_at = ? WHERE org_id = ? AND id = ?",
+    )
+    .bind(balance)
+    .bind(&new_status)
+    .bind(now())
+    .bind(&ctx.org_id)
+    .bind(bill_id)
     .execute(pool)
     .await?;
 

@@ -118,6 +118,7 @@ pub fn register(r: &mut Registry) {
             text("number", "Bill #").readonly().in_list(),
             reference("vendor_id", "Vendor", "inventory.vendors").required().in_list(),
             reference("purchase_order_id", "From PO", "inventory.purchase_orders"),
+            // Derived from `amount_paid` and the due date, like an invoice's.
             select("status", "Status", vec![
                 opt("open", "Open", "info"),
                 opt("partial", "Partially paid", "warning"),

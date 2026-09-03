@@ -75,6 +75,14 @@ pub fn parse_scaled(raw: &str, scale: i64, field: &str) -> Result<i64, FieldErro
         .checked_mul(scale)
         .and_then(|v| v.checked_add(frac_val))
         .ok_or_else(|| err(field, "number is too large"))?;
+
+    // Bound the magnitude, not just the type. `i64` alone still lets a single
+    // line carry a value large enough that summing a document overflows, and a
+    // wrapped total reads as a negative amount owed.
+    if total > crate::common::money::MAX_SCALED {
+        return Err(err(field, "number is too large"));
+    }
+
     Ok(if neg { -total } else { total })
 }
 
@@ -248,6 +256,14 @@ mod tests {
         assert_eq!(parse_scaled("-8.05", 100, "f").unwrap(), -805);
         assert_eq!(parse_scaled("42", 100, "f").unwrap(), 4_200);
         assert_eq!(parse_scaled(".5", 100, "f").unwrap(), 50);
+    }
+
+    #[test]
+    fn absurd_magnitudes_are_refused_rather_than_overflowing_a_total() {
+        assert!(parse_scaled("99999999999999999", 100, "f").is_err());
+        assert!(parse_scaled("-99999999999999999", 100, "f").is_err());
+        // Something merely large is still fine.
+        assert!(parse_scaled("1000000000", 100, "f").is_ok());
     }
 
     #[test]

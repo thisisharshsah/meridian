@@ -299,6 +299,13 @@ async fn decide(
         return Err(AppError::forbidden("This approval is not yours to decide"));
     }
 
+    // Being the approver says who may decide; it does not by itself grant the
+    // right to write the record. A rule naming no approver is decidable by any
+    // active member, so without this a support user could set an expense to
+    // `approved` on a module they cannot otherwise touch.
+    let entity_for_check: String = row.try_get("entity").unwrap_or_default();
+    ctx.require(&entity_for_check, Action::Edit)?;
+
     let entity: String = row.try_get("entity").unwrap_or_default();
     let record_id: String = row.try_get("record_id").unwrap_or_default();
     let field: String = row.try_get("decision_field").unwrap_or_default();
@@ -337,10 +344,13 @@ async fn decide(
         .execute(&mut *tx)
         .await?;
 
-    sqlx::query(
+    // `status = 'pending'` in the predicate, not only in the read above: two
+    // people clicking at once would otherwise both succeed, and the record
+    // would take whichever decision landed second.
+    let decided = sqlx::query(
         "UPDATE approval_requests
             SET status = ?, decided_by = ?, decided_at = ?, comment = ?, updated_at = ?
-          WHERE org_id = ? AND id = ?",
+          WHERE org_id = ? AND id = ? AND status = 'pending'",
     )
     .bind(if approve { "approved" } else { "rejected" })
     .bind(&ctx.user_id)
@@ -351,6 +361,11 @@ async fn decide(
     .bind(&id)
     .execute(&mut *tx)
     .await?;
+
+    if decided.rows_affected() == 0 {
+        // Someone else got there first; the field write rolls back with the tx.
+        return Err(AppError::conflict("This request was already decided"));
+    }
 
     tx.commit().await?;
 

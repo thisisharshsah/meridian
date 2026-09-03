@@ -465,6 +465,19 @@ async fn delete_role(
         return Err(AppError::bad_request("Built-in roles cannot be deleted"));
     }
 
+    // A pending invitation naming this role would admit someone to nothing,
+    // so those are revoked with it rather than left to fail on acceptance.
+    sqlx::query(
+        "UPDATE invitations SET revoked_at = ?, updated_at = ?
+          WHERE org_id = ? AND role_id = ? AND accepted_at IS NULL AND revoked_at IS NULL",
+    )
+    .bind(now())
+    .bind(now())
+    .bind(&ctx.org_id)
+    .bind(&id)
+    .execute(&state.pool)
+    .await?;
+
     // Deleting a role out from under someone would leave them with no
     // permissions and no explanation.
     let members: i64 = role.try_get("members").unwrap_or(0);

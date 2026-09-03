@@ -29,7 +29,7 @@ impl FromRequestParts<AppState> for Ctx {
         let row = sqlx::query(
             "SELECT m.is_owner, m.status, r.key AS role_key, r.permissions
              FROM memberships m
-             JOIN roles r ON r.id = m.role_id
+             JOIN roles r ON r.id = m.role_id AND r.deleted_at IS NULL
              WHERE m.org_id = ? AND m.user_id = ? AND m.deleted_at IS NULL",
         )
         .bind(&claims.org)

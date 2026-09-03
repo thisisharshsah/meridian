@@ -337,6 +337,20 @@ async fn accept(
         }
     };
 
+    // The role is re-checked here, not just when the invitation was written:
+    // a role deleted in between would otherwise be handed to the new member,
+    // and `Ctx` would resolve it to no permissions at all with no explanation.
+    let role_alive = sqlx::query("SELECT 1 FROM roles WHERE org_id = ? AND id = ? AND deleted_at IS NULL")
+        .bind(&invite.org_id)
+        .bind(&invite.role_id)
+        .fetch_optional(&mut *tx)
+        .await?;
+    if role_alive.is_none() {
+        return Err(AppError::conflict(
+            "The role this invitation was for no longer exists — ask for a new invitation",
+        ));
+    }
+
     sqlx::query(
         "INSERT INTO memberships (id, org_id, user_id, role_id, is_owner, status, title, created_at, updated_at)
          VALUES (?, ?, ?, ?, 0, 'active', ?, ?, ?)",

@@ -222,11 +222,17 @@ async fn convert_lead(
         None
     };
 
+    // Mark the lead converted only if it is still unconverted. The account,
+    // contact and deal above are separate writes, so two clicks landing
+    // together would otherwise both build a full set of records and the second
+    // would overwrite the first's links — leaving the first set orphaned, with
+    // no way to find them from the lead. Losing the race here means the caller
+    // is told, and their extra records are cleaned up below.
     let ts = now();
-    sqlx::query(
+    let claimed = sqlx::query(
         "UPDATE leads SET status = 'converted', converted_at = ?, converted_contact_id = ?,
                 converted_account_id = ?, converted_deal_id = ?, updated_at = ?, updated_by = ?
-         WHERE org_id = ? AND id = ?",
+         WHERE org_id = ? AND id = ? AND converted_at IS NULL",
     )
     .bind(&ts)
     .bind(&contact_id)
@@ -238,6 +244,27 @@ async fn convert_lead(
     .bind(&id)
     .execute(&state.pool)
     .await?;
+
+    if claimed.rows_affected() == 0 {
+        // Someone else converted it first. Soft-delete what this request
+        // created so the workspace is not left with a duplicate customer.
+        for (table, row_id) in [
+            ("deals", deal_id.as_deref()),
+            ("contacts", Some(contact_id.as_str())),
+            // Only if we made it — an account the caller chose stays.
+            ("accounts", if body.account_id.is_none() { Some(account_id.as_str()) } else { None }),
+        ] {
+            let Some(row_id) = row_id else { continue };
+            let sql = format!("UPDATE {table} SET deleted_at = ? WHERE org_id = ? AND id = ?");
+            let _ = sqlx::query(sqlx::AssertSqlSafe(sql))
+                .bind(&ts)
+                .bind(&ctx.org_id)
+                .bind(row_id)
+                .execute(&state.pool)
+                .await;
+        }
+        return Err(AppError::conflict("This lead has already been converted"));
+    }
 
     audit::record(
         &state.pool,
@@ -264,8 +291,15 @@ async fn convert_lead(
 }
 
 /// Money is stored in minor units; the engine's writer wants a decimal string.
+///
+/// The sign comes from the value, not from the integer part: `-50` divided by
+/// 100 truncates to `0`, so building the string from the quotient turns minus
+/// fifty pence into plus fifty pence. A credit note copied through a document
+/// conversion would silently become a charge.
 fn minor_to_decimal(minor: i64) -> Value {
-    Value::String(format!("{}.{:02}", minor / 100, (minor % 100).abs()))
+    let sign = if minor < 0 { "-" } else { "" };
+    let m = minor.unsigned_abs();
+    Value::String(format!("{sign}{}.{:02}", m / 100, m % 100))
 }
 
 // -------------------------------------------------------------- documents ---
@@ -321,11 +355,13 @@ async fn copy_lines(
 }
 
 /// Turn a scaled integer back into the decimal string the writer parses.
+/// Signed from the value itself, for the reason given on `minor_to_decimal`.
 fn scaled(value: i64, scale: i64) -> Value {
     let digits = (scale as f64).log10().round() as usize;
-    let whole = value / scale;
-    let frac = (value % scale).abs();
-    Value::String(format!("{whole}.{frac:0width$}", width = digits))
+    let sign = if value < 0 { "-" } else { "" };
+    let v = value.unsigned_abs();
+    let s = scale.unsigned_abs().max(1);
+    Value::String(format!("{sign}{}.{:0width$}", v / s, v % s, width = digits))
 }
 
 #[derive(Deserialize, Default)]
@@ -355,6 +391,7 @@ async fn quote_to_order(
     .await?
     .ok_or_else(|| AppError::not_found("Quote"))?;
 
+    // As above: the index in 0016 is the guarantee, this is the message.
     let existing = sqlx::query("SELECT id FROM sales_orders WHERE org_id = ? AND quote_id = ? AND deleted_at IS NULL")
         .bind(&ctx.org_id)
         .bind(&id)
@@ -431,6 +468,9 @@ async fn order_to_invoice(
     let account_id = text("account_id")
         .ok_or_else(|| AppError::bad_request("This order has no customer, so it cannot be invoiced"))?;
 
+    // The read is a courtesy for the error message; the unique index added in
+    // migration 0016 is what actually prevents two concurrent conversions from
+    // both creating an invoice.
     let existing = sqlx::query("SELECT id FROM invoices WHERE org_id = ? AND sales_order_id = ? AND deleted_at IS NULL")
         .bind(&ctx.org_id).bind(&id)
         .fetch_optional(&state.pool)
@@ -533,5 +573,16 @@ mod tests {
         assert_eq!(scaled(185_000, 10_000), json!("18.5000"));
         assert_eq!(minor_to_decimal(123_456), json!("1234.56"));
         assert_eq!(minor_to_decimal(5), json!("0.05"));
+    }
+
+    #[test]
+    fn a_sub_unit_negative_keeps_its_sign() {
+        // The bug: -50 / 100 truncates to 0, so the sign was lost and a credit
+        // came back through a conversion as a charge.
+        assert_eq!(minor_to_decimal(-5), json!("-0.05"));
+        assert_eq!(minor_to_decimal(-50), json!("-0.50"));
+        assert_eq!(minor_to_decimal(-123_456), json!("-1234.56"));
+        assert_eq!(scaled(-500, 1000), json!("-0.500"));
+        assert_eq!(scaled(-1_500, 1000), json!("-1.500"));
     }
 }

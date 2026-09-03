@@ -318,20 +318,27 @@ async fn refresh(
     .await?
     .ok_or(AppError::Unauthorized)?;
 
-    if row.try_get::<Option<String>, _>("revoked_at").ok().flatten().is_some() {
-        return Err(AppError::Unauthorized);
-    }
     let expires_at: String = row.try_get("expires_at").unwrap_or_default();
     if expires_at < now() {
         return Err(AppError::Unauthorized);
     }
 
+    // Claim the token in one statement and check that we were the one who
+    // claimed it. Reading `revoked_at` and then revoking in a second statement
+    // lets two concurrent requests both pass the read and both mint a session,
+    // which is exactly the replay that rotation exists to prevent.
     let token_id: String = row.try_get("id").unwrap_or_default();
-    sqlx::query("UPDATE refresh_tokens SET revoked_at = ? WHERE id = ?")
-        .bind(now())
-        .bind(&token_id)
-        .execute(&state.pool)
-        .await?;
+    let claimed = sqlx::query(
+        "UPDATE refresh_tokens SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL",
+    )
+    .bind(now())
+    .bind(&token_id)
+    .execute(&state.pool)
+    .await?;
+
+    if claimed.rows_affected() == 0 {
+        return Err(AppError::Unauthorized);
+    }
 
     let user_id: String = row.try_get("user_id").unwrap_or_default();
     let org_id: String = row.try_get("org_id").unwrap_or_default();

@@ -2348,6 +2348,187 @@ async fn reports_do_not_join_across_tenants() {
 }
 
 #[tokio::test]
+async fn a_refresh_token_cannot_be_spent_twice() {
+    let (app, _state) = test_app().await;
+
+    let (_, session) = call(
+        &app,
+        anon(
+            "POST",
+            "/api/auth/register",
+            json!({
+                "name": "Rotator", "email": "rotate@example.test",
+                "password": "a-long-enough-password", "organization": "Rotate Co"
+            }),
+        ),
+    )
+    .await;
+    let refresh = session["refresh_token"].as_str().unwrap().to_string();
+
+    let (first, _) = call(
+        &app,
+        anon("POST", "/api/auth/refresh", json!({ "refresh_token": refresh })),
+    )
+    .await;
+    assert_eq!(first, StatusCode::OK);
+
+    // The claim is one statement guarded on `revoked_at IS NULL`, so replaying
+    // the same token cannot mint a second session.
+    let (second, _) = call(
+        &app,
+        anon("POST", "/api/auth/refresh", json!({ "refresh_token": refresh })),
+    )
+    .await;
+    assert_eq!(second, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn one_order_can_only_become_one_invoice() {
+    let (app, _state) = test_app().await;
+    let owner = new_org(&app, "one-invoice").await;
+
+    let (_, acct) = call(
+        &app,
+        send("POST", "/api/e/crm.accounts", &owner, json!({ "name": "Buyer" })),
+    )
+    .await;
+    let (_, order) = call(
+        &app,
+        send(
+            "POST",
+            "/api/e/sales.orders",
+            &owner,
+            json!({ "subject": "Kit", "account_id": acct["id"], "order_date": "2026-01-01" }),
+        ),
+    )
+    .await;
+    let order_id = order["id"].as_str().unwrap().to_string();
+    call(
+        &app,
+        send(
+            "POST",
+            "/api/e/sales.order_items",
+            &owner,
+            json!({ "sales_order_id": order_id, "description": "Kit", "quantity": "1", "unit_price": "100.00" }),
+        ),
+    )
+    .await;
+
+    let (first, _) = call(
+        &app,
+        send("POST", &format!("/api/actions/sales.orders/{order_id}/convert"), &owner, json!({})),
+    )
+    .await;
+    assert_eq!(first, StatusCode::OK);
+
+    let (second, _) = call(
+        &app,
+        send("POST", &format!("/api/actions/sales.orders/{order_id}/convert"), &owner, json!({})),
+    )
+    .await;
+    assert_eq!(second, StatusCode::CONFLICT, "billing a customer twice is the failure to avoid");
+
+    let (_, invoices) = call(&app, get("/api/e/books.invoices", &owner)).await;
+    assert_eq!(invoices["total"], json!(1));
+}
+
+#[tokio::test]
+async fn a_lead_converts_once_even_if_asked_twice() {
+    let (app, _state) = test_app().await;
+    let owner = new_org(&app, "convert-once").await;
+
+    let (_, lead) = call(
+        &app,
+        send(
+            "POST",
+            "/api/e/crm.leads",
+            &owner,
+            json!({ "last_name": "Fisher", "full_name": "Kim Fisher", "company": "Fisher Ltd" }),
+        ),
+    )
+    .await;
+    let lead_id = lead["id"].as_str().unwrap().to_string();
+
+    let (first, _) = call(
+        &app,
+        send(&"POST", &format!("/api/actions/crm.leads/{lead_id}/convert"), &owner, json!({ "create_deal": true })),
+    )
+    .await;
+    assert_eq!(first, StatusCode::OK);
+
+    let (second, _) = call(
+        &app,
+        send("POST", &format!("/api/actions/crm.leads/{lead_id}/convert"), &owner, json!({ "create_deal": true })),
+    )
+    .await;
+    assert_eq!(second, StatusCode::CONFLICT);
+
+    // And exactly one customer exists, not two.
+    let (_, accounts) = call(&app, get("/api/e/crm.accounts", &owner)).await;
+    assert_eq!(accounts["total"], json!(1), "a second convert must not duplicate the customer");
+}
+
+#[tokio::test]
+async fn a_bill_reports_what_is_actually_outstanding() {
+    let (app, _state) = test_app().await;
+    let owner = new_org(&app, "bills").await;
+
+    let (_, vendor) = call(
+        &app,
+        send("POST", "/api/e/inventory.vendors", &owner, json!({ "name": "Supplier" })),
+    )
+    .await;
+
+    // `balance_due` is readonly, so nothing the client sends reaches it — the
+    // server has to compute it, or every unpaid bill reads as zero owed.
+    let (_, bill) = call(
+        &app,
+        send(
+            "POST",
+            "/api/e/books.bills",
+            &owner,
+            json!({
+                "vendor_id": vendor["id"], "bill_date": "2026-01-01", "due_date": "2099-01-01",
+                "subtotal": "1000.00", "total": "1000.00", "amount_paid": "0"
+            }),
+        ),
+    )
+    .await;
+    let bill_id = bill["id"].as_str().unwrap().to_string();
+    assert_eq!(bill["balance_due"], json!(100_000), "the full amount is owed");
+    assert_eq!(bill["status"], json!("open"));
+
+    let (_, part) = call(
+        &app,
+        send("PATCH", &format!("/api/e/books.bills/{bill_id}"), &owner, json!({ "amount_paid": "400.00" })),
+    )
+    .await;
+    assert_eq!(part["balance_due"], json!(60_000));
+    assert_eq!(part["status"], json!("partial"));
+
+    let (_, settled) = call(
+        &app,
+        send("PATCH", &format!("/api/e/books.bills/{bill_id}"), &owner, json!({ "amount_paid": "1000.00" })),
+    )
+    .await;
+    assert_eq!(settled["balance_due"], json!(0));
+    assert_eq!(settled["status"], json!("paid"));
+}
+
+#[tokio::test]
+async fn an_absurd_page_number_does_not_take_the_list_down() {
+    let (app, _state) = test_app().await;
+    let owner = new_org(&app, "paging").await;
+
+    // Multiplying an unbounded page by per_page overflows i64 — a panic in a
+    // debug build, which is a request away from taking the API with it.
+    for q in ["page=9223372036854775807", "page=999999999999&per_page=200", "page=-1"] {
+        let (status, _) = call(&app, get(&format!("/api/e/crm.accounts?{q}"), &owner)).await;
+        assert_eq!(status, StatusCode::OK, "{q} should be servable");
+    }
+}
+
+#[tokio::test]
 async fn hostile_query_parameters_cannot_reach_sql() {
     let (app, _state) = test_app().await;
     let token = new_org(&app, "inject").await;

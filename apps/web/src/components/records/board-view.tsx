@@ -56,16 +56,23 @@ export function BoardView({ meta, groupField }: { meta: EntityMeta; groupField: 
     const record = records.find((r) => r.id === id);
     if (!record || !target || valueOf(record) === target) return;
 
-    // Move the card immediately; roll it back if the server disagrees.
+    // Move the card immediately, then let the server have the last word.
     setOptimistic((s) => ({ ...s, [id]: target }));
-    try {
-      await update.mutateAsync({ id, body: { [groupField.name]: target } });
-    } catch (err) {
+    const clear = () =>
       setOptimistic((s) => {
         const next = { ...s };
         delete next[id];
         return next;
       });
+
+    try {
+      await update.mutateAsync({ id, body: { [groupField.name]: target } });
+      // Clear on success too. Keeping the override forever means a rule that
+      // moved the record somewhere else — or another person's edit — is
+      // invisible here, and the card sits in a column it is not in.
+      clear();
+    } catch (err) {
+      clear();
       toast.error(err instanceof ApiError ? err.message : "Could not move that card");
     }
   };

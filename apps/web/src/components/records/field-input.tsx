@@ -22,12 +22,15 @@ export function FieldInput({
   onChange,
   invalid,
   autoFocus,
+  label,
 }: {
   field: FieldDef;
   value: unknown;
   onChange: (v: FieldValueInput) => void;
   invalid?: boolean;
   autoFocus?: boolean;
+  /** `<field>__label` from the record, so a ref need not re-fetch its title. */
+  label?: string | null;
 }) {
   const id = `field-${field.name}`;
 
@@ -82,6 +85,7 @@ export function FieldInput({
           value={(value as string) ?? null}
           onChange={onChange}
           invalid={invalid}
+          label={label}
         />
       );
 

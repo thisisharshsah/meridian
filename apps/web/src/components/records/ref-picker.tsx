@@ -20,12 +20,15 @@ export function RefPicker({
   value,
   onChange,
   invalid,
+  label,
 }: {
   id?: string;
   entity: string;
   value: string | null;
   onChange: (v: string | null) => void;
   invalid?: boolean;
+  /** The `<field>__label` the record already carries, when there is one. */
+  label?: string | null;
 }) {
   const [open, setOpen] = React.useState(false);
   const [term, setTerm] = React.useState("");
@@ -39,6 +42,14 @@ export function RefPicker({
       setSelectedLabel(null);
       return;
     }
+    // Prefer the label the caller already has. Re-deriving it with a GET on the
+    // referenced entity is permission-checked against *that* entity, so an
+    // owner field (which points at `core.users`, a read-only view most roles
+    // cannot list) came back 403 and rendered as "Unknown".
+    if (label) {
+      setSelectedLabel(label);
+      return;
+    }
     get<Record<string, unknown>>(`e/${entity}/${value}`)
       .then((r) => {
         if (cancelled) return;
@@ -50,7 +61,7 @@ export function RefPicker({
     return () => {
       cancelled = true;
     };
-  }, [entity, value]);
+  }, [entity, value, label]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
