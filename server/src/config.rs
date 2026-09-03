@@ -28,7 +28,7 @@ impl Config {
 
         Config {
             database_url,
-            bind_addr: env::var("BIND_ADDR").unwrap_or_else(|_| "127.0.0.1:8787".to_string()),
+            bind_addr: env::var("BIND_ADDR").unwrap_or_else(|_| "127.0.0.1:7011".to_string()),
             jwt_secret,
             access_ttl_secs: env::var("ACCESS_TTL_SECS")
                 .ok()
@@ -38,8 +38,11 @@ impl Config {
                 .ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(60 * 60 * 24 * 30),
+            // Empty by default. The browser reaches this API only through the
+            // Next.js proxy, which is same-origin, so a CORS grant is something
+            // an operator opts into rather than the default posture.
             cors_origins: env::var("CORS_ORIGINS")
-                .unwrap_or_else(|_| "http://localhost:3000".to_string())
+                .unwrap_or_default()
                 .split(',')
                 .map(|s| s.trim().to_string())
                 .filter(|s| !s.is_empty())

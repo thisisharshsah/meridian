@@ -3,8 +3,8 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-API_PORT=8787
-WEB_PORT=3100
+API_PORT=7011
+WEB_PORT=7010
 
 cleanup() {
   trap - INT TERM EXIT

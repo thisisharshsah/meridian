@@ -32,3 +32,9 @@ data/*.db-wal
 .vscode/*
 !.vscode/extensions.json
 *.log
+
+# real secrets
+.env.production
+server/.env.production
+logs/
+server/target-release/

@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -21,7 +22,35 @@ const schema = z.object({
 
 type Values = z.infer<typeof schema>;
 
+/**
+ * `useSearchParams` opts a component out of static prerendering, so the form
+ * lives behind a Suspense boundary and the page's shell still renders at build
+ * time. Without this the production build fails outright — dev never
+ * prerenders, so it only shows up at `next build`.
+ */
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginShell />}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginShell() {
+  return (
+    <div>
+      <h2 className="text-xl font-semibold tracking-tight">Sign in</h2>
+      <p className="mt-1 text-sm text-muted-foreground">Welcome back to your workspace.</p>
+      <div className="mt-7 space-y-4">
+        <div className="h-14 animate-pulse rounded-md bg-surface-muted" />
+        <div className="h-14 animate-pulse rounded-md bg-surface-muted" />
+        <div className="h-10 animate-pulse rounded-md bg-surface-muted" />
+      </div>
+    </div>
+  );
+}
+
+function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
   const [formError, setFormError] = React.useState<string | null>(null);

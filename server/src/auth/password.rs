@@ -17,6 +17,25 @@ pub fn verify_password(plain: &str, hashed: &str) -> bool {
     Argon2::default().verify_password(plain.as_bytes(), hashed).is_ok()
 }
 
+/// Hash a password off the async runtime.
+///
+/// Argon2 is deliberately slow and CPU-bound — that is the point — but running
+/// it on a Tokio worker blocks that thread for its whole duration. On a public
+/// login endpoint a handful of concurrent attempts is then enough to stall
+/// every other request on the runtime, so the work goes to the blocking pool.
+pub async fn hash_password_async(plain: String) -> AppResult<String> {
+    tokio::task::spawn_blocking(move || hash_password(&plain))
+        .await
+        .map_err(|e| AppError::Other(anyhow::anyhow!("password hashing panicked: {e}")))?
+}
+
+/// Verify off the async runtime, for the same reason.
+pub async fn verify_password_async(plain: String, hashed: String) -> bool {
+    tokio::task::spawn_blocking(move || verify_password(&plain, &hashed))
+        .await
+        .unwrap_or(false)
+}
+
 /// Opaque, high-entropy token: refresh tokens, invite links, API keys.
 pub fn random_token() -> String {
     let mut raw = [0u8; 32];

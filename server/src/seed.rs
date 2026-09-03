@@ -644,7 +644,7 @@ pub async fn run(state: &AppState) -> anyhow::Result<()> {
         println!("  {n:>4}  {what}");
     }
     println!("  {indexed:>4}  records indexed for search");
-    println!("\n  Sign in at http://localhost:3100/login");
+    println!("\n  Sign in at http://localhost:7010/login");
     println!("  Email    {DEMO_EMAIL}");
     println!("  Password {DEMO_PASSWORD}\n");
 

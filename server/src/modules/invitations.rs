@@ -14,7 +14,9 @@ use serde_json::{json, Value};
 use sqlx::Row;
 
 use crate::auth::ctx::Ctx;
-use crate::auth::password::{digest_token, hash_password, random_token, verify_password};
+use crate::auth::password::{
+    digest_token, hash_password_async, random_token, verify_password_async,
+};
 use crate::common::audit;
 use crate::common::ids::new_id;
 use crate::error::{AppError, AppResult, FieldError};
@@ -296,7 +298,7 @@ async fn accept(
                 .fetch_one(&mut *tx)
                 .await?;
             let hash: String = row.try_get("password_hash").unwrap_or_default();
-            if !verify_password(&body.password, &hash) {
+            if !verify_password_async(body.password.clone(), hash).await {
                 return Err(AppError::Validation(vec![FieldError::new(
                     "password",
                     "That is not the password for this email address",
@@ -326,7 +328,7 @@ async fn accept(
             .bind(&id)
             .bind(&invite.email)
             .bind(name)
-            .bind(hash_password(&body.password)?)
+            .bind(hash_password_async(body.password.clone()).await?)
             .bind(&ts)
             .bind(&ts)
             .execute(&mut *tx)

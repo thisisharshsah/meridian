@@ -13,7 +13,7 @@ on disk. No cloud services, no Docker, no database server to install.
 ./dev.sh      # run the API and the web app together
 ```
 
-Then open <http://localhost:3100> and sign in as `demo@meridian.test` /
+Then open <http://localhost:7010> and sign in as `demo@meridian.test` /
 `demo12345`.
 
 ---
@@ -327,7 +327,7 @@ Requirements: Rust 1.9x, Node 20+, pnpm. Nothing else.
 ```bash
 pnpm install --dir apps/web   # once
 ./seed.sh                     # demo data (optional but recommended)
-./dev.sh                      # API on :8787, web on :3100
+./dev.sh                      # API on :7011, web on :7010
 ```
 
 Other commands:

@@ -8,7 +8,9 @@ use sqlx::Row;
 
 use crate::auth::ctx::Ctx;
 use crate::auth::jwt::issue_access_token;
-use crate::auth::password::{digest_token, hash_password, random_token, verify_password};
+use crate::auth::password::{
+    digest_token, hash_password_async, random_token, verify_password_async,
+};
 use crate::auth::roles::DEFAULT_ROLES;
 use crate::common::ids::new_id;
 use crate::error::{AppError, AppResult, FieldError};
@@ -160,7 +162,7 @@ async fn register(
     .bind(&user_id)
     .bind(&email)
     .bind(body.name.trim())
-    .bind(hash_password(&body.password)?)
+    .bind(hash_password_async(body.password.clone()).await?)
     .bind(&ts)
     .bind(&ts)
     .execute(&mut *tx)
@@ -246,12 +248,12 @@ async fn login(
 
     let Some(user) = user else {
         // Still spend the hashing time, so a missing account is not detectably faster.
-        let _ = verify_password(&body.password, "$argon2id$v=19$m=19456,t=2,p=1$c29tZXNhbHQ$RdescudvJCsgt3ub+b+dWRWJTmaaJObG");
+        let _ = verify_password_async(body.password.clone(), "$argon2id$v=19$m=19456,t=2,p=1$c29tZXNhbHQ$RdescudvJCsgt3ub+b+dWRWJTmaaJObG".to_string()).await;
         return Err(invalid());
     };
 
     let hash: String = user.try_get("password_hash").unwrap_or_default();
-    if !verify_password(&body.password, &hash) {
+    if !verify_password_async(body.password.clone(), hash).await {
         return Err(invalid());
     }
 

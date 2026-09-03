@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 export const ACCESS_COOKIE = "suite_at";
 export const REFRESH_COOKIE = "suite_rt";
 
-export const API_URL = process.env.API_URL ?? "http://127.0.0.1:8787";
+export const API_URL = process.env.API_URL ?? "http://127.0.0.1:7011";
 
 /** Tokens live in httpOnly cookies, so page scripts (and any XSS) cannot read them. */
 export function cookieOptions(maxAge: number) {
