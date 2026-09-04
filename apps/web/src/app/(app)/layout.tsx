@@ -3,8 +3,11 @@
 import * as React from "react";
 import { Sidebar } from "@/components/shell/sidebar";
 import { Topbar } from "@/components/shell/topbar";
+import { BottomNav } from "@/components/shell/bottom-nav";
 import { CommandPalette } from "@/components/shell/command-palette";
 import { useAppMeta, useSession } from "@/lib/queries";
+
+const COLLAPSE_KEY = "suite-sidebar-collapsed";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { data: meta, isLoading } = useAppMeta();
@@ -12,12 +15,43 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [paletteOpen, setPaletteOpen] = React.useState(false);
   const [navOpen, setNavOpen] = React.useState(false);
 
+  // Read on mount rather than in the initial state so the server and the first
+  // client render agree; flipping width during hydration would be a visible jump.
+  const [collapsed, setCollapsed] = React.useState(false);
+  React.useEffect(() => {
+    try {
+      setCollapsed(localStorage.getItem(COLLAPSE_KEY) === "1");
+    } catch {
+      /* storage blocked: stay expanded */
+    }
+  }, []);
+
+  const toggleCollapsed = () =>
+    setCollapsed((c) => {
+      const next = !c;
+      try {
+        localStorage.setItem(COLLAPSE_KEY, next ? "1" : "0");
+      } catch {
+        /* not worth failing a click over */
+      }
+      return next;
+    });
+
+  const modules = meta?.modules ?? [];
+
   return (
     <div className="flex h-dvh overflow-hidden">
-      {/* Desktop: a permanent column. Phone: the same nav as an overlay drawer,
-          because 240px of a 390px screen leaves nothing for the actual work. */}
-      <Sidebar modules={meta?.modules ?? []} loading={isLoading} className="hidden md:flex" />
+      {/* Desktop: a permanent column, collapsible to an icon rail. */}
+      <Sidebar
+        modules={modules}
+        loading={isLoading}
+        className="hidden md:flex"
+        collapsed={collapsed}
+        onToggleCollapse={toggleCollapsed}
+      />
 
+      {/* Phone: the same nav as an overlay drawer, always full width - a rail
+          inside a drawer would save nothing and cost the labels. */}
       {navOpen && (
         <div className="fixed inset-0 z-40 md:hidden">
           <button
@@ -27,7 +61,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             className="absolute inset-0 bg-black/40"
           />
           <Sidebar
-            modules={meta?.modules ?? []}
+            modules={modules}
             loading={isLoading}
             onNavigate={() => setNavOpen(false)}
             className="absolute inset-y-0 left-0 z-50 shadow-lg"
@@ -36,13 +70,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       )}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar
-          session={session}
-          onSearch={() => setPaletteOpen(true)}
-          onMenu={() => setNavOpen(true)}
-        />
-        <main className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">{children}</main>
+        <Topbar session={session} onSearch={() => setPaletteOpen(true)} />
+        {/* pb-16 clears the fixed bottom bar, which would otherwise cover the
+            last row of any list. */}
+        <main className="min-h-0 flex-1 overflow-y-auto pb-16 scrollbar-thin md:pb-0">
+          {children}
+        </main>
       </div>
+
+      <BottomNav
+        modules={modules}
+        onSearch={() => setPaletteOpen(true)}
+        onMenu={() => setNavOpen(true)}
+      />
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
     </div>
   );

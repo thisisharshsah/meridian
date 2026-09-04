@@ -29,6 +29,12 @@ try {
   var t = localStorage.getItem('suite-theme');
   var dark = t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches);
   if (dark) document.documentElement.classList.add('dark');
+  // Sidebar width has to be right in the first paint too. React only learns the
+  // stored choice after mount, so without this a collapsed sidebar renders at
+  // full width and snaps narrow on every single page load.
+  if (localStorage.getItem('suite-sidebar-collapsed') === '1') {
+    document.documentElement.classList.add('nav-collapsed');
+  }
 } catch (e) {}
 `;
 

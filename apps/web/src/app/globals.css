@@ -159,6 +159,13 @@
   html {
     -webkit-text-size-adjust: 100%;
   }
+  /* Set pre-paint by the inline script above, matching what React applies once
+     it mounts, so the two agree and the rail never resizes under the cursor.
+     Labels are clipped rather than wrapped for the frame before hydration. */
+  .nav-collapsed [data-nav-rail] {
+    width: 3.5rem;
+    overflow: hidden;
+  }
   /* iOS Safari zooms the whole page in whenever a focused control is smaller
      than 16px, and it never zooms back out - every field tap leaves the form
      scrolled sideways. The desk UI stays at 14px; only touch widths pay this. */
