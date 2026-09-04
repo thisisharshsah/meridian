@@ -59,3 +59,19 @@ export function FormError({ message }: { message?: string | null }) {
     </div>
   );
 }
+
+/**
+ * The id a control should point `aria-describedby` at, matching what FieldRow
+ * actually renders: the error replaces the hint rather than joining it, so the
+ * control must reference whichever one is on screen. Kept here so the id
+ * convention lives with the markup that defines it.
+ */
+export function fieldDescribedBy(
+  htmlFor: string | undefined,
+  opts: { error?: boolean; hint?: boolean },
+): string | undefined {
+  if (!htmlFor) return undefined;
+  if (opts.error) return `${htmlFor}-error`;
+  if (opts.hint) return `${htmlFor}-hint`;
+  return undefined;
+}

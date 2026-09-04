@@ -23,12 +23,14 @@ export function RefPicker({
   onChange,
   invalid,
   label,
+  describedBy,
 }: {
   id?: string;
   entity: string;
   value: string | null;
   onChange: (v: string | null) => void;
   invalid?: boolean;
+  describedBy?: string;
   /** The `<field>__label` the record already carries, when there is one. */
   label?: string | null;
 }) {
@@ -72,6 +74,7 @@ export function RefPicker({
         <button
           id={id}
           type="button"
+          aria-describedby={describedBy}
           aria-invalid={invalid}
           className={cn(
             "flex h-8.5 w-full items-center justify-between gap-2 rounded-md border bg-surface px-2.5 text-left text-sm shadow-xs transition-colors",

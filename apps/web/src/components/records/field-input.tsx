@@ -23,12 +23,15 @@ export function FieldInput({
   invalid,
   autoFocus,
   label,
+  describedBy,
 }: {
   field: FieldDef;
   value: unknown;
   onChange: (v: FieldValueInput) => void;
   invalid?: boolean;
   autoFocus?: boolean;
+  /** Id of the hint or error that FieldRow rendered for this field. */
+  describedBy?: string;
   /** `<field>__label` from the record, so a ref need not re-fetch its title. */
   label?: string | null;
 }) {
@@ -41,6 +44,7 @@ export function FieldInput({
           id={id}
           autoFocus={autoFocus}
           aria-invalid={invalid}
+          aria-describedby={describedBy}
           rows={4}
           value={(value as string) ?? ""}
           onChange={(e) => onChange(e.target.value)}
@@ -55,6 +59,7 @@ export function FieldInput({
             checked={!!value}
             onCheckedChange={(c) => onChange(c === true)}
             aria-invalid={invalid}
+          aria-describedby={describedBy}
           />
         </div>
       );
@@ -63,7 +68,8 @@ export function FieldInput({
       const options = optionsOf(field);
       return (
         <Select value={(value as string) ?? ""} onValueChange={(v) => onChange(v)}>
-          <SelectTrigger id={id} aria-invalid={invalid}>
+          <SelectTrigger id={id} aria-invalid={invalid}
+          aria-describedby={describedBy}>
             <SelectValue placeholder="Select…" />
           </SelectTrigger>
           <SelectContent>
@@ -85,6 +91,7 @@ export function FieldInput({
           value={(value as string) ?? null}
           onChange={onChange}
           invalid={invalid}
+          describedBy={describedBy}
           label={label}
         />
       );
@@ -97,6 +104,7 @@ export function FieldInput({
           invalid={invalid}
           initial={typeof value === "string" ? value : moneyToInput(value as number)}
           onChange={onChange}
+          describedBy={describedBy}
           placeholder="0.00"
         />
       );
@@ -109,6 +117,7 @@ export function FieldInput({
           invalid={invalid}
           initial={typeof value === "string" ? value : percentToInput(value as number)}
           onChange={onChange}
+          describedBy={describedBy}
           placeholder="0"
           suffix="%"
         />
@@ -122,6 +131,7 @@ export function FieldInput({
           invalid={invalid}
           initial={typeof value === "string" ? value : qtyToInput(value as number)}
           onChange={onChange}
+          describedBy={describedBy}
           placeholder="1"
         />
       );
@@ -134,6 +144,7 @@ export function FieldInput({
           step="1"
           autoFocus={autoFocus}
           aria-invalid={invalid}
+          aria-describedby={describedBy}
           value={value === null || value === undefined ? "" : String(value)}
           onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))}
         />
@@ -146,6 +157,7 @@ export function FieldInput({
           type="date"
           autoFocus={autoFocus}
           aria-invalid={invalid}
+          aria-describedby={describedBy}
           value={((value as string) ?? "").slice(0, 10)}
           onChange={(e) => onChange(e.target.value || null)}
         />
@@ -158,6 +170,7 @@ export function FieldInput({
           type="datetime-local"
           autoFocus={autoFocus}
           aria-invalid={invalid}
+          aria-describedby={describedBy}
           value={toLocalInput(value as string | null)}
           onChange={(e) => onChange(e.target.value ? new Date(e.target.value).toISOString() : null)}
         />
@@ -170,6 +183,7 @@ export function FieldInput({
           type={field.kind.type === "email" ? "email" : field.kind.type === "url" ? "url" : "text"}
           autoFocus={autoFocus}
           aria-invalid={invalid}
+          aria-describedby={describedBy}
           value={(value as string) ?? ""}
           onChange={(e) => onChange(e.target.value)}
           placeholder={field.kind.type === "url" ? "https://" : undefined}
@@ -190,12 +204,14 @@ function NumericInput({
   autoFocus,
   placeholder,
   suffix,
+  describedBy,
 }: {
   id: string;
   initial: string;
   onChange: (v: string | null) => void;
   invalid?: boolean;
   autoFocus?: boolean;
+  describedBy?: string;
   placeholder?: string;
   suffix?: string;
 }) {
@@ -213,6 +229,7 @@ function NumericInput({
         inputMode="decimal"
         autoFocus={autoFocus}
         aria-invalid={invalid}
+        aria-describedby={describedBy}
         value={text}
         placeholder={placeholder}
         onFocus={() => setFocused(true)}

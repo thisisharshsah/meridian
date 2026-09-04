@@ -91,6 +91,7 @@ function LoginForm() {
             autoFocus
             placeholder="you@company.com"
             aria-invalid={!!form.formState.errors.email}
+            aria-describedby={form.formState.errors.email ? "email-error" : undefined}
             {...form.register("email")}
           />
         </FieldRow>
@@ -101,6 +102,7 @@ function LoginForm() {
             autoComplete="current-password"
             placeholder="••••••••"
             aria-invalid={!!form.formState.errors.password}
+            aria-describedby={form.formState.errors.password ? "password-error" : undefined}
             {...form.register("password")}
           />
         </FieldRow>

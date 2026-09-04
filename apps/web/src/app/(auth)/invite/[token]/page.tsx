@@ -159,6 +159,7 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             aria-invalid={!!errors.password}
+            aria-describedby={errors.password ? "invite-password-error" : "invite-password-hint"}
           />
         </FieldRow>
 

@@ -14,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { FieldRow, FormError } from "@/components/form/field";
+import { FieldRow, FormError, fieldDescribedBy } from "@/components/form/field";
 import { FieldInput } from "@/components/records/field-input";
 import { ApiError } from "@/lib/api";
 import type { EntityMeta, FieldDef } from "@/lib/meta";
@@ -165,6 +165,10 @@ export function RecordForm({
         value={values[f.name]}
         onChange={(v) => setValue(f.name, v)}
         invalid={!!errors[f.name]}
+        describedBy={fieldDescribedBy(`field-${f.name}`, {
+          error: !!errors[f.name],
+          hint: !!f.help,
+        })}
         label={record?.[`${f.name}__label`] as string | undefined}
       />
     </FieldRow>

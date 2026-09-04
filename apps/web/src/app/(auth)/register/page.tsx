@@ -60,7 +60,8 @@ export default function RegisterPage() {
         <FormError message={formError} />
 
         <FieldRow label="Your name" error={form.formState.errors.name?.message} htmlFor="name" required>
-          <Input id="name" autoFocus placeholder="Ada Lovelace" aria-invalid={!!form.formState.errors.name} {...form.register("name")} />
+          <Input id="name" autoFocus placeholder="Ada Lovelace" aria-invalid={!!form.formState.errors.name}
+            aria-describedby={form.formState.errors.name ? "name-error" : undefined} {...form.register("name")} />
         </FieldRow>
 
         <FieldRow
@@ -73,6 +74,7 @@ export default function RegisterPage() {
             id="organization"
             placeholder="Acme Industries"
             aria-invalid={!!form.formState.errors.organization}
+            aria-describedby={form.formState.errors.organization ? "organization-error" : undefined}
             {...form.register("organization")}
           />
         </FieldRow>
@@ -85,6 +87,7 @@ export default function RegisterPage() {
               autoComplete="email"
               placeholder="you@company.com"
               aria-invalid={!!form.formState.errors.email}
+            aria-describedby={form.formState.errors.email ? "email-error" : undefined}
               {...form.register("email")}
             />
           </FieldRow>
@@ -120,6 +123,7 @@ export default function RegisterPage() {
             autoComplete="new-password"
             placeholder="••••••••"
             aria-invalid={!!form.formState.errors.password}
+            aria-describedby={form.formState.errors.password ? "password-error" : "password-hint"}
             {...form.register("password")}
           />
         </FieldRow>
