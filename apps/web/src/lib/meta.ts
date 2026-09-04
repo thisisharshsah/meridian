@@ -31,6 +31,8 @@ export type FieldDef = {
   /** Mirrors the column's SQL DEFAULT; used to seed a new-record form. */
   default: string | null;
   help: string | null;
+  /** Offer values already used in this workspace, while still allowing new ones. */
+  suggest: boolean;
 };
 
 export type ChildDef = {

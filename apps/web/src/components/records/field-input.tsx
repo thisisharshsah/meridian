@@ -6,10 +6,15 @@ import { Input, Textarea } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/misc";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RefPicker } from "@/components/records/ref-picker";
+import { ChipSelect } from "@/components/records/chip-select";
+import { SuggestInput } from "@/components/records/suggest-input";
 import { optionsOf, type FieldDef } from "@/lib/meta";
 import { moneyToInput, percentToInput, qtyToInput } from "@/lib/format";
 
 export type FieldValueInput = string | number | boolean | null;
+
+/** Above this many options, chips wrap into a block and a dropdown reads better. */
+const CHIP_LIMIT = 5;
 
 /**
  * One input per field kind. Scaled numbers (money, percent, quantity) are
@@ -24,6 +29,7 @@ export function FieldInput({
   autoFocus,
   label,
   describedBy,
+  entity,
 }: {
   field: FieldDef;
   value: unknown;
@@ -32,6 +38,8 @@ export function FieldInput({
   autoFocus?: boolean;
   /** Id of the hint or error that FieldRow rendered for this field. */
   describedBy?: string;
+  /** Entity key, needed to look up what values this workspace already uses. */
+  entity?: string;
   /** `<field>__label` from the record, so a ref need not re-fetch its title. */
   label?: string | null;
 }) {
@@ -66,6 +74,25 @@ export function FieldInput({
 
     case "select": {
       const options = optionsOf(field);
+
+      // Short lists become chips: every choice visible, one tap to pick, and no
+      // picker sheet covering the form on a phone. 33 of the 35 select fields
+      // in the schema have five options or fewer. Past that chips wrap into an
+      // unreadable block and a dropdown is the better control.
+      if (options.length <= CHIP_LIMIT) {
+        return (
+          <ChipSelect
+            id={id}
+            options={options}
+            value={(value as string) ?? null}
+            onChange={onChange}
+            invalid={invalid}
+            required={field.required}
+            describedBy={describedBy}
+          />
+        );
+      }
+
       return (
         <Select value={(value as string) ?? ""} onValueChange={(v) => onChange(v)}>
           <SelectTrigger id={id} aria-invalid={invalid}
@@ -177,6 +204,23 @@ export function FieldInput({
       );
 
     default:
+      // A field the schema marks as a small reusable vocabulary offers what is
+      // already in use, so the same thing is not filed three different ways.
+      if (field.suggest && entity) {
+        return (
+          <SuggestInput
+            id={id}
+            entity={entity}
+            field={field.name}
+            value={(value as string) ?? ""}
+            onChange={onChange}
+            invalid={invalid}
+            autoFocus={autoFocus}
+            describedBy={describedBy}
+          />
+        );
+      }
+
       return (
         <Input
           id={id}

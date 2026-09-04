@@ -71,6 +71,11 @@ pub struct FieldDef {
     /// forcing every client to restate the obvious one.
     pub default: Option<&'static str>,
     pub help: Option<&'static str>,
+    /// A free-text field whose values form a small vocabulary the user invents
+    /// and then reuses -- category, city, industry. The client offers whatever
+    /// is already in use as suggestions so the same thing is not filed under
+    /// "Hardware", "hardware" and "HW", while still accepting a new value.
+    pub suggest: bool,
 }
 
 impl FieldDef {
@@ -91,6 +96,7 @@ impl FieldDef {
             readonly: false,
             default: None,
             help: None,
+            suggest: false,
         }
     }
     pub fn required(mut self) -> Self {
@@ -121,6 +127,10 @@ impl FieldDef {
     }
     pub fn help(mut self, h: &'static str) -> Self {
         self.help = Some(h);
+        self
+    }
+    pub fn suggests(mut self) -> Self {
+        self.suggest = true;
         self
     }
 }

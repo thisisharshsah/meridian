@@ -70,7 +70,7 @@ pub fn register(r: &mut Registry) {
             date("date_of_joining", "Joined").in_list(),
             date("date_of_birth", "Date of birth"),
             money("annual_salary", "Annual salary"),
-            text("location", "Location").in_list(),
+            text("location", "Location").in_list().suggests(),
             long_text("notes", "Notes"),
         ],
         default_sort: ("full_name", SortDir::Asc),

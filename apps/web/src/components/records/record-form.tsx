@@ -165,6 +165,7 @@ export function RecordForm({
         value={values[f.name]}
         onChange={(v) => setValue(f.name, v)}
         invalid={!!errors[f.name]}
+        entity={meta.key}
         describedBy={fieldDescribedBy(`field-${f.name}`, {
           error: !!errors[f.name],
           hint: !!f.help,

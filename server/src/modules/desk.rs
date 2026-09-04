@@ -35,7 +35,7 @@ pub fn register(r: &mut Registry) {
                 opt("web", "Web form", "purple"),
                 opt("chat", "Chat", "success"),
             ]).required().with_default("email"),
-            text("category", "Category").in_list(),
+            text("category", "Category").in_list().suggests(),
             reference("assignee_id", "Assignee", "core.users").in_list(),
             datetime("due_at", "Due by").in_list(),
             datetime("first_response_at", "First response").readonly(),
@@ -94,7 +94,7 @@ pub fn register(r: &mut Registry) {
         title_field: "title",
         fields: vec![
             text("title", "Title").required().in_list(),
-            text("category", "Category").in_list(),
+            text("category", "Category").in_list().suggests(),
             select("status", "Status", vec![
                 opt("draft", "Draft", "neutral"),
                 opt("published", "Published", "success"),
