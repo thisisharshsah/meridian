@@ -304,7 +304,7 @@ function Stat({
   const tones = {
     brand: "bg-brand-subtle text-brand-subtle-foreground",
     success: "bg-success-subtle text-success",
-    warning: "bg-warning-subtle text-warning",
+    warning: "bg-warning-subtle text-warning-strong",
     danger: "bg-danger-subtle text-danger",
   };
   return (

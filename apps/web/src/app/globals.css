@@ -39,6 +39,15 @@
   --danger-subtle: oklch(0.95 0.04 26);
   --info: oklch(0.6 0.13 235);
   --info-subtle: oklch(0.95 0.035 235);
+
+  /* Badge/label text tones. The plain --success/--warning/--danger/--info are
+     tuned as fill colours and are far too light to read as small text on their
+     own subtle backgrounds: measured 3.52, 2.40, 4.30 and 3.33:1 against a
+     4.5:1 requirement. These clear 6:1 on the same backgrounds. */
+  --success-strong: oklch(0.44 0.12 155);
+  --warning-strong: oklch(0.45 0.11 75);
+  --danger-strong: oklch(0.47 0.19 26);
+  --info-strong: oklch(0.45 0.12 235);
   --purple: oklch(0.56 0.19 300);
   --purple-subtle: oklch(0.95 0.04 300);
 
@@ -79,6 +88,14 @@
   --danger-subtle: oklch(0.3 0.06 26);
   --info: oklch(0.72 0.12 235);
   --info-subtle: oklch(0.29 0.05 235);
+
+  /* On dark the bright fills are already legible on their subtle backgrounds
+     (5.51, 6.51, 5.76:1) so they carry straight over; danger measured 4.47:1,
+     just under, and is lifted to 4.83:1. */
+  --success-strong: var(--success);
+  --warning-strong: var(--warning);
+  --danger-strong: oklch(0.7 0.18 26);
+  --info-strong: var(--info);
   --purple: oklch(0.7 0.16 300);
   --purple-subtle: oklch(0.3 0.06 300);
 
@@ -116,6 +133,10 @@
   --color-danger-subtle: var(--danger-subtle);
   --color-info: var(--info);
   --color-info-subtle: var(--info-subtle);
+  --color-success-strong: var(--success-strong);
+  --color-warning-strong: var(--warning-strong);
+  --color-danger-strong: var(--danger-strong);
+  --color-info-strong: var(--info-strong);
   --color-purple: var(--purple);
   --color-purple-subtle: var(--purple-subtle);
 

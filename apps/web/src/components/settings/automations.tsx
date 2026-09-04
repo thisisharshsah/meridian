@@ -269,7 +269,7 @@ function ScheduledWork() {
                 <span className="flex-1">Follow-up action</span>
                 <span className="text-muted-foreground">runs {relativeTime(j.run_at)}</span>
                 {j.attempts > 1 && (
-                  <span className="text-warning">attempt {j.attempts}</span>
+                  <span className="text-warning-strong">attempt {j.attempts}</span>
                 )}
               </li>
             ))}

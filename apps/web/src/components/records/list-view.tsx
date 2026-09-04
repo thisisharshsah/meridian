@@ -21,6 +21,7 @@ import { Icon, iconFor } from "@/components/icon";
 import { BoardView, boardFieldFor } from "@/components/records/board-view";
 import { FieldValue } from "@/components/records/field-value";
 import { RecordForm } from "@/components/records/record-form";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ApiError } from "@/lib/api";
 import { entityPath, optionsOf, type EntityMeta, type FieldDef } from "@/lib/meta";
 import { useDelete, useList, useSession, type ListParams, type Record_ } from "@/lib/queries";
@@ -84,10 +85,38 @@ export function ListView({ meta, fixedFilters, embedded }: {
   }, [search]);
 
   const columns = React.useMemo(() => meta.fields.filter((f) => f.in_list).slice(0, 8), [meta.fields]);
+
+  // Defined once and used by both the desktop table and the phone card list, so
+  // the two views can never drift on what a row is allowed to do.
+  const RowActions = ({ r }: { r: Record_ }) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon-sm" aria-label={`Actions for this ${meta.label.toLowerCase()}`}>
+          <MoreHorizontal />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onSelect={() => router.push(`${entityPath(meta.key)}/${r.id}`)}>
+          Open
+        </DropdownMenuItem>
+        {meta.permissions.edit && (
+          <DropdownMenuItem onSelect={() => setEditing(r)}>Edit</DropdownMenuItem>
+        )}
+        {meta.permissions.delete && (
+          <DropdownMenuItem destructive onSelect={() => onDelete(r)}>
+            <Trash2 />
+            Delete
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
   const filterable = React.useMemo(
     () => meta.fields.filter((f) => f.kind.type === "select").slice(0, 3),
     [meta.fields],
   );
+
+  const [confirming, setConfirming] = React.useState<Record_ | null>(null);
 
   const params: ListParams = {
     page,
@@ -108,11 +137,18 @@ export function ListView({ meta, fixedFilters, embedded }: {
 
   const activeFilters = Object.entries(filters).filter(([, v]) => v);
 
-  const onDelete = async (r: Record_) => {
+  // The menu item now only asks; the deletion itself waits for confirmLabel.
+  const onDelete = (r: Record_) => setConfirming(r);
+
+  const confirmDelete = async () => {
+    const r = confirming;
+    if (!r) return;
     try {
       await remove.mutateAsync(r.id);
+      setConfirming(null);
       toast.success(`${meta.label} deleted`);
     } catch {
+      setConfirming(null);
       toast.error(`Could not delete this ${meta.label.toLowerCase()}`);
     }
   };
@@ -269,6 +305,10 @@ export function ListView({ meta, fixedFilters, embedded }: {
             }
           />
         ) : (
+          <>
+          {/* A six-to-eight column table cannot be read on a 390px screen, so
+              below md the same rows render as cards led by the record title. */}
+          <div className="hidden md:block">
           <Table>
             <THead>
               <TR className="hover:bg-transparent">
@@ -325,32 +365,35 @@ export function ListView({ meta, fixedFilters, embedded }: {
                     </TD>
                   ))}
                   <TD onClick={(e) => e.stopPropagation()}>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon-sm" aria-label="Row actions">
-                          <MoreHorizontal />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onSelect={() => router.push(`${entityPath(meta.key)}/${r.id}`)}>
-                          Open
-                        </DropdownMenuItem>
-                        {meta.permissions.edit && (
-                          <DropdownMenuItem onSelect={() => setEditing(r)}>Edit</DropdownMenuItem>
-                        )}
-                        {meta.permissions.delete && (
-                          <DropdownMenuItem destructive onSelect={() => onDelete(r)}>
-                            <Trash2 />
-                            Delete
-                          </DropdownMenuItem>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <RowActions r={r} />
                   </TD>
                 </TR>
               ))}
             </TBody>
           </Table>
+          </div>
+
+          <ul className="divide-y divide-border md:hidden">
+            {data?.data.map((r) => (
+              <li key={r.id} className="flex items-start gap-2 p-3">
+                <Link href={`${entityPath(meta.key)}/${r.id}`} className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium">
+                    <FieldValue field={columns[0]} record={r} currency={currency} compact />
+                  </span>
+                  <span className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                    {columns.slice(1, 4).map((f) => (
+                      <span key={f.name} className="text-xs text-muted-foreground">
+                        <span className="text-subtle-foreground">{f.label}: </span>
+                        <FieldValue field={f} record={r} currency={currency} compact />
+                      </span>
+                    ))}
+                  </span>
+                </Link>
+                <RowActions r={r} />
+              </li>
+            ))}
+          </ul>
+          </>
         )}
       </div>
 
@@ -391,6 +434,22 @@ export function ListView({ meta, fixedFilters, embedded }: {
         record={editing}
         open={!!editing}
         onOpenChange={(v) => !v && setEditing(null)}
+      />
+      <ConfirmDialog
+        open={!!confirming}
+        onOpenChange={(v) => !v && setConfirming(null)}
+        title={`Delete this ${meta.label.toLowerCase()}?`}
+        description={
+          <>
+            <span className="font-medium text-foreground">
+              {String(confirming?.[meta.title_field] ?? "Untitled")}
+            </span>{" "}
+            will be removed from {meta.label_plural.toLowerCase()}.
+          </>
+        }
+        confirmLabel={`Delete ${meta.label.toLowerCase()}`}
+        pending={remove.isPending}
+        onConfirm={confirmDelete}
       />
     </div>
   );

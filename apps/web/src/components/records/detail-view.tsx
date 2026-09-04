@@ -17,6 +17,7 @@ import { Timeline } from "@/components/records/timeline";
 import { LineItems } from "@/components/records/line-items";
 import { RecordActions } from "@/components/records/record-actions";
 import { ListView } from "@/components/records/list-view";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { entityPath, type EntityMeta, type FieldDef } from "@/lib/meta";
 import { useDelete, useEntityMeta, useRecord, useSession } from "@/lib/queries";
 import { formatMoney } from "@/lib/format";
@@ -34,6 +35,7 @@ export function DetailView({ meta, id }: { meta: EntityMeta; id: string }) {
   const { data: record, isLoading, isError } = useRecord(meta.key, id);
   const remove = useDelete(meta.key);
   const [editing, setEditing] = React.useState(false);
+  const [confirming, setConfirming] = React.useState(false);
 
   const inlineChild = meta.children.find((c) => c.inline);
   const relatedChildren = meta.children.filter((c) => !c.inline);
@@ -71,9 +73,11 @@ export function DetailView({ meta, id }: { meta: EntityMeta; id: string }) {
   const onDelete = async () => {
     try {
       await remove.mutateAsync(id);
+      setConfirming(false);
       toast.success(`${meta.label} deleted`);
       router.push(entityPath(meta.key));
     } catch {
+      setConfirming(false);
       toast.error("Could not delete this record");
     }
   };
@@ -119,7 +123,12 @@ export function DetailView({ meta, id }: { meta: EntityMeta; id: string }) {
             </Button>
           )}
           {meta.permissions.delete && (
-            <Button variant="ghost" size="icon" onClick={onDelete} aria-label="Delete">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setConfirming(true)}
+              aria-label={`Delete this ${meta.label.toLowerCase()}`}
+            >
               <Trash2 />
             </Button>
           )}
@@ -180,6 +189,20 @@ export function DetailView({ meta, id }: { meta: EntityMeta; id: string }) {
       </div>
 
       <RecordForm meta={meta} record={record} open={editing} onOpenChange={setEditing} />
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title={`Delete this ${meta.label.toLowerCase()}?`}
+        description={
+          <>
+            <span className="font-medium text-foreground">{title}</span> will be removed,
+            along with anything filed under it.
+          </>
+        }
+        confirmLabel={`Delete ${meta.label.toLowerCase()}`}
+        pending={remove.isPending}
+        onConfirm={onDelete}
+      />
     </div>
   );
 }

@@ -8,11 +8,11 @@ import { initials } from "@/lib/format";
  */
 const TONES = [
   "bg-brand-subtle text-brand-subtle-foreground",
-  "bg-success-subtle text-success",
-  "bg-warning-subtle text-warning",
-  "bg-info-subtle text-info",
+  "bg-success-subtle text-success-strong",
+  "bg-warning-subtle text-warning-strong",
+  "bg-info-subtle text-info-strong",
   "bg-purple-subtle text-purple",
-  "bg-danger-subtle text-danger",
+  "bg-danger-subtle text-danger-strong",
 ];
 
 function toneFor(seed: string) {
