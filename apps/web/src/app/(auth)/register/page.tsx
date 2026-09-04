@@ -10,6 +10,7 @@ import { ArrowRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FieldRow, FormError } from "@/components/form/field";
 import { submitSession } from "@/lib/auth-client";
@@ -114,9 +115,8 @@ export default function RegisterPage() {
           hint="At least 8 characters."
           required
         >
-          <Input
+          <PasswordInput
             id="password"
-            type="password"
             autoComplete="new-password"
             placeholder="••••••••"
             aria-invalid={!!form.formState.errors.password}

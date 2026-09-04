@@ -11,6 +11,7 @@ import { ArrowRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { FieldRow, FormError } from "@/components/form/field";
 import { submitSession } from "@/lib/auth-client";
@@ -95,9 +96,8 @@ function LoginForm() {
         </FieldRow>
 
         <FieldRow label="Password" error={form.formState.errors.password?.message} htmlFor="password">
-          <Input
+          <PasswordInput
             id="password"
-            type="password"
             autoComplete="current-password"
             placeholder="••••••••"
             aria-invalid={!!form.formState.errors.password}

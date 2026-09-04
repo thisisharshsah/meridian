@@ -9,6 +9,7 @@ import { ArrowRight, MailWarning } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Skeleton } from "@/components/ui/misc";
 import { FieldRow, FormError } from "@/components/form/field";
 import { ApiError, get } from "@/lib/api";
@@ -150,9 +151,8 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
           }
           required
         >
-          <Input
+          <PasswordInput
             id="invite-password"
-            type="password"
             autoFocus={data.has_account}
             autoComplete={data.has_account ? "current-password" : "new-password"}
             placeholder="••••••••"

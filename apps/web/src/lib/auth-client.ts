@@ -22,7 +22,42 @@ export async function submitSession(
     return { ok: false, message: "Cannot reach the server. Is it running?", fields: {} };
   }
 
-  if (res.ok) return { ok: true };
+  if (res.ok) {
+    // A 200 does not prove we are signed in. If the page was opened over
+    // http://, the browser discards the Secure session cookies without a word,
+    // the caller navigates away, the route guard bounces straight back to the
+    // form, and the user is left staring at a login page that never said no.
+    // Ask the server whether the cookie survived before claiming success.
+    const state = await fetch("/api/session/state", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null);
+    if (state && state.signedIn === false) {
+      return {
+        ok: false,
+        message:
+          "Your details were accepted, but the browser did not keep the session cookie. This happens when the page is opened over http:// - open the site with https:// and try again.",
+        fields: {},
+      };
+    }
+    return { ok: true };
+  }
+
+  // An edge security check (Cloudflare's managed challenge) answers XHR with an
+  // HTML interstitial, not JSON. A challenge can only be solved by a top-level
+  // navigation, so this request never reached the app at all. Parsing that as
+  // JSON fails and the user used to get a bare "Something went wrong", which
+  // hides the one fact that matters: the server never saw the credentials.
+  const contentType = res.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) {
+    const challenged = res.headers.get("cf-mitigated") === "challenge" || res.status === 403;
+    return {
+      ok: false,
+      message: challenged
+        ? "A security check blocked this request before it reached the server. Your details were not sent. If this keeps happening the site's WAF challenge needs to be scoped away from /api."
+        : `The server returned an unexpected ${res.status} response.`,
+      fields: {},
+    };
+  }
 
   const body = await res.json().catch(() => null);
   const err = body?.error;
