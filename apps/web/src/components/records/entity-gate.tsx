@@ -36,15 +36,26 @@ export function EntityGate({
 
   if (error) {
     const forbidden = error instanceof ApiError && error.status === 403;
+    // A timed-out session used to be reported as "Screen not found", which
+    // reads as data loss to someone who does not know what a session is.
+    const signedOut = error instanceof ApiError && error.status === 401;
     return (
       <div className="p-5">
         <EmptyState
-          icon={forbidden ? Lock : FileQuestion}
-          title={forbidden ? "You do not have access to this" : "Screen not found"}
+          icon={forbidden || signedOut ? Lock : FileQuestion}
+          title={
+            forbidden
+              ? "You do not have access to this"
+              : signedOut
+                ? "Please sign in again"
+                : "We couldn't open this screen"
+          }
           description={
             forbidden
-              ? "Ask an administrator to grant your role permission to view these records."
-              : `There is no module called "${entityKey}".`
+              ? "Ask whoever set up your workspace to give your role access to these records."
+              : signedOut
+                ? "Your session timed out. Nothing has been lost — sign in and you'll come straight back."
+                : "This screen may have been renamed or removed. Head back home and pick it from the menu."
           }
           action={
             <Button variant="secondary" asChild>
