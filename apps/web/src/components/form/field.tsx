@@ -20,6 +20,11 @@ export function FieldRow({
   children: React.ReactNode;
   className?: string;
 }) {
+  // role="alert" so a screen reader announces the problem when it appears
+  // rather than only when the field is next visited.
+  const errorId = htmlFor ? `${htmlFor}-error` : undefined;
+  const hintId = htmlFor ? `${htmlFor}-hint` : undefined;
+
   return (
     <div className={cn("space-y-1.5", className)}>
       {label && (
@@ -29,12 +34,14 @@ export function FieldRow({
       )}
       {children}
       {error ? (
-        <p className="flex items-center gap-1 text-xs text-danger">
-          <AlertCircle className="size-3" />
+        <p id={errorId} role="alert" className="flex items-center gap-1 text-xs text-danger">
+          <AlertCircle className="size-3 shrink-0" aria-hidden="true" />
           {error}
         </p>
       ) : hint ? (
-        <p className="text-xs text-subtle-foreground">{hint}</p>
+        <p id={hintId} className="text-xs text-subtle-foreground">
+          {hint}
+        </p>
       ) : null}
     </div>
   );
@@ -43,8 +50,11 @@ export function FieldRow({
 export function FormError({ message }: { message?: string | null }) {
   if (!message) return null;
   return (
-    <div className="flex items-start gap-2 rounded-md border border-danger/30 bg-danger-subtle px-3 py-2 text-xs text-danger">
-      <AlertCircle className="mt-px size-3.5 shrink-0" />
+    <div
+      role="alert"
+      className="flex items-start gap-2 rounded-md border border-danger/30 bg-danger-subtle px-3 py-2 text-xs text-danger"
+    >
+      <AlertCircle className="mt-px size-3.5 shrink-0" aria-hidden="true" />
       <span>{message}</span>
     </div>
   );

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import {
-  AlertTriangle, ArrowUpRight, Banknote, CircleDollarSign, Receipt, Target, Ticket, TrendingUp,
+  AlertTriangle, ArrowUpRight, Banknote, Check, CircleDollarSign, Receipt, Target, Ticket, TrendingUp,
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -59,6 +59,16 @@ export default function DashboardPage() {
 
   const loading = openPipeline.isLoading || receivable.isLoading;
 
+  // A brand-new workspace is all zeroes, and a grid of zeroes tells an owner
+  // nothing about what to do next. Detect that state and lead with a first
+  // task instead of a dashboard that reports on data they have not entered.
+  const accounts = useList("crm.accounts", { per_page: 1 });
+  const hasCustomers = (accounts.data?.data.length ?? 0) > 0;
+  const hasDeals = openDealCount > 0 || (recentDeals.data?.data.length ?? 0) > 0;
+  const hasInvoices = (invoiceTotals.data?.data.length ?? 0) > 0;
+  const isNewWorkspace =
+    !loading && !accounts.isLoading && !hasCustomers && !hasDeals && !hasInvoices;
+
   return (
     <div className="p-5">
       <header className="mb-5">
@@ -69,6 +79,43 @@ export default function DashboardPage() {
           Here is where {session?.organization.name ?? "your workspace"} stands today.
         </p>
       </header>
+
+      {isNewWorkspace && (
+        <Card className="mb-5 border-brand/30 bg-brand-subtle/40">
+          <CardHeader>
+            <CardTitle>Start here</CardTitle>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              Three steps and this page fills itself in. Do them in order — each one uses the last.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <StartStep
+              n={1}
+              done={hasCustomers}
+              title="Add a customer"
+              why="Someone you sell to. Deals and invoices both attach to one."
+              href="/crm/accounts"
+              cta="Add a customer"
+            />
+            <StartStep
+              n={2}
+              done={hasDeals}
+              title="Add a deal you are chasing"
+              why="Work you hope to win. This is what fills your pipeline figure."
+              href="/crm/deals"
+              cta="Add a deal"
+            />
+            <StartStep
+              n={3}
+              done={hasInvoices}
+              title="Send your first invoice"
+              why="Bill a customer. Unpaid invoices become the receivable figure."
+              href="/books/invoices"
+              cta="Create an invoice"
+            />
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Stat
@@ -294,4 +341,51 @@ function greeting() {
   if (h < 12) return "Good morning";
   if (h < 18) return "Good afternoon";
   return "Good evening";
+}
+
+/**
+ * One numbered step of the first-run guide. Says what the thing IS, not just
+ * its name — "account" and "deal" mean nothing to someone who has not used a
+ * CRM before, and they are the first two words this product shows them.
+ */
+function StartStep({
+  n,
+  done,
+  title,
+  why,
+  href,
+  cta,
+}: {
+  n: number;
+  done: boolean;
+  title: string;
+  why: string;
+  href: string;
+  cta: string;
+}) {
+  return (
+    <div className="flex items-start gap-3 rounded-md border border-border bg-surface p-3">
+      <span
+        className={cn(
+          "mt-px flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
+          done ? "bg-success text-white" : "bg-surface-muted text-muted-foreground",
+        )}
+        aria-hidden="true"
+      >
+        {done ? <Check className="size-3.5" /> : n}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className={cn("text-sm font-medium", done && "text-muted-foreground line-through")}>
+          {title}
+        </p>
+        <p className="mt-0.5 text-xs text-muted-foreground">{why}</p>
+      </div>
+      {!done && (
+        <Button variant="secondary" size="sm" asChild className="shrink-0">
+          <Link href={href}>{cta}</Link>
+        </Button>
+      )}
+      <span className="sr-only">{done ? "Done" : `Step ${n} of 3`}</span>
+    </div>
+  );
 }

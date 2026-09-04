@@ -17,7 +17,17 @@ const OPEN_KEY = "suite-open-modules";
  * Module list comes straight from the API, filtered to what this user may see,
  * so the navigation can never offer a screen the server would refuse.
  */
-export function Sidebar({ modules, loading }: { modules: ModuleMeta[]; loading: boolean }) {
+export function Sidebar({
+  modules,
+  loading,
+  className,
+  onNavigate,
+}: {
+  modules: ModuleMeta[];
+  loading: boolean;
+  className?: string;
+  onNavigate?: () => void;
+}) {
   const pathname = usePathname();
   const activeModule = pathname.split("/")[1] ?? "";
 
@@ -46,7 +56,17 @@ export function Sidebar({ modules, loading }: { modules: ModuleMeta[]; loading: 
   const isOpen = (key: string) => open[key] ?? key === activeModule;
 
   return (
-    <nav className="flex h-full w-60 shrink-0 flex-col border-r border-border bg-sidebar">
+    <nav
+      // Delegated so the drawer closes on an actual navigation but stays open
+      // when a module row is only being expanded.
+      onClick={(e) => {
+        if ((e.target as HTMLElement).closest("a")) onNavigate?.();
+      }}
+      className={cn(
+        "flex h-full w-60 shrink-0 flex-col border-r border-border bg-sidebar",
+        className,
+      )}
+    >
       <div className="flex h-13 items-center px-4">
         <Link href="/" className="text-sidebar-foreground hover:text-foreground">
           <Wordmark />

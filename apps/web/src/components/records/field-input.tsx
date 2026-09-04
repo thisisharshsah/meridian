@@ -95,7 +95,7 @@ export function FieldInput({
           id={id}
           autoFocus={autoFocus}
           invalid={invalid}
-          initial={moneyToInput(value as number)}
+          initial={typeof value === "string" ? value : moneyToInput(value as number)}
           onChange={onChange}
           placeholder="0.00"
         />
@@ -107,7 +107,7 @@ export function FieldInput({
           id={id}
           autoFocus={autoFocus}
           invalid={invalid}
-          initial={percentToInput(value as number)}
+          initial={typeof value === "string" ? value : percentToInput(value as number)}
           onChange={onChange}
           placeholder="0"
           suffix="%"
@@ -120,7 +120,7 @@ export function FieldInput({
           id={id}
           autoFocus={autoFocus}
           invalid={invalid}
-          initial={qtyToInput(value as number)}
+          initial={typeof value === "string" ? value : qtyToInput(value as number)}
           onChange={onChange}
           placeholder="1"
         />

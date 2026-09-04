@@ -19,12 +19,15 @@ const buttonVariants = cva(
         danger: "bg-danger text-white hover:brightness-110 shadow-xs",
         link: "text-brand underline-offset-4 hover:underline",
       },
+      // The max-md heights keep the desk-dense look on a pointer device while
+      // giving a finger something it can actually hit: a 28px row action is
+      // well under the ~44px a thumb needs, and misses land on the row behind.
       size: {
-        sm: "h-7 px-2.5 text-xs [&_svg]:size-3.5",
-        md: "h-8.5 px-3 text-sm [&_svg]:size-4",
-        lg: "h-10 px-4 text-sm [&_svg]:size-4",
-        icon: "size-8.5 [&_svg]:size-4",
-        "icon-sm": "size-7 [&_svg]:size-3.5",
+        sm: "h-7 max-md:h-10 px-2.5 text-xs [&_svg]:size-3.5",
+        md: "h-8.5 max-md:h-11 px-3 text-sm [&_svg]:size-4",
+        lg: "h-10 max-md:h-11 px-4 text-sm [&_svg]:size-4",
+        icon: "size-8.5 max-md:size-11 [&_svg]:size-4",
+        "icon-sm": "size-7 max-md:size-10 [&_svg]:size-3.5",
       },
     },
     defaultVariants: { variant: "secondary", size: "md" },

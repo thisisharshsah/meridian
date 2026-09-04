@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { LogOut, Moon, Search, Sun } from "lucide-react";
+import { LogOut, Menu, Moon, Search, Sun } from "lucide-react";
 
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { Session } from "@/lib/meta";
 
-export function Topbar({ session, onSearch }: { session?: Session; onSearch: () => void }) {
+export function Topbar({
+  session,
+  onSearch,
+  onMenu,
+}: {
+  session?: Session;
+  onSearch: () => void;
+  onMenu?: () => void;
+}) {
   const router = useRouter();
   const qc = useQueryClient();
   const [dark, setDark] = React.useState(false);
@@ -50,6 +58,17 @@ export function Topbar({ session, onSearch }: { session?: Session; onSearch: () 
 
   return (
     <header className="flex h-13 shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
+      {onMenu && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="-ml-1 shrink-0 md:hidden"
+          onClick={onMenu}
+          aria-label="Open menu"
+        >
+          <Menu />
+        </Button>
+      )}
       <button
         type="button"
         onClick={onSearch}

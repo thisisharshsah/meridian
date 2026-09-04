@@ -117,12 +117,15 @@ function LoginForm() {
         </Button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-muted-foreground">
-        No workspace yet?{" "}
-        <Link href="/register" className="font-medium text-brand hover:underline">
-          Create one
-        </Link>
-      </p>
+      {/* A self-hosted copy opens here with no accounts in it at all, so the
+          way OUT of this screen matters as much as the way through it. A grey
+          sentence asks a first-time owner to spot a link; a button does not. */}
+      <div className="mt-6 border-t border-border pt-5 text-center">
+        <p className="text-sm text-muted-foreground">First time here?</p>
+        <Button variant="secondary" size="lg" className="mt-2 w-full" asChild>
+          <Link href="/register">Create a new workspace</Link>
+        </Button>
+      </div>
     </div>
   );
 }

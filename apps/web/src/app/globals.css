@@ -138,6 +138,17 @@
   html {
     -webkit-text-size-adjust: 100%;
   }
+  /* iOS Safari zooms the whole page in whenever a focused control is smaller
+     than 16px, and it never zooms back out - every field tap leaves the form
+     scrolled sideways. The desk UI stays at 14px; only touch widths pay this. */
+  @media (max-width: 767px) {
+    input,
+    textarea,
+    select,
+    [cmdk-input] {
+      font-size: 16px;
+    }
+  }
   body {
     background-color: var(--background);
     color: var(--foreground);

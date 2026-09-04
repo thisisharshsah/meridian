@@ -1,11 +1,13 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { Check, ChevronDown, X } from "lucide-react";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/misc";
 import { useLookup } from "@/lib/queries";
 import { get } from "@/lib/api";
+import { entityPath } from "@/lib/meta";
 import { cn } from "@/lib/utils";
 
 /**
@@ -30,6 +32,7 @@ export function RefPicker({
   /** The `<field>__label` the record already carries, when there is one. */
   label?: string | null;
 }) {
+  const lookupLabel = entity.split(".").pop()?.replace(/_/g, " ") ?? "records";
   const [open, setOpen] = React.useState(false);
   const [term, setTerm] = React.useState("");
   const [selectedLabel, setSelectedLabel] = React.useState<string | null>(null);
@@ -112,7 +115,21 @@ export function RefPicker({
             <p className="px-2 py-3 text-center text-xs text-muted-foreground">Searching…</p>
           )}
           {data?.data.length === 0 && (
-            <p className="px-2 py-3 text-center text-xs text-muted-foreground">No matches.</p>
+            // On a fresh workspace this list is empty for every required
+            // reference, so "No matches." is a dead end: the field cannot be
+            // filled and the form cannot be submitted. Say where the missing
+            // thing is created rather than only reporting its absence.
+            <div className="px-2 py-3 text-center">
+              <p className="text-xs text-muted-foreground">
+                {term ? `Nothing matches “${term}”.` : `You have no ${lookupLabel} yet.`}
+              </p>
+              <Link
+                href={entityPath(entity)}
+                className="mt-1 inline-block text-xs font-medium text-brand hover:underline"
+              >
+                Add {term ? "one" : `your first ${lookupLabel}`} first →
+              </Link>
+            </div>
           )}
           {data?.data.map((o) => (
             <button

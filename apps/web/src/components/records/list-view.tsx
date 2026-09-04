@@ -21,6 +21,7 @@ import { Icon, iconFor } from "@/components/icon";
 import { BoardView, boardFieldFor } from "@/components/records/board-view";
 import { FieldValue } from "@/components/records/field-value";
 import { RecordForm } from "@/components/records/record-form";
+import { ApiError } from "@/lib/api";
 import { entityPath, optionsOf, type EntityMeta, type FieldDef } from "@/lib/meta";
 import { useDelete, useList, useSession, type ListParams, type Record_ } from "@/lib/queries";
 import { cn } from "@/lib/utils";
@@ -236,8 +237,12 @@ export function ListView({ meta, fixedFilters, embedded }: {
         {isError ? (
           <EmptyState
             icon={iconFor(meta.icon)}
-            title="Could not load these records"
-            description={(error as Error)?.message}
+            title={`We couldn't load your ${meta.label_plural.toLowerCase()}`}
+            description={
+              error instanceof ApiError && error.status === 401
+                ? "Your session timed out. Sign in again and you'll come straight back here."
+                : "Nothing has been lost. Check your connection and try again in a moment."
+            }
           />
         ) : isLoading && !data ? (
           <div className="space-y-px p-3">

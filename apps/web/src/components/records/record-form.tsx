@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { toast } from "sonner";
+import { ChevronRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -44,6 +45,17 @@ export function RecordForm({
   const update = useUpdate(meta.key);
 
   const editable = React.useMemo(() => meta.fields.filter((f) => !f.readonly), [meta.fields]);
+
+  // A create dialog can carry twenty-odd fields, and a first-time user cannot
+  // tell which two actually matter. Lead with what is required and fold the
+  // rest away. Only worth splitting when it genuinely shortens the form, and
+  // never when editing, where hiding a filled-in value would be a trap.
+  const [primary, secondary] = React.useMemo(() => {
+    const required = editable.filter((f) => f.required);
+    const rest = editable.filter((f) => !f.required);
+    if (editing || required.length === 0 || rest.length < 3) return [editable, []];
+    return [required, rest];
+  }, [editable, editing]);
 
   const [values, setValues] = React.useState<Record<string, unknown>>({});
   const [errors, setErrors] = React.useState<Record<string, string>>({});
@@ -104,8 +116,28 @@ export function RecordForm({
       if (err instanceof ApiError) {
         const map = err.fieldMap;
         setErrors(map);
-        if (!Object.keys(map).length) setFormError(err.message);
-        else setFormError(null);
+        const named = Object.keys(map);
+        // A field error keyed to something this form does not render (a hidden
+        // or readonly column) would otherwise highlight nothing and leave the
+        // dialog looking as though the click did nothing at all.
+        const shown = editable.filter((f) => map[f.name]);
+        setFormError(
+          named.length === 0
+            ? err.message
+            : shown.length > 0
+              ? "Please fix the highlighted fields below."
+              : err.message || "Some details could not be saved.",
+        );
+        // Long forms scroll: without this the highlighted field can be well
+        // below the fold and the user sees no reaction to pressing Create.
+        const first = shown[0];
+        if (first) {
+          requestAnimationFrame(() => {
+            const el = document.getElementById(`field-${first.name}`);
+            el?.scrollIntoView({ block: "center", behavior: "smooth" });
+            el?.focus?.();
+          });
+        }
       } else {
         setFormError("Something went wrong. Please try again.");
       }
@@ -113,6 +145,30 @@ export function RecordForm({
   };
 
   const pending = create.isPending || update.isPending;
+
+  // If the server rejected something that lives in the collapsed half, the
+  // disclosure has to be open or the highlight is invisible.
+  const hasSecondaryError = secondary.some((f) => errors[f.name]);
+
+  const renderField = (f: FieldDef) => (
+    <FieldRow
+      key={f.name}
+      label={f.label}
+      htmlFor={`field-${f.name}`}
+      required={f.required}
+      error={errors[f.name] || undefined}
+      hint={f.help ?? undefined}
+      className={spanClass(f)}
+    >
+      <FieldInput
+        field={f}
+        value={values[f.name]}
+        onChange={(v) => setValue(f.name, v)}
+        invalid={!!errors[f.name]}
+        label={record?.[`${f.name}__label`] as string | undefined}
+      />
+    </FieldRow>
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -129,28 +185,24 @@ export function RecordForm({
 
           <DialogBody>
             <FormError message={formError} />
-            <div className="grid gap-4 sm:grid-cols-2">
-              {editable.map((f, i) => (
-                <FieldRow
-                  key={f.name}
-                  label={f.label}
-                  htmlFor={`field-${f.name}`}
-                  required={f.required}
-                  error={errors[f.name] || undefined}
-                  hint={f.help ?? undefined}
-                  className={spanClass(f)}
-                >
-                  <FieldInput
-                    field={f}
-                    value={values[f.name]}
-                    onChange={(v) => setValue(f.name, v)}
-                    invalid={!!errors[f.name]}
-                    autoFocus={i === 0}
-                    label={record?.[`${f.name}__label`] as string | undefined}
-                  />
-                </FieldRow>
-              ))}
-            </div>
+            <div className="grid gap-4 sm:grid-cols-2">{primary.map(renderField)}</div>
+
+            {secondary.length > 0 && (
+              <details className="group mt-4 rounded-md border border-border" open={hasSecondaryError}>
+                <summary className="cursor-pointer list-none px-3 py-2 text-sm font-medium marker:content-none">
+                  <span className="inline-flex items-center gap-1.5">
+                    <ChevronRight className="size-4 transition-transform group-open:rotate-90" aria-hidden="true" />
+                    More details
+                    <span className="font-normal text-muted-foreground">
+                      (optional, {secondary.length})
+                    </span>
+                  </span>
+                </summary>
+                <div className="grid gap-4 border-t border-border p-3 sm:grid-cols-2">
+                  {secondary.map(renderField)}
+                </div>
+              </details>
+            )}
           </DialogBody>
 
           <DialogFooter>

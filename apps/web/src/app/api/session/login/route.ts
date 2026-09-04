@@ -26,7 +26,10 @@ export async function exchange(req: NextRequest, endpoint: "login" | "register")
       {
         error: {
           code: "api_unreachable",
-          message: "Cannot reach the API server. Start it with `cargo run` in the server directory.",
+          // Owner-facing. The operator instruction that used to live here named
+          // a shell command, which means nothing to the person signing in.
+          message:
+            "Meridian can't reach its own service right now. Nothing you typed has been lost \u2014 wait a moment and try again.",
         },
       },
       { status: 502 },
