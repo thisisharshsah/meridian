@@ -2554,3 +2554,66 @@ async fn hostile_query_parameters_cannot_reach_sql() {
     let (_, list) = call(&app, get("/api/e/crm.accounts", &token)).await;
     assert_eq!(list["total"], json!(1), "the accounts table should still be intact");
 }
+
+#[tokio::test]
+async fn a_currency_must_be_one_of_the_offered_codes() {
+    // Currency was free text, so "Euro", "euros" and "$" all stored happily and
+    // every amount on the document was then formatted against a code that means
+    // nothing. The engine validates a Select against its own options, so the
+    // typo has to be refused at write time rather than discovered on an invoice.
+    let (app, _state) = test_app().await;
+    let token = new_org(&app, "money").await;
+
+    let (_, acct) = call(
+        &app,
+        send("POST", "/api/e/crm.accounts", &token, json!({ "name": "Payer Ltd" })),
+    )
+    .await;
+
+    let base = |currency: &str| {
+        json!({
+            "account_id": acct["id"],
+            "invoice_date": "2026-01-05",
+            "due_date": "2099-01-01",
+            "currency": currency,
+        })
+    };
+
+    for bad in ["Euro", "euros", "$", "usd "] {
+        let (status, body) = call(
+            &app,
+            send("POST", "/api/e/books.invoices", &token, base(bad)),
+        )
+        .await;
+        assert_eq!(
+            status,
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "`{bad}` should not be accepted as a currency, got {body}"
+        );
+    }
+
+    let (status, body) = call(
+        &app,
+        send("POST", "/api/e/books.invoices", &token, base("EUR")),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "a listed code must still work: {body}");
+    assert_eq!(body["currency"], json!("EUR"));
+
+    // Optional: blank still means "whatever the organisation uses".
+    let (status, body) = call(
+        &app,
+        send(
+            "POST",
+            "/api/e/books.invoices",
+            &token,
+            json!({
+                "account_id": acct["id"],
+                "invoice_date": "2026-01-05",
+                "due_date": "2099-01-01",
+            }),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "currency must stay optional: {body}");
+}

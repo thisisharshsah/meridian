@@ -333,7 +333,7 @@ pnpm install --dir apps/web   # once
 Other commands:
 
 ```bash
-pnpm test        # cargo test — 112 tests, incl. 41 end-to-end HTTP tests
+pnpm test        # cargo test — 128 tests, incl. 48 end-to-end HTTP tests
 pnpm typecheck   # tsc --noEmit
 pnpm build       # release build of both halves
 ./reset.sh       # delete the local database (asks first)

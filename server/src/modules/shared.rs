@@ -16,8 +16,32 @@ pub fn line_item_fields(parent_field: &'static str, parent_label: &'static str, 
     ]
 }
 
+/// The same nine currencies the sign-up and settings screens offer. As free
+/// text this accepted "Euro", "euros" and "$" alongside "EUR", and every amount
+/// on the record was then formatted against a code that means nothing -- the
+/// kind of mistake that is invisible until an invoice goes out wrong. The
+/// engine validates a Select against its own options, so a typo is now
+/// impossible rather than merely discouraged.
+///
+/// Left optional: an empty currency means "whatever the organisation uses",
+/// which is what the reader already falls back to.
 pub fn currency_field() -> FieldDef {
-    text("currency", "Currency")
+    select(
+        "currency",
+        "Currency",
+        vec![
+            opt("USD", "USD — US Dollar", "neutral"),
+            opt("EUR", "EUR — Euro", "neutral"),
+            opt("GBP", "GBP — British Pound", "neutral"),
+            opt("INR", "INR — Indian Rupee", "neutral"),
+            opt("AUD", "AUD — Australian Dollar", "neutral"),
+            opt("CAD", "CAD — Canadian Dollar", "neutral"),
+            opt("SGD", "SGD — Singapore Dollar", "neutral"),
+            opt("AED", "AED — UAE Dirham", "neutral"),
+            opt("JPY", "JPY — Japanese Yen", "neutral"),
+        ],
+    )
+    .help("Leave blank to use your organisation's currency.")
 }
 
 pub fn document_totals() -> Vec<FieldDef> {
