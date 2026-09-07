@@ -76,7 +76,7 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
         error: {
           code: "api_unreachable",
           message:
-            "Meridian can't reach its own service right now. Your data is safe — wait a moment and try again.",
+            "Aurovie Business can't reach its own service right now. Your data is safe — wait a moment and try again.",
         },
       },
       { status: 502 },

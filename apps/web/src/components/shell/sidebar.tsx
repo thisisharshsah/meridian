@@ -100,7 +100,7 @@ export function Sidebar({
         <Link
           href="/"
           className="text-sidebar-foreground hover:text-foreground"
-          aria-label="Meridian home"
+          aria-label="Aurovie Business home"
         >
           {collapsed ? <Logo size={24} /> : <Wordmark />}
         </Link>

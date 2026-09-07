@@ -29,7 +29,7 @@ export async function exchange(req: NextRequest, endpoint: "login" | "register")
           // Owner-facing. The operator instruction that used to live here named
           // a shell command, which means nothing to the person signing in.
           message:
-            "Meridian can't reach its own service right now. Nothing you typed has been lost \u2014 wait a moment and try again.",
+            "Aurovie Business can't reach its own service right now. Nothing you typed has been lost \u2014 wait a moment and try again.",
         },
       },
       { status: 502 },

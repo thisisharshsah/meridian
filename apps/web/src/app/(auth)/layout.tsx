@@ -24,7 +24,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         />
         <Link href="/" className="relative flex items-center gap-2.5">
           <Logo size={30} className="[&>rect]:fill-white/15" />
-          <span className="text-lg font-semibold tracking-tight">Meridian</span>
+          <span className="text-lg font-semibold tracking-tight">Aurovie Business</span>
         </Link>
 
         <div className="relative max-w-md">

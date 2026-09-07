@@ -4,8 +4,8 @@ import { Providers } from "./providers";
 
 export const metadata: Metadata = {
   title: {
-    default: "Meridian",
-    template: "%s · Meridian",
+    default: "Aurovie Business",
+    template: "%s · Aurovie Business",
   },
   description: "One workspace for sales, finance, projects, people and support.",
 };
