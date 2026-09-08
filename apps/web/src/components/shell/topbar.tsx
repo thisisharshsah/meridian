@@ -3,9 +3,13 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { LogOut, Moon, Search, Sun } from "lucide-react";
+import { Building2, Check, LogOut, Moon, Plus, Search, Sun } from "lucide-react";
+
+import { toast } from "sonner";
 
 import { Avatar } from "@/components/ui/avatar";
+import { NewWorkspaceDialog } from "@/components/shell/new-workspace-dialog";
+import { t } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -25,6 +29,34 @@ export function Topbar({ session, onSearch }: { session?: Session; onSearch: () 
   React.useEffect(() => {
     setDark(document.documentElement.classList.contains("dark"));
   }, []);
+
+  const [switching, setSwitching] = React.useState(false);
+  const [creating, setCreating] = React.useState(false);
+
+  /**
+   * Switching workspaces replaces the session cookies, so every cached answer
+   * belongs to the business we just left. Clearing the cache before navigating
+   * is what stops one company's records flashing up inside another.
+   */
+  const switchTo = async (organization_id: string) => {
+    if (switching) return;
+    setSwitching(true);
+    try {
+      const res = await fetch("/api/session/switch", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ organization_id }),
+      });
+      if (!res.ok) throw new Error();
+      qc.clear();
+      router.replace("/");
+      router.refresh();
+    } catch {
+      toast.error("Could not switch workspace. Try again in a moment.");
+    } finally {
+      setSwitching(false);
+    }
+  };
 
   const toggleTheme = () => {
     const next = !dark;
@@ -82,14 +114,37 @@ export function Topbar({ session, onSearch }: { session?: Session; onSearch: () 
                 {session?.is_owner ? "Owner" : session?.role} · {session?.organization.currency}
               </div>
             </div>
+            {(session?.organizations.length ?? 0) > 1 && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>{t("workspace.switch")}</DropdownMenuLabel>
+                {session?.organizations.map((o) => (
+                  <DropdownMenuItem
+                    key={o.id}
+                    disabled={o.id === session.organization.id || switching}
+                    onSelect={() => switchTo(o.id)}
+                  >
+                    {o.id === session.organization.id ? <Check /> : <Building2 />}
+                    <span className="truncate">{o.name}</span>
+                  </DropdownMenuItem>
+                ))}
+              </>
+            )}
+
             <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => setCreating(true)}>
+              <Plus />
+              {t("workspace.create")}
+            </DropdownMenuItem>
             <DropdownMenuItem destructive onSelect={signOut}>
               <LogOut />
-              Sign out
+              {t("action.signOut")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      <NewWorkspaceDialog open={creating} onOpenChange={setCreating} />
     </header>
   );
 }

@@ -23,6 +23,8 @@ pub fn router() -> Router<AppState> {
         .route("/refresh", post(refresh))
         .route("/logout", post(logout))
         .route("/me", get(me))
+        .route("/workspaces", post(create_workspace))
+        .route("/switch", post(switch_workspace))
 }
 
 #[derive(Deserialize)]
@@ -123,37 +125,8 @@ async fn register(
     let mut tx = state.pool.begin().await?;
     let ts = now();
 
-    let org_id = new_id();
     let user_id = new_id();
-    let currency = body.currency.unwrap_or_else(|| "USD".into());
-
-    // Slugs are unique per install, so add a short suffix on collision rather
-    // than failing a signup over a name someone else already used.
-    let base_slug = slugify(&body.organization);
-    let mut slug = base_slug.clone();
-    for n in 1..50 {
-        let taken = sqlx::query("SELECT 1 FROM organizations WHERE slug = ?")
-            .bind(&slug)
-            .fetch_optional(&mut *tx)
-            .await?;
-        if taken.is_none() {
-            break;
-        }
-        slug = format!("{base_slug}-{n}");
-    }
-
-    sqlx::query(
-        "INSERT INTO organizations (id, name, slug, currency, timezone, fiscal_year_start_month, created_at, updated_at)
-         VALUES (?, ?, ?, ?, 'UTC', 1, ?, ?)",
-    )
-    .bind(&org_id)
-    .bind(body.organization.trim())
-    .bind(&slug)
-    .bind(&currency)
-    .bind(&ts)
-    .bind(&ts)
-    .execute(&mut *tx)
-    .await?;
+    let currency = body.currency.clone().unwrap_or_else(|| "USD".into());
 
     sqlx::query(
         "INSERT INTO users (id, email, name, password_hash, created_at, updated_at)
@@ -168,52 +141,7 @@ async fn register(
     .execute(&mut *tx)
     .await?;
 
-    let mut admin_role_id = String::new();
-    for seed in DEFAULT_ROLES {
-        let id = new_id();
-        if seed.key == "admin" {
-            admin_role_id = id.clone();
-        }
-        sqlx::query(
-            "INSERT INTO roles (id, org_id, key, name, description, permissions, is_system, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)",
-        )
-        .bind(&id)
-        .bind(&org_id)
-        .bind(seed.key)
-        .bind(seed.name)
-        .bind(seed.description)
-        .bind(serde_json::to_string(seed.permissions).unwrap_or_else(|_| "[]".into()))
-        .bind(&ts)
-        .bind(&ts)
-        .execute(&mut *tx)
-        .await?;
-    }
-
-    sqlx::query(
-        "INSERT INTO memberships (id, org_id, user_id, role_id, is_owner, status, created_at, updated_at)
-         VALUES (?, ?, ?, ?, 1, 'active', ?, ?)",
-    )
-    .bind(new_id())
-    .bind(&org_id)
-    .bind(&user_id)
-    .bind(&admin_role_id)
-    .bind(&ts)
-    .bind(&ts)
-    .execute(&mut *tx)
-    .await?;
-
-    for (key, prefix) in crate::modules::SEQUENCE_SEEDS {
-        sqlx::query(
-            "INSERT INTO number_sequences (org_id, key, prefix, padding, next_value)
-             VALUES (?, ?, ?, 5, 1) ON CONFLICT (org_id, key) DO NOTHING",
-        )
-        .bind(&org_id)
-        .bind(*key)
-        .bind(*prefix)
-        .execute(&mut *tx)
-        .await?;
-    }
+    let org_id = provision_organization(&mut tx, &user_id, body.organization.trim(), &currency, &ts).await?;
 
     tx.commit().await?;
 
@@ -406,6 +334,166 @@ async fn me(State(state): State<AppState>, ctx: Ctx) -> AppResult<Json<serde_jso
         "is_owner": ctx.is_owner,
         "permissions": permissions,
     })))
+}
+
+/// Everything a workspace needs to exist: the organisation row, its own copy of
+/// the default roles, an owner membership for the creator, and the document
+/// numbering sequences.
+///
+/// Extracted from signup because creating your second business is the same act
+/// as creating your first -- the only difference is that the person already has
+/// an account. Keeping one implementation means a new role or sequence added to
+/// signup cannot quietly go missing from every workspace created afterwards.
+async fn provision_organization(
+    tx: &mut sqlx::SqliteConnection,
+    user_id: &str,
+    name: &str,
+    currency: &str,
+    ts: &str,
+) -> AppResult<String> {
+    let org_id = new_id();
+
+    // Slugs are unique per install, so add a short suffix on collision rather
+    // than failing over a name someone else already used.
+    let base_slug = slugify(name);
+    let mut slug = base_slug.clone();
+    for n in 1..50 {
+        let taken = sqlx::query("SELECT 1 FROM organizations WHERE slug = ?")
+            .bind(&slug)
+            .fetch_optional(&mut *tx)
+            .await?;
+        if taken.is_none() {
+            break;
+        }
+        slug = format!("{base_slug}-{n}");
+    }
+
+    sqlx::query(
+        "INSERT INTO organizations (id, name, slug, currency, timezone, fiscal_year_start_month, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'UTC', 1, ?, ?)",
+    )
+    .bind(&org_id)
+    .bind(name)
+    .bind(&slug)
+    .bind(currency)
+    .bind(ts)
+    .bind(ts)
+    .execute(&mut *tx)
+    .await?;
+
+    let mut admin_role_id = String::new();
+    for seed in DEFAULT_ROLES {
+        let id = new_id();
+        if seed.key == "admin" {
+            admin_role_id = id.clone();
+        }
+        sqlx::query(
+            "INSERT INTO roles (id, org_id, key, name, description, permissions, is_system, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)",
+        )
+        .bind(&id)
+        .bind(&org_id)
+        .bind(seed.key)
+        .bind(seed.name)
+        .bind(seed.description)
+        .bind(serde_json::to_string(seed.permissions).unwrap_or_else(|_| "[]".into()))
+        .bind(ts)
+        .bind(ts)
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    sqlx::query(
+        "INSERT INTO memberships (id, org_id, user_id, role_id, is_owner, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 1, 'active', ?, ?)",
+    )
+    .bind(new_id())
+    .bind(&org_id)
+    .bind(user_id)
+    .bind(&admin_role_id)
+    .bind(ts)
+    .bind(ts)
+    .execute(&mut *tx)
+    .await?;
+
+    for (key, prefix) in crate::modules::SEQUENCE_SEEDS {
+        sqlx::query(
+            "INSERT INTO number_sequences (org_id, key, prefix, padding, next_value)
+             VALUES (?, ?, ?, 5, 1) ON CONFLICT (org_id, key) DO NOTHING",
+        )
+        .bind(&org_id)
+        .bind(*key)
+        .bind(*prefix)
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    Ok(org_id)
+}
+
+#[derive(Deserialize)]
+pub struct NewWorkspaceBody {
+    pub organization: String,
+    #[serde(default)]
+    pub currency: Option<String>,
+}
+
+/// Start another business under the same login. The caller becomes its owner,
+/// and the session returned is already scoped to it, so the client lands inside
+/// the new workspace rather than being told to sign in again.
+async fn create_workspace(
+    State(state): State<AppState>,
+    ctx: Ctx,
+    Json(body): Json<NewWorkspaceBody>,
+) -> AppResult<Json<AuthResponse>> {
+    if body.organization.trim().is_empty() {
+        return Err(AppError::Validation(vec![FieldError::new(
+            "organization",
+            "Give the business a name",
+        )]));
+    }
+
+    let ts = now();
+    let currency = body.currency.unwrap_or_else(|| "USD".into());
+    let mut tx = state.pool.begin().await?;
+    let org_id =
+        provision_organization(&mut tx, &ctx.user_id, body.organization.trim(), &currency, &ts).await?;
+    tx.commit().await?;
+
+    issue_session(&state, &ctx.user_id, &org_id, &ctx.email, &ctx.name, None).await.map(Json)
+}
+
+#[derive(Deserialize)]
+pub struct SwitchBody {
+    pub organization_id: String,
+}
+
+/// Move the session to another workspace this person belongs to.
+///
+/// The organisation is part of the access token, so switching means issuing a
+/// new one rather than flipping a preference: a token minted for one business
+/// can never read another's data, which is the property the whole tenancy model
+/// rests on. Membership is re-checked here rather than trusted from the client.
+async fn switch_workspace(
+    State(state): State<AppState>,
+    ctx: Ctx,
+    Json(body): Json<SwitchBody>,
+) -> AppResult<Json<AuthResponse>> {
+    let member = sqlx::query(
+        "SELECT 1 FROM memberships
+          WHERE user_id = ? AND org_id = ? AND status = 'active' AND deleted_at IS NULL",
+    )
+    .bind(&ctx.user_id)
+    .bind(&body.organization_id)
+    .fetch_optional(&state.pool)
+    .await?;
+    if member.is_none() {
+        return Err(AppError::forbidden("You do not belong to that workspace"));
+    }
+
+    issue_session(&state, &ctx.user_id, &body.organization_id, &ctx.email, &ctx.name, None)
+        .await
+        .map(Json)
 }
 
 async fn issue_session(

@@ -53,7 +53,10 @@ pub fn register(r: &mut Registry) {
             phone("phone", "Phone"),
             reference("user_id", "Login", "core.users"),
             reference("department_id", "Department", "hr.departments").in_list(),
-            text("designation", "Designation").in_list(),
+            // Required: an employee record with no job title is a name in a
+            // list. It is also the thing that differs when the same person
+            // works for two businesses, so it cannot be optional.
+            text("designation", "Job title").required().suggests().in_list(),
             reference("manager_id", "Manager", "hr.employees").in_list(),
             select("employment_type", "Employment", vec![
                 opt("full_time", "Full time", "brand"),

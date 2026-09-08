@@ -1778,7 +1778,7 @@ async fn search_results_stay_inside_the_callers_permissions() {
     .await;
     call(
         &app,
-        send("POST", "/api/e/hr.employees", &owner, json!({ "full_name": "Findable Person" })),
+        send("POST", "/api/e/hr.employees", &owner, json!({ "full_name": "Findable Person", "designation": "Staff" })),
     )
     .await;
 
@@ -2625,7 +2625,7 @@ async fn clocking_out_derives_the_minutes_worked() {
 
     let (_, emp) = call(
         &app,
-        send("POST", "/api/e/hr.employees", &owner, json!({ "full_name": "Dana Reyes" })),
+        send("POST", "/api/e/hr.employees", &owner, json!({ "full_name": "Dana Reyes", "designation": "Operations lead" })),
     )
     .await;
     let emp_id = emp["id"].as_str().unwrap().to_string();
@@ -2693,7 +2693,7 @@ async fn one_attendance_row_per_person_per_day() {
 
     let (_, emp) = call(
         &app,
-        send("POST", "/api/e/hr.employees", &owner, json!({ "full_name": "Marcus Webb" })),
+        send("POST", "/api/e/hr.employees", &owner, json!({ "full_name": "Marcus Webb", "designation": "Technician" })),
     )
     .await;
     let emp_id = emp["id"].as_str().unwrap().to_string();
@@ -2716,7 +2716,7 @@ async fn a_shift_is_what_makes_a_clock_in_late() {
 
     let (_, emp) = call(
         &app,
-        send("POST", "/api/e/hr.employees", &owner, json!({ "full_name": "Priya Nair" })),
+        send("POST", "/api/e/hr.employees", &owner, json!({ "full_name": "Priya Nair", "designation": "Shift supervisor" })),
     )
     .await;
     let emp_id = emp["id"].as_str().unwrap().to_string();
@@ -2778,7 +2778,7 @@ async fn a_payslip_is_built_from_what_was_already_recorded() {
 
     let (_, emp) = call(
         &app,
-        send("POST", "/api/e/hr.employees", &owner, json!({ "full_name": "Tom Okafor" })),
+        send("POST", "/api/e/hr.employees", &owner, json!({ "full_name": "Tom Okafor", "designation": "Fitter" })),
     )
     .await;
     let emp_id = emp["id"].as_str().unwrap().to_string();
@@ -3004,4 +3004,104 @@ async fn a_barcode_finds_the_item_the_way_a_scanner_would() {
     // The business's own code still works, because that is what staff type.
     let (_, by_sku) = call(&app, get("/api/e/inventory.items?q=TT-1", &owner)).await;
     assert_eq!(by_sku["data"][0]["name"], json!("Tinned tomatoes"), "sku and barcode are different codes");
+}
+
+#[tokio::test]
+async fn one_person_can_run_two_businesses_and_be_staff_in_both() {
+    let (app, _state) = test_app().await;
+    let owner = new_org(&app, "firstco").await;
+
+    // A second business under the same login.
+    let (status, second) = call(
+        &app,
+        send("POST", "/api/auth/workspaces", &owner, json!({ "organization": "Second Co", "currency": "GBP" })),
+    )
+    .await;
+    assert!(status.is_success(), "starting another business must not need another account: {second:?}");
+
+    let second_token = second["access_token"].as_str().unwrap().to_string();
+    let second_org = second["organization"]["id"].as_str().unwrap().to_string();
+    assert_eq!(second["organization"]["name"], json!("Second Co"));
+
+    let (_, whoami) = call(&app, get("/api/auth/me", &second_token)).await;
+    assert_eq!(whoami["is_owner"], json!(true), "you own what you start");
+
+    // The session came back scoped to the new workspace, and it is empty.
+    let (_, list) = call(&app, get("/api/e/crm.accounts", &second_token)).await;
+    assert_eq!(
+        list["data"].as_array().unwrap().len(), 0,
+        "a new business starts empty, whatever the first one holds"
+    );
+
+    // Owner of a business can also be on its payroll, with a job title.
+    let (emp_status, emp) = call(
+        &app,
+        send("POST", "/api/e/hr.employees", &second_token, json!({
+            "full_name": "Sam Rivera", "designation": "Managing Director"
+        })),
+    )
+    .await;
+    assert!(emp_status.is_success(), "an owner is often also staff: {emp:?}");
+    assert_eq!(emp["designation"], json!("Managing Director"));
+
+    // And in the first business, with a different title.
+    let (_, emp2) = call(
+        &app,
+        send("POST", "/api/e/hr.employees", &owner, json!({
+            "full_name": "Sam Rivera", "designation": "Weekend cover"
+        })),
+    )
+    .await;
+    assert_eq!(
+        emp2["designation"], json!("Weekend cover"),
+        "the same person holds a different job in each business"
+    );
+
+    // Both workspaces are listed, and switching between them works.
+    let (_, me) = call(&app, get("/api/auth/me", &owner)).await;
+    assert_eq!(me["organizations"].as_array().unwrap().len(), 2);
+
+    let (sw, switched) = call(
+        &app,
+        send("POST", "/api/auth/switch", &owner, json!({ "organization_id": second_org })),
+    )
+    .await;
+    assert!(sw.is_success(), "switching to your own workspace: {switched:?}");
+    assert_eq!(switched["organization"]["name"], json!("Second Co"));
+}
+
+#[tokio::test]
+async fn you_cannot_switch_into_a_business_you_do_not_belong_to() {
+    let (app, _state) = test_app().await;
+    let mine = new_org(&app, "mine").await;
+    let theirs = new_org(&app, "theirs").await;
+
+    let (_, them) = call(&app, get("/api/auth/me", &theirs)).await;
+    let their_org = them["organization"]["id"].as_str().unwrap().to_string();
+
+    let (status, _) = call(
+        &app,
+        send("POST", "/api/auth/switch", &mine, json!({ "organization_id": their_org })),
+    )
+    .await;
+    assert_eq!(
+        status, StatusCode::FORBIDDEN,
+        "membership is checked on the server; a token for one business must never reach another"
+    );
+}
+
+#[tokio::test]
+async fn an_employee_needs_a_job_title() {
+    let (app, _state) = test_app().await;
+    let owner = new_org(&app, "titles").await;
+
+    let (status, body) = call(
+        &app,
+        send("POST", "/api/e/hr.employees", &owner, json!({ "full_name": "No Title" })),
+    )
+    .await;
+    assert!(
+        !status.is_success(),
+        "a name with no job title is not a staff record: {body:?}"
+    );
 }

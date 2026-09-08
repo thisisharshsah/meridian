@@ -50,6 +50,19 @@ const en: Messages = {
   "action.open": "Open",
   "action.edit": "Edit",
 
+  "action.signOut": "Sign out",
+
+  // ---- workspaces ----
+  "workspace.switch": "Switch business",
+  "workspace.create": "Start another business",
+  "workspace.createLede": "You already have an account, so this only needs a name. Roles, numbering and ownership are set up for you.",
+  "workspace.name": "Business name",
+  "workspace.currency": "Currency",
+  "workspace.currencyHint": "What this business charges in. Each one keeps its own.",
+  "workspace.nameRequired": "Give the business a name",
+  "workspace.created": "{name} is ready",
+  "workspace.failed": "Could not create that business. Nothing was changed — try again.",
+
   // ---- first run ----
   "setup.title": "Set up your workspace",
   "setup.lede": "Work down the list. Each step uses the one before it, and this page fills itself in as you go.",
