@@ -2617,3 +2617,220 @@ async fn a_currency_must_be_one_of_the_offered_codes() {
     .await;
     assert_eq!(status, StatusCode::OK, "currency must stay optional: {body}");
 }
+
+#[tokio::test]
+async fn clocking_out_derives_the_minutes_worked() {
+    let (app, _state) = test_app().await;
+    let owner = new_org(&app, "clocking").await;
+
+    let (_, emp) = call(
+        &app,
+        send("POST", "/api/e/hr.employees", &owner, json!({ "full_name": "Dana Reyes" })),
+    )
+    .await;
+    let emp_id = emp["id"].as_str().unwrap().to_string();
+
+    // A plain 9-to-5.
+    let (_, day) = call(
+        &app,
+        send("POST", "/api/e/hr.attendance", &owner, json!({
+            "employee_id": emp_id,
+            "work_date": "2026-03-02",
+            "clock_in": "2026-03-02T09:00:00Z",
+            "clock_out": "2026-03-02T17:30:00Z"
+        })),
+    )
+    .await;
+    let day_id = day["id"].as_str().unwrap().to_string();
+    let (_, day) = call(&app, get(&format!("/api/e/hr.attendance/{day_id}"), &owner)).await;
+    assert_eq!(day["worked_minutes"], json!(510), "09:00 to 17:30 is eight and a half hours");
+
+    // Still clocked in: nothing to total yet, and certainly not a negative.
+    let (_, open) = call(
+        &app,
+        send("POST", "/api/e/hr.attendance", &owner, json!({
+            "employee_id": emp_id,
+            "work_date": "2026-03-03",
+            "clock_in": "2026-03-03T09:00:00Z"
+        })),
+    )
+    .await;
+    let open_id = open["id"].as_str().unwrap().to_string();
+    let (_, open) = call(&app, get(&format!("/api/e/hr.attendance/{open_id}"), &owner)).await;
+    assert_eq!(open["worked_minutes"], json!(0), "an open shift has no total");
+
+    // A night shift ends on the following morning, which is not negative time.
+    let (_, night) = call(
+        &app,
+        send("POST", "/api/e/hr.attendance", &owner, json!({
+            "employee_id": emp_id,
+            "work_date": "2026-03-04",
+            "clock_in": "2026-03-04T22:00:00Z",
+            "clock_out": "2026-03-05T06:00:00Z"
+        })),
+    )
+    .await;
+    let night_id = night["id"].as_str().unwrap().to_string();
+    let (_, night) = call(&app, get(&format!("/api/e/hr.attendance/{night_id}"), &owner)).await;
+    assert_eq!(night["worked_minutes"], json!(480), "22:00 to 06:00 is eight hours, not minus sixteen");
+
+    // Correcting the clock-out has to move the total with it.
+    call(
+        &app,
+        send("PATCH", &format!("/api/e/hr.attendance/{day_id}"), &owner, json!({
+            "clock_out": "2026-03-02T16:00:00Z"
+        })),
+    )
+    .await;
+    let (_, fixed) = call(&app, get(&format!("/api/e/hr.attendance/{day_id}"), &owner)).await;
+    assert_eq!(fixed["worked_minutes"], json!(420), "a corrected stamp cannot leave a stale total");
+}
+
+#[tokio::test]
+async fn one_attendance_row_per_person_per_day() {
+    let (app, _state) = test_app().await;
+    let owner = new_org(&app, "oneperday").await;
+
+    let (_, emp) = call(
+        &app,
+        send("POST", "/api/e/hr.employees", &owner, json!({ "full_name": "Marcus Webb" })),
+    )
+    .await;
+    let emp_id = emp["id"].as_str().unwrap().to_string();
+
+    let body = json!({ "employee_id": emp_id, "work_date": "2026-03-02", "clock_in": "2026-03-02T09:00:00Z" });
+    let (first, _) = call(&app, send("POST", "/api/e/hr.attendance", &owner, body.clone())).await;
+    assert!(first.is_success(), "the first clock-in of the day is fine");
+
+    let (second, _) = call(&app, send("POST", "/api/e/hr.attendance", &owner, body)).await;
+    assert!(
+        !second.is_success(),
+        "a second row for the same day would count that day twice in every total downstream"
+    );
+}
+
+#[tokio::test]
+async fn a_shift_is_what_makes_a_clock_in_late() {
+    let (app, _state) = test_app().await;
+    let owner = new_org(&app, "lateness").await;
+
+    let (_, emp) = call(
+        &app,
+        send("POST", "/api/e/hr.employees", &owner, json!({ "full_name": "Priya Nair" })),
+    )
+    .await;
+    let emp_id = emp["id"].as_str().unwrap().to_string();
+
+    let (_, shift) = call(
+        &app,
+        send("POST", "/api/e/hr.shifts", &owner, json!({
+            "employee_id": emp_id,
+            "shift_date": "2026-03-02",
+            "starts_at": "2026-03-02T09:00:00Z",
+            "ends_at": "2026-03-02T17:00:00Z"
+        })),
+    )
+    .await;
+    let shift_id = shift["id"].as_str().unwrap().to_string();
+
+    // Four minutes over is inside the grace period.
+    let (_, ok_day) = call(
+        &app,
+        send("POST", "/api/e/hr.attendance", &owner, json!({
+            "employee_id": emp_id, "shift_id": shift_id, "work_date": "2026-03-02",
+            "clock_in": "2026-03-02T09:04:00Z"
+        })),
+    )
+    .await;
+    let ok_id = ok_day["id"].as_str().unwrap().to_string();
+    let (_, ok_day) = call(&app, get(&format!("/api/e/hr.attendance/{ok_id}"), &owner)).await;
+    assert_eq!(ok_day["status"], json!("present"), "a few minutes is not lateness");
+
+    // Twenty is not.
+    call(
+        &app,
+        send("PATCH", &format!("/api/e/hr.attendance/{ok_id}"), &owner, json!({
+            "clock_in": "2026-03-02T09:20:00Z"
+        })),
+    )
+    .await;
+    let (_, late) = call(&app, get(&format!("/api/e/hr.attendance/{ok_id}"), &owner)).await;
+    assert_eq!(late["status"], json!("late"), "twenty minutes past the shift start is late");
+
+    // A day somebody already judged is not re-judged by a clock stamp.
+    let (_, leave) = call(
+        &app,
+        send("POST", "/api/e/hr.attendance", &owner, json!({
+            "employee_id": emp_id, "shift_id": shift_id, "work_date": "2026-03-03",
+            "clock_in": "2026-03-03T11:00:00Z", "status": "on_leave"
+        })),
+    )
+    .await;
+    let leave_id = leave["id"].as_str().unwrap();
+    let (_, leave) = call(&app, get(&format!("/api/e/hr.attendance/{leave_id}"), &owner)).await;
+    assert_eq!(leave["status"], json!("on_leave"), "a stamp cannot overrule a decision about the day");
+}
+
+#[tokio::test]
+async fn a_payslip_is_built_from_what_was_already_recorded() {
+    let (app, _state) = test_app().await;
+    let owner = new_org(&app, "payroll").await;
+
+    let (_, emp) = call(
+        &app,
+        send("POST", "/api/e/hr.employees", &owner, json!({ "full_name": "Tom Okafor" })),
+    )
+    .await;
+    let emp_id = emp["id"].as_str().unwrap().to_string();
+
+    // Two days inside the period and one outside it.
+    for (date, out) in [
+        ("2026-03-02", "2026-03-02T17:00:00Z"),
+        ("2026-03-03", "2026-03-03T17:00:00Z"),
+        ("2026-04-01", "2026-04-01T17:00:00Z"),
+    ] {
+        call(
+            &app,
+            send("POST", "/api/e/hr.attendance", &owner, json!({
+                "employee_id": emp_id, "work_date": date,
+                "clock_in": format!("{date}T09:00:00Z"), "clock_out": out
+            })),
+        )
+        .await;
+    }
+
+    let (_, run) = call(
+        &app,
+        send("POST", "/api/e/hr.pay_runs", &owner, json!({
+            "reference": "March 2026", "period_start": "2026-03-01", "period_end": "2026-03-31"
+        })),
+    )
+    .await;
+    let run_id = run["id"].as_str().unwrap().to_string();
+
+    let (_, slip) = call(
+        &app,
+        send("POST", "/api/e/hr.payslips", &owner, json!({
+            "pay_run_id": run_id, "employee_id": emp_id, "gross": "3200", "deductions": "450"
+        })),
+    )
+    .await;
+    let slip_id = slip["id"].as_str().unwrap().to_string();
+
+    let (_, slip) = call(&app, get(&format!("/api/e/hr.payslips/{slip_id}"), &owner)).await;
+    assert_eq!(slip["net"], json!(275_000), "net is gross less deductions, in minor units");
+    assert_eq!(
+        slip["minutes_worked"], json!(960),
+        "two eight-hour days inside the period, and not the April one outside it"
+    );
+    assert_eq!(slip["slip_for"], json!("Tom Okafor — March 2026"), "a slip names its person and run");
+
+    let (_, run) = call(&app, get(&format!("/api/e/hr.pay_runs/{run_id}"), &owner)).await;
+    assert_eq!(run["total_gross"], json!(320_000));
+    assert_eq!(run["total_net"], json!(275_000));
+
+    // Removing the slip has to take it back out of the run.
+    call(&app, send("DELETE", &format!("/api/e/hr.payslips/{slip_id}"), &owner, Value::Null)).await;
+    let (_, run) = call(&app, get(&format!("/api/e/hr.pay_runs/{run_id}"), &owner)).await;
+    assert_eq!(run["total_net"], json!(0), "a run total cannot outlive the slips behind it");
+}

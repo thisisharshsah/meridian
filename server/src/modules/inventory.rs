@@ -98,8 +98,8 @@ pub fn register(r: &mut Registry) {
         fields: vec![
             text("name", "Name").required().in_list(),
             text("code", "Code").in_list(),
-            text("city", "City").suggests().in_list().suggests(),
-            text("country", "Country").suggests().in_list().suggests(),
+            text("city", "City").in_list().suggests(),
+            text("country", "Country").in_list().suggests(),
             boolean("is_primary", "Primary").in_list(),
             long_text("address", "Address"),
         ],

@@ -125,4 +125,135 @@ pub fn register(r: &mut Registry) {
         embedded: false,
         read_only: false,
     });
+
+    r.add(EntityDef {
+        key: "hr.shifts",
+        table: "shifts",
+        module: "hr",
+        label: "Shift",
+        label_plural: "Shifts",
+        icon: "CalendarClock",
+        title_field: "shift_date",
+        fields: vec![
+            reference("employee_id", "Employee", "hr.employees").required().in_list(),
+            date("shift_date", "Date").required().in_list(),
+            datetime("starts_at", "Starts").required().in_list(),
+            datetime("ends_at", "Ends").required().in_list(),
+            select("status", "Status", vec![
+                opt("scheduled", "Scheduled", "info"),
+                opt("published", "Published", "success"),
+                opt("cancelled", "Cancelled", "neutral"),
+            ]).required().with_default("scheduled").in_list(),
+            text("role_note", "Covering").suggests().in_list(),
+        ],
+        default_sort: ("shift_date", SortDir::Desc),
+        children: vec![],
+        has_activities: false,
+        has_notes: false,
+        global_search: false,
+        embedded: false,
+        read_only: false,
+    });
+
+    r.add(EntityDef {
+        key: "hr.attendance",
+        table: "attendance",
+        module: "hr",
+        label: "Attendance",
+        label_plural: "Attendance",
+        icon: "Clock",
+        title_field: "work_date",
+        fields: vec![
+            reference("employee_id", "Employee", "hr.employees").required().in_list(),
+            date("work_date", "Date").required().in_list(),
+            datetime("clock_in", "Clocked in").in_list(),
+            datetime("clock_out", "Clocked out").in_list(),
+            // Derived from the two stamps above on every write, so a corrected
+            // clock-out cannot leave a stale total behind it.
+            int("worked_minutes", "Minutes worked").readonly().in_list(),
+            select("status", "Status", vec![
+                opt("present", "Present", "success"),
+                opt("late", "Late", "warning"),
+                opt("absent", "Absent", "danger"),
+                opt("on_leave", "On leave", "info"),
+                opt("holiday", "Holiday", "neutral"),
+            ]).required().with_default("present").in_list(),
+            reference("shift_id", "Against shift", "hr.shifts"),
+            text("notes", "Notes"),
+        ],
+        default_sort: ("work_date", SortDir::Desc),
+        children: vec![],
+        has_activities: false,
+        has_notes: false,
+        global_search: false,
+        embedded: false,
+        read_only: false,
+    });
+
+    r.add(EntityDef {
+        key: "hr.pay_runs",
+        table: "pay_runs",
+        module: "hr",
+        label: "Pay run",
+        label_plural: "Pay runs",
+        icon: "Banknote",
+        title_field: "reference",
+        fields: vec![
+            text("reference", "Run").required().in_list(),
+            date("period_start", "From").required().in_list(),
+            date("period_end", "To").required().in_list(),
+            date("pay_date", "Pay date").in_list(),
+            select("status", "Status", vec![
+                opt("draft", "Draft", "neutral"),
+                opt("approved", "Approved", "info"),
+                opt("paid", "Paid", "success"),
+            ]).required().with_default("draft").in_list(),
+            money("total_gross", "Gross").readonly().in_list(),
+            money("total_net", "Net").readonly().in_list(),
+            long_text("notes", "Notes"),
+        ],
+        default_sort: ("period_start", SortDir::Desc),
+        children: vec![ChildDef {
+            entity: "hr.payslips",
+            foreign_key: "pay_run_id",
+            label: "Payslips",
+            inline: false,
+        }],
+        has_activities: false,
+        has_notes: false,
+        global_search: true,
+        embedded: false,
+        read_only: false,
+    });
+
+    r.add(EntityDef {
+        key: "hr.payslips",
+        table: "payslips",
+        module: "hr",
+        label: "Payslip",
+        label_plural: "Payslips",
+        icon: "ReceiptText",
+        title_field: "slip_for",
+        fields: vec![
+            reference("pay_run_id", "Pay run", "hr.pay_runs").required().in_list(),
+            reference("employee_id", "Employee", "hr.employees").required().in_list(),
+            // Who and which period, composed on write so a slip is identifiable
+            // in a list without joining back to two other tables.
+            text("slip_for", "Payslip").readonly().in_list(),
+            money("gross", "Gross").in_list(),
+            money("deductions", "Deductions").in_list(),
+            money("net", "Net").readonly().in_list(),
+            // Pulled from the attendance already recorded for the run's period,
+            // so the hours behind the payment are visible on the payment.
+            int("minutes_worked", "Minutes worked").readonly().in_list(),
+            long_text("notes", "Notes"),
+        ],
+        default_sort: ("created_at", SortDir::Desc),
+        children: vec![],
+        has_activities: false,
+        has_notes: false,
+        global_search: false,
+        embedded: false,
+        read_only: false,
+    });
 }

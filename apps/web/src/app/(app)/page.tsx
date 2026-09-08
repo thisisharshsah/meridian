@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState, Skeleton } from "@/components/ui/misc";
 import { PipelineChart, StatusBars } from "@/components/dashboard/charts";
 import { SetupGuide, type SetupStep } from "@/components/dashboard/setup-guide";
+import { ClockCard } from "@/components/dashboard/clock-card";
 import { ModuleLauncher } from "@/components/dashboard/module-launcher";
 import { useAppMeta, useList, useSession, useStats } from "@/lib/queries";
 import { formatMoney, formatDate, daysUntil } from "@/lib/format";
@@ -124,6 +125,8 @@ export default function DashboardPage() {
           Here is where {session?.organization.name ?? "your workspace"} stands today.
         </p>
       </header>
+
+      <ClockCard />
 
       <SetupGuide steps={setupSteps} />
 

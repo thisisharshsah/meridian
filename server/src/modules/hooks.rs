@@ -135,6 +135,9 @@ pub async fn after_write(pool: &SqlitePool, ctx: &Ctx, entity: &str, id: &str) -
 
     match entity {
         "crm.deals" => recalc_deal(pool, ctx, id).await,
+        "hr.attendance" => recalc_attendance(pool, ctx, id).await,
+        "hr.payslips" => recalc_payslip(pool, ctx, id).await,
+        "hr.pay_runs" => recalc_pay_run(pool, ctx, id).await,
         "books.payments" => {
             let invoice_id: Option<String> =
                 scalar(pool, "SELECT invoice_id FROM payments WHERE org_id = ? AND id = ?", &ctx.org_id, id).await?;
@@ -185,6 +188,7 @@ pub fn parent_key(entity: &str) -> Option<&'static str> {
         "inventory.stock_moves" => Some("item_id"),
         "projects.timesheets" => Some("task_id"),
         "projects.tasks" => Some("project_id"),
+        "hr.payslips" => Some("pay_run_id"),
         _ => None,
     }
 }
@@ -205,6 +209,7 @@ pub async fn after_child_delete(
         "inventory.stock_moves" => recalc_item_stock(pool, ctx, parent_id).await,
         "projects.timesheets" => recalc_task_hours(pool, ctx, parent_id).await,
         "projects.tasks" => recalc_project_progress(pool, ctx, parent_id).await,
+        "hr.payslips" => recalc_pay_run(pool, ctx, parent_id).await,
         _ => Ok(()),
     }
 }
@@ -473,6 +478,189 @@ async fn recalc_deal(pool: &SqlitePool, ctx: &Ctx, deal_id: &str) -> AppResult<(
         .bind(new_closed_at)
         .bind(&ctx.org_id)
         .bind(deal_id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+/// Minutes worked, from the two clock stamps. Derived rather than typed: a
+/// corrected clock-out has to move the total with it, and payroll reads this
+/// column rather than re-deriving it per query.
+///
+/// A clock-out before the clock-in means a shift crossed midnight, so the end
+/// belongs to the following day; anything beyond that is a typo, not a shift,
+/// and is left at zero rather than silently paying someone for it.
+async fn recalc_attendance(pool: &SqlitePool, ctx: &Ctx, id: &str) -> AppResult<()> {
+    let row: Option<(Option<String>, Option<String>)> = sqlx::query_as(
+        "SELECT clock_in, clock_out FROM attendance WHERE org_id = ? AND id = ?",
+    )
+    .bind(&ctx.org_id)
+    .bind(id)
+    .fetch_optional(pool)
+    .await?;
+
+    let minutes = match row {
+        Some((Some(in_s), Some(out_s))) => {
+            let parsed = (
+                chrono::DateTime::parse_from_rfc3339(&in_s),
+                chrono::DateTime::parse_from_rfc3339(&out_s),
+            );
+            match parsed {
+                (Ok(start), Ok(end)) => {
+                    let mut mins = (end - start).num_minutes();
+                    if mins < 0 {
+                        mins += 24 * 60;
+                    }
+                    if (0..=24 * 60).contains(&mins) { mins } else { 0 }
+                }
+                _ => 0,
+            }
+        }
+        _ => 0,
+    };
+
+    sqlx::query("UPDATE attendance SET worked_minutes = ? WHERE org_id = ? AND id = ?")
+        .bind(minutes)
+        .bind(&ctx.org_id)
+        .bind(id)
+        .execute(pool)
+        .await?;
+
+    mark_late_against_shift(pool, ctx, id).await
+}
+
+/// A shift is what makes a clock-in mean something: without one, an arrival
+/// time is just a number. When the row is filed against a shift and the stamp
+/// falls more than the grace period after the shift opened, the day is marked
+/// late.
+///
+/// Only a status still sitting on its default is touched. Absent, on leave and
+/// holiday are judgements somebody made about the day, and a clock stamp has no
+/// business overruling them.
+const LATE_GRACE_MINUTES: i64 = 5;
+
+async fn mark_late_against_shift(pool: &SqlitePool, ctx: &Ctx, id: &str) -> AppResult<()> {
+    let row: Option<(Option<String>, Option<String>, String)> = sqlx::query_as(
+        "SELECT a.clock_in, s.starts_at, a.status
+           FROM attendance a
+           JOIN shifts s ON s.id = a.shift_id AND s.org_id = a.org_id
+          WHERE a.org_id = ? AND a.id = ?",
+    )
+    .bind(&ctx.org_id)
+    .bind(id)
+    .fetch_optional(pool)
+    .await?;
+
+    let Some((Some(clock_in), Some(starts_at), status)) = row else {
+        return Ok(());
+    };
+    if status != "present" {
+        return Ok(());
+    }
+
+    let (Ok(arrived), Ok(due)) = (
+        chrono::DateTime::parse_from_rfc3339(&clock_in),
+        chrono::DateTime::parse_from_rfc3339(&starts_at),
+    ) else {
+        return Ok(());
+    };
+
+    if (arrived - due).num_minutes() > LATE_GRACE_MINUTES {
+        sqlx::query("UPDATE attendance SET status = 'late' WHERE org_id = ? AND id = ?")
+            .bind(&ctx.org_id)
+            .bind(id)
+            .execute(pool)
+            .await?;
+    }
+    Ok(())
+}
+
+/// A payslip, filled in from the things already recorded elsewhere.
+///
+/// Net is gross less deductions, never typed. The hours are summed from the
+/// attendance inside the run's own period, so the payment and the hours behind
+/// it cannot describe different weeks. The label names the person and the run,
+/// because a list of payslips identified only by id is unreadable.
+async fn recalc_payslip(pool: &SqlitePool, ctx: &Ctx, id: &str) -> AppResult<()> {
+    let row: Option<(String, String, i64, i64)> = sqlx::query_as(
+        "SELECT p.pay_run_id, p.employee_id, p.gross, p.deductions
+           FROM payslips p WHERE p.org_id = ? AND p.id = ?",
+    )
+    .bind(&ctx.org_id)
+    .bind(id)
+    .fetch_optional(pool)
+    .await?;
+
+    let Some((run_id, employee_id, gross, deductions)) = row else {
+        return Ok(());
+    };
+
+    let run: Option<(String, String, String)> = sqlx::query_as(
+        "SELECT reference, period_start, period_end FROM pay_runs WHERE org_id = ? AND id = ?",
+    )
+    .bind(&ctx.org_id)
+    .bind(&run_id)
+    .fetch_optional(pool)
+    .await?;
+    let Some((reference, period_start, period_end)) = run else {
+        return Ok(());
+    };
+
+    let name: Option<String> = scalar(
+        pool,
+        "SELECT full_name FROM employees WHERE org_id = ? AND id = ?",
+        &ctx.org_id,
+        &employee_id,
+    )
+    .await?;
+
+    let minutes: i64 = sqlx::query_scalar(
+        "SELECT COALESCE(SUM(worked_minutes), 0) FROM attendance
+          WHERE org_id = ? AND employee_id = ? AND deleted_at IS NULL
+            AND work_date >= ? AND work_date <= ?",
+    )
+    .bind(&ctx.org_id)
+    .bind(&employee_id)
+    .bind(&period_start)
+    .bind(&period_end)
+    .fetch_one(pool)
+    .await
+    .unwrap_or(0);
+
+    let label = format!("{} — {}", name.unwrap_or_else(|| "Employee".into()), reference);
+
+    sqlx::query(
+        "UPDATE payslips SET net = ?, minutes_worked = ?, slip_for = ? WHERE org_id = ? AND id = ?",
+    )
+    .bind(gross - deductions)
+    .bind(minutes)
+    .bind(&label)
+    .bind(&ctx.org_id)
+    .bind(id)
+    .execute(pool)
+    .await?;
+
+    recalc_pay_run(pool, ctx, &run_id).await
+}
+
+/// A run's totals are the sum of its slips, so deleting or correcting one slip
+/// moves the run with it rather than leaving a total nothing adds up to.
+async fn recalc_pay_run(pool: &SqlitePool, ctx: &Ctx, run_id: &str) -> AppResult<()> {
+    let (gross, net): (i64, i64) = sqlx::query_as(
+        "SELECT COALESCE(SUM(gross), 0), COALESCE(SUM(net), 0)
+           FROM payslips WHERE org_id = ? AND pay_run_id = ? AND deleted_at IS NULL",
+    )
+    .bind(&ctx.org_id)
+    .bind(run_id)
+    .fetch_one(pool)
+    .await
+    .unwrap_or((0, 0));
+
+    sqlx::query("UPDATE pay_runs SET total_gross = ?, total_net = ? WHERE org_id = ? AND id = ?")
+        .bind(gross)
+        .bind(net)
+        .bind(&ctx.org_id)
+        .bind(run_id)
         .execute(pool)
         .await?;
     Ok(())

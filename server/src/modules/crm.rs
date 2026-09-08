@@ -84,7 +84,7 @@ pub fn register(r: &mut Registry) {
                 opt("vendor", "Vendor", "warning"),
                 opt("competitor", "Competitor", "danger"),
             ]).in_list(),
-            text("industry", "Industry").suggests().in_list().suggests(),
+            text("industry", "Industry").in_list().suggests(),
             url("website", "Website"),
             phone("phone", "Phone"),
             email("email", "Email"),
