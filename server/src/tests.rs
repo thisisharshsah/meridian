@@ -2932,3 +2932,45 @@ async fn a_till_sale_needs_no_customer() {
         "a shop does not learn the name of most people it sells to: {sale:?}"
     );
 }
+
+#[tokio::test]
+async fn selling_a_service_does_not_move_stock() {
+    let (app, _state) = test_app().await;
+    let owner = new_org(&app, "services").await;
+
+    let (_, svc) = call(
+        &app,
+        send("POST", "/api/e/inventory.items", &owner, json!({
+            "name": "Callout fee", "sku": "SVC-1", "item_type": "service", "sell_price": "60"
+        })),
+    )
+    .await;
+    let svc_id = svc["id"].as_str().unwrap().to_string();
+
+    let (_, sale) = call(
+        &app,
+        send("POST", "/api/e/sales.counter_sales", &owner, json!({ "sold_at": "2026-03-02T10:00:00Z" })),
+    )
+    .await;
+    let sale_id = sale["id"].as_str().unwrap().to_string();
+
+    call(
+        &app,
+        send("POST", "/api/e/sales.counter_sale_items", &owner, json!({
+            "counter_sale_id": sale_id, "item_id": svc_id,
+            "description": "Callout fee", "quantity": "4", "unit_price": "60"
+        })),
+    )
+    .await;
+    call(
+        &app,
+        send("PATCH", &format!("/api/e/sales.counter_sales/{sale_id}"), &owner, json!({ "status": "completed" })),
+    )
+    .await;
+
+    let (_, svc) = call(&app, get(&format!("/api/e/inventory.items/{svc_id}"), &owner)).await;
+    assert_eq!(
+        svc["stock_on_hand"], json!(0),
+        "an hour of labour sold four times is not minus four of it on the shelf"
+    );
+}

@@ -707,10 +707,14 @@ async fn settle_counter_sale(pool: &SqlitePool, ctx: &Ctx, sale_id: &str) -> App
     let already = stocked_at.is_some();
 
     if completed && !already {
+        // Goods only. A service has no shelf, and an hour of labour sold four
+        // times should not leave the catalogue claiming minus four of it.
         let lines: Vec<(String, i64)> = sqlx::query_as(
-            "SELECT item_id, quantity FROM counter_sale_items
-              WHERE org_id = ? AND counter_sale_id = ? AND deleted_at IS NULL
-                AND item_id IS NOT NULL",
+            "SELECT l.item_id, l.quantity
+               FROM counter_sale_items l
+               JOIN items i ON i.id = l.item_id AND i.org_id = l.org_id
+              WHERE l.org_id = ? AND l.counter_sale_id = ? AND l.deleted_at IS NULL
+                AND l.item_id IS NOT NULL AND i.item_type = 'goods'",
         )
         .bind(&ctx.org_id)
         .bind(sale_id)

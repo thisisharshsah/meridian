@@ -11,6 +11,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Settings,
+  ShoppingCart,
 } from "lucide-react";
 
 import { Icon } from "@/components/icon";
@@ -200,6 +201,7 @@ export function Sidebar({
 
       <div className="border-t border-border p-2">
         {[
+          { href: "/till", label: "Till", icon: ShoppingCart },
           { href: "/approvals", label: "Approvals", icon: CheckCheck },
           { href: "/reports", label: "Reports", icon: BarChart3 },
           { href: "/settings", label: "Settings", icon: Settings },
