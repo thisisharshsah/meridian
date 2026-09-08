@@ -8,6 +8,7 @@ import { LayoutDashboard, Menu, Search } from "lucide-react";
 import { Icon } from "@/components/icon";
 import { cn } from "@/lib/utils";
 import { entityPath, type ModuleMeta } from "@/lib/meta";
+import { t } from "@/lib/i18n";
 
 /**
  * Phone navigation. The drawer holds everything, but reaching a drawer costs a
@@ -47,7 +48,7 @@ export function BottomNav({
     >
       <Link href="/" className={cn(cell, pathname === "/" ? on : off)}>
         <LayoutDashboard className="size-5" />
-        Home
+        {t("nav.home")}
       </Link>
 
       {shortcuts.map(({ module, entity }) => {
@@ -63,12 +64,12 @@ export function BottomNav({
 
       <button type="button" onClick={onSearch} className={cn(cell, off)}>
         <Search className="size-5" />
-        Search
+        {t("nav.search")}
       </button>
 
-      <button type="button" onClick={onMenu} className={cn(cell, off)} aria-label="Open menu">
+      <button type="button" onClick={onMenu} className={cn(cell, off)} aria-label={t("nav.openMenu")}>
         <Menu className="size-5" />
-        More
+        {t("nav.more")}
       </button>
     </nav>
   );

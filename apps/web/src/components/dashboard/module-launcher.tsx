@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Icon } from "@/components/icon";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { entityPath, type ModuleMeta } from "@/lib/meta";
+import { t } from "@/lib/i18n";
 
 /**
  * An icon launcher for the phone, where the module list is folded away behind
@@ -23,9 +24,9 @@ export function ModuleLauncher({ modules }: { modules: ModuleMeta[] }) {
   return (
     <Card className="mb-5 md:hidden">
       <CardHeader className="flex-col items-stretch gap-0">
-        <CardTitle>Where things live</CardTitle>
+        <CardTitle>{t("launcher.title")}</CardTitle>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          Tap an area to open it. Everything else is under More.
+          {t("launcher.lede")}
         </p>
       </CardHeader>
       <CardContent>

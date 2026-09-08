@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useCreate, useList, useSession, useStats, useUpdate, type Record_ } from "@/lib/queries";
+import { t } from "@/lib/i18n";
 
 /** Local calendar date, not UTC: a shift belongs to the day the worker had. */
 function today() {
@@ -143,17 +144,17 @@ export function ClockCard() {
           <div>
             <p className="text-sm font-medium">
               {working
-                ? `Working since ${clockTime(clockedInAt!)}`
+                ? t("clock.workingSince", undefined, { time: clockTime(clockedInAt!) })
                 : finished
-                  ? `Done for today — ${spell((record?.worked_minutes as number) ?? 0)}`
-                  : "Not clocked in"}
+                  ? t("clock.doneToday", undefined, { duration: spell((record?.worked_minutes as number) ?? 0) })
+                  : t("clock.notIn")}
             </p>
             <p className="text-xs text-muted-foreground">
               {working
-                ? `${spell(runningMinutes)} so far`
+                ? t("clock.soFar", undefined, { duration: spell(runningMinutes) })
                 : finished
                   ? `${clockTime(clockedInAt!)} to ${clockTime(clockedOutAt!)}`
-                  : "Start your day when you are ready."}
+                  : t("clock.startWhenReady")}
             </p>
           </div>
         </div>
@@ -167,22 +168,22 @@ export function ClockCard() {
             className="w-full sm:w-auto"
           >
             {working ? <LogOut /> : <LogIn />}
-            {working ? "Clock out" : "Clock in"}
+            {working ? t("clock.out") : t("clock.in")}
           </Button>
         )}
       </CardContent>
 
       <div className="flex flex-wrap gap-x-6 gap-y-1 border-t border-border px-4 py-2.5 text-xs">
         <span className="text-muted-foreground">
-          Today&rsquo;s shift:{" "}
+          {t("clock.todaysShift")}:{" "}
           <span className="font-medium text-foreground">
             {shift
               ? `${clockTime(shift.starts_at as string)} – ${clockTime(shift.ends_at as string)}`
-              : "none scheduled"}
+              : t("clock.noShift")}
           </span>
         </span>
         <span className="text-muted-foreground">
-          This week:{" "}
+          {t("clock.thisWeek")}:{" "}
           <span className="font-medium text-foreground tabular-nums">{spell(weekMinutes)}</span>
         </span>
       </div>

@@ -9,15 +9,16 @@ import { Input } from "@/components/ui/input";
 import { EmptyState, Skeleton } from "@/components/ui/misc";
 import { post, patch } from "@/lib/api";
 import { formatMoney, moneyToInput, MONEY_SCALE } from "@/lib/format";
-import { useList, useSession, type Record_ } from "@/lib/queries";
+import { useList, useSession, useStats, type Record_ } from "@/lib/queries";
 import { cn } from "@/lib/utils";
+import { t } from "@/lib/i18n";
 
 type Line = { itemId: string; name: string; unitMinor: number; qty: number };
 
 const METHODS = [
-  { value: "cash", label: "Cash" },
-  { value: "card", label: "Card" },
-  { value: "transfer", label: "Transfer" },
+  { value: "cash", labelKey: "till.method.cash" },
+  { value: "card", labelKey: "till.method.card" },
+  { value: "transfer", labelKey: "till.method.transfer" },
 ] as const;
 
 /**
@@ -41,6 +42,22 @@ export default function TillPage() {
   }, [term]);
 
   const items = useList("inventory.items", { per_page: 60, ...(debounced ? { q: debounced } : {}) });
+
+  // What the drawer should hold. A shop counts up at close, and the figures
+  // are already here -- there is no reason to make anyone add up receipts.
+  const startOfToday = React.useMemo(() => {
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }, []);
+  const takings = useStats("sales.counter_sales", {
+    group_by: "payment_method",
+    measure: "total",
+    agg: "sum",
+    filters: { status: "completed", sold_at__gte: startOfToday },
+  });
+  const takenToday = (takings.data?.data ?? []).reduce((s, r) => s + r.value, 0);
+  const salesToday = (takings.data?.data ?? []).reduce((s, r) => s + r.count, 0);
 
   const [lines, setLines] = React.useState<Line[]>([]);
   const [method, setMethod] = React.useState<string>("cash");
@@ -71,6 +88,21 @@ export default function TillPage() {
         },
       ];
     });
+  };
+
+  // A scanner is a keyboard that types fast and presses Enter. One match means
+  // the right thing is unambiguous, so ring it up and clear for the next item;
+  // anything else leaves the results on screen to be chosen by hand.
+  const onSearchKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    const hits = items.data?.data ?? [];
+    if (hits.length === 1) {
+      add(hits[0]);
+      setTerm("");
+    } else if (hits.length === 0 && debounced) {
+      toast.error(`Nothing found for “${debounced}”`);
+    }
   };
 
   const bump = (itemId: string, by: number) =>
@@ -131,8 +163,9 @@ export default function TillPage() {
           <Input
             value={term}
             onChange={(e) => setTerm(e.target.value)}
-            placeholder="Search products…"
-            aria-label="Search products"
+            onKeyDown={onSearchKey}
+            placeholder={t("till.searchPlaceholder")}
+            aria-label="Scan a barcode or search products"
             className="h-11 pl-9 text-base"
           />
         </div>
@@ -147,11 +180,11 @@ export default function TillPage() {
           ) : (items.data?.data.length ?? 0) === 0 ? (
             <EmptyState
               icon={Search}
-              title={debounced ? "Nothing matches that" : "No products yet"}
+              title={debounced ? "Nothing matches that" : t("till.noProducts")}
               description={
                 debounced
                   ? "Try a shorter word, or part of the code."
-                  : "Add what you sell under Inventory and it will appear here."
+                  : t("till.noProductsWhy")
               }
             />
           ) : (
@@ -177,12 +210,24 @@ export default function TillPage() {
 
       {/* basket */}
       <div className="flex min-h-0 w-full flex-col lg:w-96">
+        <div className="flex shrink-0 flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-border bg-surface-muted px-3 py-2">
+          <span className="text-xs text-muted-foreground">
+            {t("till.takenToday")}{" "}
+            <span className="font-semibold tabular-nums text-foreground">
+              {formatMoney(takenToday, currency, { showZero: true })}
+            </span>
+          </span>
+          <span className="text-xs text-muted-foreground tabular-nums">
+            {salesToday} {salesToday === 1 ? "sale" : "sales"}
+          </span>
+        </div>
+
         <div className="flex shrink-0 items-center justify-between px-3 py-2.5">
-          <h1 className="text-sm font-semibold">This sale</h1>
+          <h1 className="text-sm font-semibold">{t("till.thisSale")}</h1>
           {lines.length > 0 && (
             <Button variant="ghost" size="sm" onClick={clear}>
               <Trash2 />
-              Clear
+              {t("action.clear")}
             </Button>
           )}
         </div>
@@ -190,7 +235,7 @@ export default function TillPage() {
         <div className="min-h-0 flex-1 overflow-y-auto px-3 scrollbar-thin">
           {lines.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              Tap a product to start.
+              {t("till.tapToStart")}
             </p>
           ) : (
             <ul className="flex flex-col gap-1.5">
@@ -222,7 +267,7 @@ export default function TillPage() {
 
         <div className="shrink-0 border-t border-border p-3">
           <div className="flex items-baseline justify-between">
-            <span className="text-sm text-muted-foreground">Total</span>
+            <span className="text-sm text-muted-foreground">{t("till.total")}</span>
             <span className="text-2xl font-semibold tabular-nums">{formatMoney(totalMinor, currency)}</span>
           </div>
 
@@ -240,7 +285,7 @@ export default function TillPage() {
                     : "border-border text-muted-foreground hover:bg-surface-hover hover:text-foreground",
                 )}
               >
-                {m.label}
+                {t(m.labelKey)}
               </button>
             ))}
           </div>
@@ -251,17 +296,17 @@ export default function TillPage() {
                 value={tendered}
                 onChange={(e) => setTendered(e.target.value.replace(/[^\d.]/g, ""))}
                 inputMode="decimal"
-                placeholder="Cash given"
-                aria-label="Cash given"
+                placeholder={t("till.cashGiven")}
+                aria-label={t("till.cashGiven")}
                 aria-invalid={short}
                 className="h-10 flex-1 text-base"
               />
               <span className="w-28 text-right text-sm tabular-nums">
                 {short ? (
-                  <span className="text-danger">Not enough</span>
+                  <span className="text-danger">{t("till.notEnough")}</span>
                 ) : changeMinor > 0 ? (
                   <>
-                    <span className="text-muted-foreground">Change </span>
+                    <span className="text-muted-foreground">{t("till.change")} </span>
                     <span className="font-semibold">{formatMoney(changeMinor, currency)}</span>
                   </>
                 ) : null}
@@ -277,7 +322,7 @@ export default function TillPage() {
             loading={busy}
             onClick={takePayment}
           >
-            Take payment
+            {t("till.takePayment")}
           </Button>
         </div>
       </div>

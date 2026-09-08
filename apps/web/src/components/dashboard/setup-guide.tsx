@@ -7,6 +7,7 @@ import { Check, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { t } from "@/lib/i18n";
 
 const DISMISS_KEY = "suite-setup-dismissed";
 
@@ -60,14 +61,13 @@ export function SetupGuide({ steps }: { steps: SetupStep[] }) {
     <Card className="mb-5 border-brand/30 bg-brand-subtle/30">
       <CardHeader className="flex-col items-stretch gap-0">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <CardTitle>Set up your workspace</CardTitle>
+          <CardTitle>{t("setup.title")}</CardTitle>
           <span className="text-xs font-medium text-muted-foreground">
-            {done} of {steps.length} done
+            {t("setup.progress", undefined, { done, total: steps.length })}
           </span>
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
-          Work down the list. Each step uses the one before it, and this page fills itself in as
-          you go.
+          {t("setup.lede")}
         </p>
         <div
           className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-surface-muted"
@@ -138,7 +138,7 @@ export function SetupGuide({ steps }: { steps: SetupStep[] }) {
             onClick={hide}
             className="text-xs text-subtle-foreground underline-offset-2 hover:text-foreground hover:underline"
           >
-            I know my way around — hide this
+            {t("setup.hide")}
           </button>
         </div>
       </CardContent>

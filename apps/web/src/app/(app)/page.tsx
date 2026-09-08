@@ -17,6 +17,7 @@ import { ModuleLauncher } from "@/components/dashboard/module-launcher";
 import { useAppMeta, useList, useSession, useStats } from "@/lib/queries";
 import { formatMoney, formatDate, daysUntil } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { t } from "@/lib/i18n";
 
 export default function DashboardPage() {
   const { data: session } = useSession();
@@ -78,32 +79,32 @@ export default function DashboardPage() {
   const setupSteps: SetupStep[] = [
     {
       icon: Building2,
-      title: "Add a customer",
-      why: "Someone you sell to. Deals and invoices both attach to one, so this comes first.",
+      title: t("setup.customer.title"),
+      why: t("setup.customer.why"),
       href: "/crm/accounts",
-      cta: "Add a customer",
+      cta: t("setup.customer.title"),
       done: hasCustomers,
     },
     {
       icon: Target,
-      title: "Add a deal you are chasing",
-      why: "Work you hope to win. Deals are what fill the pipeline figure below.",
+      title: t("setup.deal.title"),
+      why: t("setup.deal.why"),
       href: "/crm/deals",
       cta: "Add a deal",
       done: hasDeals,
     },
     {
       icon: Receipt,
-      title: "Send your first invoice",
-      why: "Bill a customer for work done. Unpaid invoices become the receivable figure.",
+      title: t("setup.invoice.title"),
+      why: t("setup.invoice.why"),
       href: "/books/invoices",
       cta: "Create an invoice",
       done: hasInvoices,
     },
     {
       icon: UserPlus,
-      title: "Invite your team",
-      why: "Give the people who work with you their own sign-in, with only the access they need.",
+      title: t("setup.team.title"),
+      why: t("setup.team.why"),
       href: "/settings",
       cta: "Invite someone",
       done: hasTeam,

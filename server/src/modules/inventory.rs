@@ -21,6 +21,7 @@ pub fn register(r: &mut Registry) {
         fields: vec![
             text("name", "Item name").required().in_list(),
             text("sku", "SKU").in_list(),
+            text("barcode", "Barcode").in_list(),
             select("item_type", "Type", vec![
                 opt("goods", "Goods", "brand"),
                 opt("service", "Service", "purple"),

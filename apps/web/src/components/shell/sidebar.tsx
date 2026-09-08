@@ -19,6 +19,7 @@ import { Logo, Wordmark } from "@/components/brand/logo";
 import { cn } from "@/lib/utils";
 import { entityPath, type ModuleMeta } from "@/lib/meta";
 import { Skeleton } from "@/components/ui/misc";
+import { t } from "@/lib/i18n";
 
 const OPEN_KEY = "suite-open-modules";
 
@@ -111,11 +112,11 @@ export function Sidebar({
         <Link
           href="/"
           className={cn("mb-1", row(pathname === "/"))}
-          title={collapsed ? "Home" : undefined}
-          aria-label={collapsed ? "Home" : undefined}
+          title={collapsed ? t("nav.home") : undefined}
+          aria-label={collapsed ? t("nav.home") : undefined}
         >
           <LayoutDashboard className="size-4 shrink-0" />
-          {!collapsed && "Home"}
+          {!collapsed && t("nav.home")}
         </Link>
 
         {loading && (
@@ -201,10 +202,10 @@ export function Sidebar({
 
       <div className="border-t border-border p-2">
         {[
-          { href: "/till", label: "Till", icon: ShoppingCart },
-          { href: "/approvals", label: "Approvals", icon: CheckCheck },
-          { href: "/reports", label: "Reports", icon: BarChart3 },
-          { href: "/settings", label: "Settings", icon: Settings },
+          { href: "/till", label: t("nav.till"), icon: ShoppingCart },
+          { href: "/approvals", label: t("nav.approvals"), icon: CheckCheck },
+          { href: "/reports", label: t("nav.reports"), icon: BarChart3 },
+          { href: "/settings", label: t("nav.settings"), icon: Settings },
         ].map(({ href, label, icon: I }) => (
           <Link
             key={href}
@@ -223,15 +224,15 @@ export function Sidebar({
             type="button"
             onClick={onToggleCollapse}
             className={cn("mt-1 w-full", row(false))}
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-label={collapsed ? t("nav.expand") : t("nav.collapse")}
+            title={collapsed ? t("nav.expand") : t("nav.collapse")}
           >
             {collapsed ? (
               <PanelLeftOpen className="size-4 shrink-0" />
             ) : (
               <>
                 <PanelLeftClose className="size-4 shrink-0" />
-                Collapse
+                {t("nav.collapseShort")}
               </>
             )}
           </button>

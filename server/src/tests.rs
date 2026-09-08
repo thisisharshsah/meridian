@@ -2974,3 +2974,34 @@ async fn selling_a_service_does_not_move_stock() {
         "an hour of labour sold four times is not minus four of it on the shelf"
     );
 }
+
+#[tokio::test]
+async fn a_barcode_finds_the_item_the_way_a_scanner_would() {
+    let (app, _state) = test_app().await;
+    let owner = new_org(&app, "scan").await;
+
+    call(
+        &app,
+        send("POST", "/api/e/inventory.items", &owner, json!({
+            "name": "Tinned beans", "sku": "TB-1", "barcode": "5012345678900", "sell_price": "1.20"
+        })),
+    )
+    .await;
+    call(
+        &app,
+        send("POST", "/api/e/inventory.items", &owner, json!({
+            "name": "Tinned tomatoes", "sku": "TT-1", "barcode": "5012345678917", "sell_price": "0.95"
+        })),
+    )
+    .await;
+
+    // A scanner types the number and presses Enter; one exact hit is what makes
+    // ringing it up automatic rather than a choice.
+    let (_, hit) = call(&app, get("/api/e/inventory.items?q=5012345678900", &owner)).await;
+    assert_eq!(hit["data"].as_array().unwrap().len(), 1, "a barcode identifies exactly one product");
+    assert_eq!(hit["data"][0]["name"], json!("Tinned beans"));
+
+    // The business's own code still works, because that is what staff type.
+    let (_, by_sku) = call(&app, get("/api/e/inventory.items?q=TT-1", &owner)).await;
+    assert_eq!(by_sku["data"][0]["name"], json!("Tinned tomatoes"), "sku and barcode are different codes");
+}

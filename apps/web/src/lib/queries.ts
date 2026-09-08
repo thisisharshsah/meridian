@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { del, get, patch, post, qs, type Page } from "@/lib/api";
 import type { AppMeta, EntityMeta, Session } from "@/lib/meta";
+import { localizeAppMeta, localizeEntityMeta } from "@/lib/i18n";
 
 export type Record_ = Record<string, unknown> & { id: string };
 
@@ -18,7 +19,8 @@ export function useSession() {
 export function useAppMeta() {
   return useQuery({
     queryKey: ["meta"],
-    queryFn: () => get<AppMeta>("meta"),
+    // Localised as it arrives, so no screen has to remember to do it.
+    queryFn: () => get<AppMeta>("meta").then(localizeAppMeta),
     staleTime: Infinity,
   });
 }
@@ -26,7 +28,7 @@ export function useAppMeta() {
 export function useEntityMeta(entity: string | undefined) {
   return useQuery({
     queryKey: ["meta", entity],
-    queryFn: () => get<EntityMeta>(`meta/${entity}`),
+    queryFn: () => get<EntityMeta>(`meta/${entity}`).then(localizeEntityMeta),
     enabled: !!entity,
     staleTime: Infinity,
   });
