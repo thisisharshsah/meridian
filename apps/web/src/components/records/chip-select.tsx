@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { X } from "lucide-react";
+import { Check, X } from "lucide-react";
 
 import { badgeVariants, toneOf } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -68,10 +68,18 @@ export function ChipSelect({
               className={cn(
                 base,
                 on
-                  ? cn(badgeVariants({ tone: toneOf(o.tone) }), "border-current/25 px-2.5")
+                  ? cn(
+                      badgeVariants({ tone: toneOf(o.tone) }),
+                      // A tick, not just colour. Roughly a third of the option
+                      // tones in the schema are "neutral", and a neutral chip
+                      // tinted against an untinted one is nearly the same chip:
+                      // on a real screen you cannot tell which is chosen.
+                      "gap-1 px-2.5 font-semibold ring-1 ring-inset ring-current/30",
+                    )
                   : "border-border bg-surface text-muted-foreground hover:bg-surface-hover hover:text-foreground",
               )}
             >
+              {on && <Check className="size-3 shrink-0" aria-hidden="true" />}
               {o.label}
             </span>
           </label>

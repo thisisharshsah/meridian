@@ -13,8 +13,13 @@ import { moneyToInput, percentToInput, qtyToInput } from "@/lib/format";
 
 export type FieldValueInput = string | number | boolean | null;
 
-/** Above this many options, chips wrap into a block and a dropdown reads better. */
-const CHIP_LIMIT = 5;
+/**
+ * Above this many options a chip row wraps far enough to lose its advantage.
+ * Seven covers 43 of the 44 select fields in the schema, including the pickers
+ * that matter most -- deal stage, candidate stage, invoice status, lead source.
+ * Only the nine-option currency list, whose labels are long, keeps a dropdown.
+ */
+const CHIP_LIMIT = 7;
 
 /**
  * One input per field kind. Scaled numbers (money, percent, quantity) are

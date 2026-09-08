@@ -1,4 +1,5 @@
 use crate::engine::schema::*;
+use crate::modules::shared::currency_field;
 
 fn user_ref(name: &'static str, label: &'static str) -> FieldDef {
     reference(name, label, "core.users")
@@ -160,7 +161,7 @@ pub fn register(r: &mut Registry) {
             reference("contact_id", "Contact", "crm.contacts"),
             select("stage", "Stage", deal_stages()).required().with_default("qualification").in_list(),
             money("amount", "Amount").in_list(),
-            text("currency", "Currency"),
+            currency_field(),
             percent("probability", "Probability").in_list(),
             // Recomputed from amount x probability on every write.
             money("expected_revenue", "Expected revenue").readonly().in_list(),
