@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import {
-  AlertTriangle, ArrowUpRight, Banknote, Check, CircleDollarSign, Receipt, Target, Ticket, TrendingUp,
+  AlertTriangle, ArrowUpRight, Banknote, Building2, CircleDollarSign, Receipt, Target, Ticket,
+  TrendingUp, UserPlus,
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,7 +11,9 @@ import { Badge, toneOf } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState, Skeleton } from "@/components/ui/misc";
 import { PipelineChart, StatusBars } from "@/components/dashboard/charts";
-import { useList, useSession, useStats } from "@/lib/queries";
+import { SetupGuide, type SetupStep } from "@/components/dashboard/setup-guide";
+import { ModuleLauncher } from "@/components/dashboard/module-launcher";
+import { useAppMeta, useList, useSession, useStats } from "@/lib/queries";
 import { formatMoney, formatDate, daysUntil } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -63,10 +66,52 @@ export default function DashboardPage() {
   // nothing about what to do next. Detect that state and lead with a first
   // task instead of a dashboard that reports on data they have not entered.
   const accounts = useList("crm.accounts", { per_page: 1 });
+  const members = useList("core.users", { per_page: 2 });
+  const meta = useAppMeta();
+
   const hasCustomers = (accounts.data?.data.length ?? 0) > 0;
   const hasDeals = openDealCount > 0 || (recentDeals.data?.data.length ?? 0) > 0;
   const hasInvoices = (invoiceTotals.data?.data.length ?? 0) > 0;
-  const isNewWorkspace =
+  const hasTeam = (members.data?.data.length ?? 0) > 1;
+
+  const setupSteps: SetupStep[] = [
+    {
+      icon: Building2,
+      title: "Add a customer",
+      why: "Someone you sell to. Deals and invoices both attach to one, so this comes first.",
+      href: "/crm/accounts",
+      cta: "Add a customer",
+      done: hasCustomers,
+    },
+    {
+      icon: Target,
+      title: "Add a deal you are chasing",
+      why: "Work you hope to win. Deals are what fill the pipeline figure below.",
+      href: "/crm/deals",
+      cta: "Add a deal",
+      done: hasDeals,
+    },
+    {
+      icon: Receipt,
+      title: "Send your first invoice",
+      why: "Bill a customer for work done. Unpaid invoices become the receivable figure.",
+      href: "/books/invoices",
+      cta: "Create an invoice",
+      done: hasInvoices,
+    },
+    {
+      icon: UserPlus,
+      title: "Invite your team",
+      why: "Give the people who work with you their own sign-in, with only the access they need.",
+      href: "/settings",
+      cta: "Invite someone",
+      done: hasTeam,
+    },
+  ];
+
+  // A grid of zeroes tells a first-time owner nothing. Once anything at all
+  // exists the figures start meaning something, so they come back immediately.
+  const nothingYet =
     !loading && !accounts.isLoading && !hasCustomers && !hasDeals && !hasInvoices;
 
   return (
@@ -80,43 +125,11 @@ export default function DashboardPage() {
         </p>
       </header>
 
-      {isNewWorkspace && (
-        <Card className="mb-5 border-brand/30 bg-brand-subtle/40">
-          <CardHeader>
-            <CardTitle>Start here</CardTitle>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              Three steps and this page fills itself in. Do them in order — each one uses the last.
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <StartStep
-              n={1}
-              done={hasCustomers}
-              title="Add a customer"
-              why="Someone you sell to. Deals and invoices both attach to one."
-              href="/crm/accounts"
-              cta="Add a customer"
-            />
-            <StartStep
-              n={2}
-              done={hasDeals}
-              title="Add a deal you are chasing"
-              why="Work you hope to win. This is what fills your pipeline figure."
-              href="/crm/deals"
-              cta="Add a deal"
-            />
-            <StartStep
-              n={3}
-              done={hasInvoices}
-              title="Send your first invoice"
-              why="Bill a customer. Unpaid invoices become the receivable figure."
-              href="/books/invoices"
-              cta="Create an invoice"
-            />
-          </CardContent>
-        </Card>
-      )}
+      <SetupGuide steps={setupSteps} />
 
+      <ModuleLauncher modules={meta.data?.modules ?? []} />
+
+      {!nothingYet && (
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Stat
           label="Open pipeline"
@@ -155,6 +168,7 @@ export default function DashboardPage() {
           href="/desk/tickets"
         />
       </div>
+      )}
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <Card>
@@ -341,51 +355,4 @@ function greeting() {
   if (h < 12) return "Good morning";
   if (h < 18) return "Good afternoon";
   return "Good evening";
-}
-
-/**
- * One numbered step of the first-run guide. Says what the thing IS, not just
- * its name — "account" and "deal" mean nothing to someone who has not used a
- * CRM before, and they are the first two words this product shows them.
- */
-function StartStep({
-  n,
-  done,
-  title,
-  why,
-  href,
-  cta,
-}: {
-  n: number;
-  done: boolean;
-  title: string;
-  why: string;
-  href: string;
-  cta: string;
-}) {
-  return (
-    <div className="flex items-start gap-3 rounded-md border border-border bg-surface p-3">
-      <span
-        className={cn(
-          "mt-px flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
-          done ? "bg-success text-white" : "bg-surface-muted text-muted-foreground",
-        )}
-        aria-hidden="true"
-      >
-        {done ? <Check className="size-3.5" /> : n}
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className={cn("text-sm font-medium", done && "text-muted-foreground line-through")}>
-          {title}
-        </p>
-        <p className="mt-0.5 text-xs text-muted-foreground">{why}</p>
-      </div>
-      {!done && (
-        <Button variant="secondary" size="sm" asChild className="shrink-0">
-          <Link href={href}>{cta}</Link>
-        </Button>
-      )}
-      <span className="sr-only">{done ? "Done" : `Step ${n} of 3`}</span>
-    </div>
-  );
 }
