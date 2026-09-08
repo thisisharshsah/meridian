@@ -65,3 +65,56 @@ impl FromRequestParts<AppState> for Ctx {
         })
     }
 }
+
+/// Who is asking, without saying which business they are asking about.
+///
+/// A person exists before any workspace does: they have just signed up and are
+/// choosing whether to start a business or accept an invitation to one. That
+/// state needs a real session -- it has to be able to list their invitations
+/// and create a workspace -- but it must not be able to read a single row of
+/// anyone's data.
+///
+/// It cannot. `Ctx` resolves permissions by looking up a membership for the
+/// token's organisation, so a token carrying no organisation finds no
+/// membership and every tenant-scoped route rejects it. This extractor is the
+/// only way such a token gets used at all, and it is fitted to a handful of
+/// endpoints that are about the person rather than about a business.
+pub struct UserCtx {
+    pub user_id: String,
+    pub email: String,
+    pub name: String,
+    /// The workspace this session points at, when it points at one.
+    pub org_id: Option<String>,
+}
+
+impl FromRequestParts<AppState> for UserCtx {
+    type Rejection = AppError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, Self::Rejection> {
+        let token = parts
+            .headers
+            .get(axum::http::header::AUTHORIZATION)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.strip_prefix("Bearer "))
+            .ok_or(AppError::Unauthorized)?;
+
+        let claims = verify_access_token(&state.config.jwt_secret, token)?;
+
+        // The account still has to exist and be live; a deleted user's token
+        // should stop working before it expires.
+        let alive = sqlx::query("SELECT 1 FROM users WHERE id = ? AND deleted_at IS NULL")
+            .bind(&claims.sub)
+            .fetch_optional(&state.pool)
+            .await?;
+        if alive.is_none() {
+            return Err(AppError::Unauthorized);
+        }
+
+        Ok(UserCtx {
+            user_id: claims.sub,
+            email: claims.email,
+            name: claims.name,
+            org_id: Some(claims.org).filter(|o| !o.is_empty()),
+        })
+    }
+}

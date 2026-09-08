@@ -3174,3 +3174,79 @@ async fn an_invitation_waits_inside_the_app_not_only_in_an_inbox() {
     let (_, after) = call(&app, get("/api/my-invitations", &guest)).await;
     assert_eq!(after["data"].as_array().unwrap().len(), 0, "an accepted invitation stops waiting");
 }
+
+#[tokio::test]
+async fn an_account_with_no_business_can_do_nothing_but_choose_one() {
+    let (app, _state) = test_app().await;
+
+    // Signing up without naming a business: the invited person's path.
+    let (status, reg) = call(
+        &app,
+        send("POST", "/api/auth/register", "", json!({
+            "name": "Dana Reyes", "email": "dana@example.com", "password": "hunter2hunter2"
+        })),
+    )
+    .await;
+    assert!(status.is_success(), "an account is a thing you can have on its own: {reg:?}");
+
+    let token = reg["access_token"].as_str().unwrap().to_string();
+
+    // The session is real, and honest about belonging nowhere.
+    let (_, me) = call(&app, get("/api/auth/me", &token)).await;
+    assert_eq!(me["organization"], Value::Null, "no business chosen yet");
+    assert_eq!(me["organizations"].as_array().unwrap().len(), 0);
+    assert_eq!(me["permissions"].as_array().unwrap().len(), 0, "no membership, no permissions");
+
+    // And it cannot touch a single row of anyone's data. This is the property
+    // the whole change rests on: no membership means no Ctx, and no Ctx means
+    // no tenant route will serve it.
+    for path in ["/api/e/crm.accounts", "/api/e/books.invoices", "/api/e/hr.employees"] {
+        let (s, _) = call(&app, get(path, &token)).await;
+        assert_eq!(s, StatusCode::UNAUTHORIZED, "{path} must refuse a session with no business");
+    }
+    let (write, _) = call(
+        &app,
+        send("POST", "/api/e/crm.accounts", &token, json!({ "name": "Sneaky Ltd" })),
+    )
+    .await;
+    assert_eq!(write, StatusCode::UNAUTHORIZED, "and certainly must not let it write");
+
+    // What it can do is start one.
+    let (made, created) = call(
+        &app,
+        send("POST", "/api/auth/workspaces", &token, json!({ "organization": "Dana Design" })),
+    )
+    .await;
+    assert!(made.is_success(), "choosing to start a business: {created:?}");
+
+    let with_org = created["access_token"].as_str().unwrap().to_string();
+    let (ok, _) = call(&app, get("/api/e/crm.accounts", &with_org)).await;
+    assert!(ok.is_success(), "and then the app opens up");
+}
+
+#[tokio::test]
+async fn signing_in_before_accepting_an_invitation_works() {
+    let (app, _state) = test_app().await;
+
+    call(
+        &app,
+        send("POST", "/api/auth/register", "", json!({
+            "name": "Dana Reyes", "email": "dana@example.com", "password": "hunter2hunter2"
+        })),
+    )
+    .await;
+
+    // Signing out and back in must not strand someone who belongs nowhere yet.
+    let (status, login) = call(
+        &app,
+        send("POST", "/api/auth/login", "", json!({
+            "email": "dana@example.com", "password": "hunter2hunter2"
+        })),
+    )
+    .await;
+    assert!(
+        status.is_success(),
+        "belonging to nothing is a state to sign in to, not an error: {login:?}"
+    );
+    assert_eq!(login["organization"], Value::Null);
+}

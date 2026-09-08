@@ -30,7 +30,7 @@ import { cn } from "@/lib/utils";
 export function DetailView({ meta, id }: { meta: EntityMeta; id: string }) {
   const router = useRouter();
   const { data: session } = useSession();
-  const currency = session?.organization.currency ?? "USD";
+  const currency = session?.organization?.currency ?? "USD";
 
   const { data: record, isLoading, isError } = useRecord(meta.key, id);
   const remove = useDelete(meta.key);

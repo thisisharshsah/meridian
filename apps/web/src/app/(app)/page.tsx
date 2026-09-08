@@ -21,7 +21,7 @@ import { t } from "@/lib/i18n";
 
 export default function DashboardPage() {
   const { data: session } = useSession();
-  const currency = session?.organization.currency ?? "USD";
+  const currency = session?.organization?.currency ?? "USD";
   const today = new Date().toISOString().slice(0, 10);
 
   const openPipeline = useStats("crm.deals", {
@@ -123,7 +123,7 @@ export default function DashboardPage() {
           {greeting()}, {session?.user.name?.split(" ")[0] ?? "there"}
         </h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          Here is where {session?.organization.name ?? "your workspace"} stands today.
+          Here is where {session?.organization?.name ?? "your workspace"} stands today.
         </p>
       </header>
 

@@ -138,11 +138,11 @@ export function Topbar({ session, onSearch }: { session?: Session; onSearch: () 
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel>{session?.organization.name}</DropdownMenuLabel>
+            <DropdownMenuLabel>{session?.organization?.name}</DropdownMenuLabel>
             <div className="px-2 pb-1.5 text-xs text-muted-foreground">
               {session?.user.email}
               <div className="mt-0.5 capitalize">
-                {session?.is_owner ? "Owner" : session?.role} · {session?.organization.currency}
+                {session?.is_owner ? "Owner" : session?.role} · {session?.organization?.currency}
               </div>
             </div>
             {(invitations.data?.data.length ?? 0) > 0 && (
@@ -165,10 +165,10 @@ export function Topbar({ session, onSearch }: { session?: Session; onSearch: () 
                 {session?.organizations.map((o) => (
                   <DropdownMenuItem
                     key={o.id}
-                    disabled={o.id === session.organization.id || switching}
+                    disabled={o.id === session.organization?.id || switching}
                     onSelect={() => switchTo(o.id)}
                   >
-                    {o.id === session.organization.id ? <Check /> : <Building2 />}
+                    {o.id === session.organization?.id ? <Check /> : <Building2 />}
                     <span className="truncate">{o.name}</span>
                   </DropdownMenuItem>
                 ))}

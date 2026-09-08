@@ -43,7 +43,7 @@ const NUMERIC = ["money", "int", "percent", "quantity"];
 
 export default function ReportsPage() {
   const { data: session } = useSession();
-  const currency = session?.organization.currency ?? "USD";
+  const currency = session?.organization?.currency ?? "USD";
 
   const [selected, setSelected] = React.useState<string | null>(null);
   const [from, setFrom] = React.useState(() => isoMonthsAgo(12));

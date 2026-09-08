@@ -18,7 +18,9 @@ import { CURRENCIES } from "@/lib/constants";
 
 const schema = z.object({
   name: z.string().min(1, "Your name is required"),
-  organization: z.string().min(1, "Organization name is required"),
+  // Optional in the schema; required only on the "starting a business" path,
+  // checked below. Someone joining a business does not have one to name.
+  organization: z.string().optional(),
   email: z.string().min(1, "Email is required").email("Enter a valid email address"),
   password: z.string().min(8, "Use at least 8 characters"),
   currency: z.string().min(3),
@@ -29,6 +31,7 @@ type Values = z.infer<typeof schema>;
 export default function RegisterPage() {
   const router = useRouter();
   const [formError, setFormError] = React.useState<string | null>(null);
+  const [starting, setStarting] = React.useState(true);
 
   const form = useForm<Values>({
     resolver: zodResolver(schema),
@@ -37,7 +40,17 @@ export default function RegisterPage() {
 
   const onSubmit = form.handleSubmit(async (values) => {
     setFormError(null);
-    const result = await submitSession("register", values);
+    if (starting && !values.organization?.trim()) {
+      form.setError("organization", { message: "Give the business a name" });
+      return;
+    }
+    // Joining sends no business at all, which is what tells the server this is
+    // an account on its own. Sending an empty string would be a named business
+    // with a blank name, and is rejected.
+    const payload = starting
+      ? values
+      : { name: values.name, email: values.email, password: values.password };
+    const result = await submitSession("register", payload);
     if (!result.ok) {
       for (const [field, message] of Object.entries(result.fields)) {
         form.setError(field as keyof Values, { message });
@@ -51,10 +64,40 @@ export default function RegisterPage() {
 
   return (
     <div>
-      <h2 className="text-xl font-semibold tracking-tight">Create your workspace</h2>
+      <h2 className="text-xl font-semibold tracking-tight">Create your account</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        You will be the owner, with full access to every module.
+        {starting
+          ? "You will own this business, with full access to everything in it."
+          : "Sign up, then accept the invitation waiting for your email address."}
       </p>
+
+      <div
+        role="radiogroup"
+        aria-label="What are you here to do?"
+        className="mt-4 grid grid-cols-2 gap-2"
+      >
+        {[
+          { on: true, label: "I'm starting a business", hint: "Set it up now" },
+          { on: false, label: "I was invited", hint: "Join someone else's" },
+        ].map((opt) => (
+          <button
+            key={String(opt.on)}
+            type="button"
+            role="radio"
+            aria-checked={starting === opt.on}
+            onClick={() => setStarting(opt.on)}
+            className={
+              "rounded-md border p-2.5 text-left transition-colors " +
+              (starting === opt.on
+                ? "border-brand bg-brand-subtle"
+                : "border-border hover:bg-surface-hover")
+            }
+          >
+            <span className="block text-sm font-medium">{opt.label}</span>
+            <span className="block text-xs text-muted-foreground">{opt.hint}</span>
+          </button>
+        ))}
+      </div>
 
       <form onSubmit={onSubmit} className="mt-7 space-y-4" noValidate>
         <FormError message={formError} />
@@ -64,22 +107,24 @@ export default function RegisterPage() {
             aria-describedby={form.formState.errors.name ? "name-error" : undefined} {...form.register("name")} />
         </FieldRow>
 
-        <FieldRow
-          label="Organization"
-          error={form.formState.errors.organization?.message}
-          htmlFor="organization"
-          required
-        >
-          <Input
-            id="organization"
-            placeholder="Acme Industries"
-            aria-invalid={!!form.formState.errors.organization}
-            aria-describedby={form.formState.errors.organization ? "organization-error" : undefined}
-            {...form.register("organization")}
-          />
-        </FieldRow>
+        {starting && (
+          <FieldRow
+            label="Business name"
+            error={form.formState.errors.organization?.message}
+            htmlFor="organization"
+            required
+          >
+            <Input
+              id="organization"
+              placeholder="Rivera Plumbing"
+              aria-invalid={!!form.formState.errors.organization}
+              aria-describedby={form.formState.errors.organization ? "organization-error" : undefined}
+              {...form.register("organization")}
+            />
+          </FieldRow>
+        )}
 
-        <div className="grid grid-cols-[1fr_7rem] gap-3">
+        <div className={starting ? "grid grid-cols-[1fr_7rem] gap-3" : ""}>
           <FieldRow label="Work email" error={form.formState.errors.email?.message} htmlFor="email" required>
             <Input
               id="email"
@@ -92,6 +137,7 @@ export default function RegisterPage() {
             />
           </FieldRow>
 
+          {starting && (
           <FieldRow label="Currency" htmlFor="currency">
             <Select
               value={form.watch("currency")}
@@ -109,6 +155,7 @@ export default function RegisterPage() {
               </SelectContent>
             </Select>
           </FieldRow>
+          )}
         </div>
 
         <FieldRow

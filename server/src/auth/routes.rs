@@ -3,10 +3,11 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{json, Value};
 use sqlx::Row;
 
 use crate::auth::ctx::Ctx;
+use crate::auth::extract::UserCtx;
 use crate::auth::jwt::issue_access_token;
 use crate::auth::password::{
     digest_token, hash_password_async, random_token, verify_password_async,
@@ -32,7 +33,10 @@ pub struct RegisterBody {
     pub name: String,
     pub email: String,
     pub password: String,
-    pub organization: String,
+    /// Omitted by someone who was invited: they are creating an account, not a
+    /// business, and will pick one on the next screen.
+    #[serde(default)]
+    pub organization: Option<String>,
     #[serde(default)]
     pub currency: Option<String>,
 }
@@ -92,8 +96,8 @@ fn validate_registration(b: &RegisterBody) -> AppResult<()> {
     if b.password.chars().count() > 200 {
         errors.push(FieldError::new("password", "Password is too long"));
     }
-    if b.organization.trim().is_empty() {
-        errors.push(FieldError::new("organization", "Organization name is required"));
+    if b.organization.as_deref().is_some_and(|o| o.trim().is_empty()) {
+        errors.push(FieldError::new("organization", "Give the business a name, or leave it out entirely"));
     }
     if errors.is_empty() {
         Ok(())
@@ -141,7 +145,12 @@ async fn register(
     .execute(&mut *tx)
     .await?;
 
-    let org_id = provision_organization(&mut tx, &user_id, body.organization.trim(), &currency, &ts).await?;
+    // No business name means the account is all they asked for. They land on a
+    // screen offering the two ways forward: start one, or accept an invitation.
+    let org_id = match body.organization.as_deref().map(str::trim).filter(|o| !o.is_empty()) {
+        Some(name) => provision_organization(&mut tx, &user_id, name, &currency, &ts).await?,
+        None => String::new(),
+    };
 
     tx.commit().await?;
 
@@ -210,8 +219,10 @@ async fn login(
         .bind(&user_id)
         .fetch_optional(&state.pool)
         .await?
+        // Belonging to nothing yet is a real state, not a failure: an invited
+        // person may sign in before accepting, and must be able to.
         .map(|r| r.try_get::<String, _>("org_id").unwrap_or_default())
-        .ok_or_else(|| AppError::forbidden("This account does not belong to an organization"))?,
+        .unwrap_or_default(),
     };
 
     sqlx::query("UPDATE users SET last_login_at = ? WHERE id = ?")
@@ -287,11 +298,43 @@ async fn logout(State(state): State<AppState>, ctx: Ctx) -> AppResult<Json<serde
 
 /// Everything the app shell needs on boot: who you are, which organization you
 /// are in, what you may do, and which other organizations you can switch to.
-async fn me(State(state): State<AppState>, ctx: Ctx) -> AppResult<Json<serde_json::Value>> {
-    let org = sqlx::query("SELECT id, name, slug, currency, timezone FROM organizations WHERE id = ?")
-        .bind(&ctx.org_id)
-        .fetch_one(&state.pool)
-        .await?;
+async fn me(State(state): State<AppState>, ctx: UserCtx) -> AppResult<Json<serde_json::Value>> {
+    let org = match &ctx.org_id {
+        Some(id) => sqlx::query("SELECT id, name, slug, currency, timezone FROM organizations WHERE id = ?")
+            .bind(id)
+            .fetch_optional(&state.pool)
+            .await?,
+        None => None,
+    };
+
+    // Role and permissions belong to a membership, so with no workspace chosen
+    // there are none -- which is exactly what the client should be told.
+    let (role_key, is_owner, permissions): (Option<String>, bool, Vec<String>) = match &ctx.org_id {
+        Some(id) => {
+            let m = sqlx::query(
+                "SELECT m.is_owner, r.key AS role_key, r.permissions FROM memberships m
+                 JOIN roles r ON r.id = m.role_id AND r.deleted_at IS NULL
+                 WHERE m.org_id = ? AND m.user_id = ? AND m.deleted_at IS NULL",
+            )
+            .bind(id)
+            .bind(&ctx.user_id)
+            .fetch_optional(&state.pool)
+            .await?;
+            match m {
+                Some(row) => {
+                    let raw: String = row.try_get("permissions").unwrap_or_else(|_| "[]".into());
+                    let perms = serde_json::from_str::<Vec<String>>(&raw).unwrap_or_default();
+                    (
+                        row.try_get::<String, _>("role_key").ok(),
+                        row.try_get::<i64, _>("is_owner").unwrap_or(0) != 0,
+                        perms,
+                    )
+                }
+                None => (None, false, Vec::new()),
+            }
+        }
+        None => (None, false, Vec::new()),
+    };
 
     let user = sqlx::query("SELECT id, name, email, avatar_url FROM users WHERE id = ?")
         .bind(&ctx.user_id)
@@ -308,7 +351,7 @@ async fn me(State(state): State<AppState>, ctx: Ctx) -> AppResult<Json<serde_jso
     .fetch_all(&state.pool)
     .await?;
 
-    let mut permissions: Vec<&String> = ctx.permissions.iter().collect();
+    let mut permissions = permissions;
     permissions.sort();
 
     Ok(Json(json!({
@@ -318,20 +361,20 @@ async fn me(State(state): State<AppState>, ctx: Ctx) -> AppResult<Json<serde_jso
             "email": user.try_get::<String, _>("email").unwrap_or_default(),
             "avatar_url": user.try_get::<Option<String>, _>("avatar_url").ok().flatten(),
         },
-        "organization": {
-            "id": org.try_get::<String, _>("id").unwrap_or_default(),
-            "name": org.try_get::<String, _>("name").unwrap_or_default(),
-            "slug": org.try_get::<String, _>("slug").unwrap_or_default(),
-            "currency": org.try_get::<String, _>("currency").unwrap_or_else(|_| "USD".into()),
-            "timezone": org.try_get::<String, _>("timezone").unwrap_or_else(|_| "UTC".into()),
-        },
+        "organization": org.as_ref().map(|o| json!({
+            "id": o.try_get::<String, _>("id").unwrap_or_default(),
+            "name": o.try_get::<String, _>("name").unwrap_or_default(),
+            "slug": o.try_get::<String, _>("slug").unwrap_or_default(),
+            "currency": o.try_get::<String, _>("currency").unwrap_or_else(|_| "USD".into()),
+            "timezone": o.try_get::<String, _>("timezone").unwrap_or_else(|_| "UTC".into()),
+        })),
         "organizations": orgs.iter().map(|r| json!({
             "id": r.try_get::<String, _>("id").unwrap_or_default(),
             "name": r.try_get::<String, _>("name").unwrap_or_default(),
             "slug": r.try_get::<String, _>("slug").unwrap_or_default(),
         })).collect::<Vec<_>>(),
-        "role": ctx.role_key,
-        "is_owner": ctx.is_owner,
+        "role": role_key,
+        "is_owner": is_owner,
         "permissions": permissions,
     })))
 }
@@ -443,7 +486,7 @@ pub struct NewWorkspaceBody {
 /// the new workspace rather than being told to sign in again.
 async fn create_workspace(
     State(state): State<AppState>,
-    ctx: Ctx,
+    ctx: UserCtx,
     Json(body): Json<NewWorkspaceBody>,
 ) -> AppResult<Json<AuthResponse>> {
     if body.organization.trim().is_empty() {
@@ -476,7 +519,7 @@ pub struct SwitchBody {
 /// rests on. Membership is re-checked here rather than trusted from the client.
 async fn switch_workspace(
     State(state): State<AppState>,
-    ctx: Ctx,
+    ctx: UserCtx,
     Json(body): Json<SwitchBody>,
 ) -> AppResult<Json<AuthResponse>> {
     let member = sqlx::query(
@@ -523,7 +566,7 @@ async fn issue_session(
     )
     .bind(new_id())
     .bind(user_id)
-    .bind(org_id)
+    .bind(Some(org_id).filter(|o: &&str| !o.is_empty()))
     .bind(digest_token(&refresh_token))
     .bind(user_agent)
     .bind(&expires_at)
@@ -531,10 +574,16 @@ async fn issue_session(
     .execute(&state.pool)
     .await?;
 
-    let org = sqlx::query("SELECT id, name, slug, currency FROM organizations WHERE id = ?")
-        .bind(org_id)
-        .fetch_one(&state.pool)
-        .await?;
+    // A session with no workspace is a legitimate answer here, not a missing
+    // row: the person has an account and has not chosen a business yet.
+    let org = if org_id.is_empty() {
+        None
+    } else {
+        sqlx::query("SELECT id, name, slug, currency FROM organizations WHERE id = ?")
+            .bind(org_id)
+            .fetch_optional(&state.pool)
+            .await?
+    };
 
     Ok(AuthResponse {
         access_token: access,
@@ -542,12 +591,12 @@ async fn issue_session(
         expires_in: state.config.access_ttl_secs,
         refresh_expires_in: state.config.refresh_ttl_secs,
         user: json!({ "id": user_id, "name": name, "email": email }),
-        organization: json!({
-            "id": org.try_get::<String, _>("id").unwrap_or_default(),
-            "name": org.try_get::<String, _>("name").unwrap_or_default(),
-            "slug": org.try_get::<String, _>("slug").unwrap_or_default(),
-            "currency": org.try_get::<String, _>("currency").unwrap_or_else(|_| "USD".into()),
-        }),
+        organization: org.as_ref().map(|o| json!({
+            "id": o.try_get::<String, _>("id").unwrap_or_default(),
+            "name": o.try_get::<String, _>("name").unwrap_or_default(),
+            "slug": o.try_get::<String, _>("slug").unwrap_or_default(),
+            "currency": o.try_get::<String, _>("currency").unwrap_or_else(|_| "USD".into()),
+        })).unwrap_or(Value::Null),
     })
 }
 
@@ -568,12 +617,27 @@ mod tests {
             name: " ".into(),
             email: "nope".into(),
             password: "short".into(),
-            organization: "".into(),
+            organization: Some("".into()),
             currency: None,
         };
         let Err(AppError::Validation(errs)) = validate_registration(&bad) else {
             panic!("expected validation failure");
         };
         assert_eq!(errs.len(), 4);
+    }
+
+    #[test]
+    fn signing_up_without_a_business_is_allowed() {
+        // Someone who was invited is creating an account, not a company. A
+        // name that is present but blank is still a mistake; no name at all
+        // is the invited person's path.
+        let invited = RegisterBody {
+            name: "Dana".into(),
+            email: "dana@example.com".into(),
+            password: "hunter2hunter2".into(),
+            organization: None,
+            currency: None,
+        };
+        assert!(validate_registration(&invited).is_ok());
     }
 }

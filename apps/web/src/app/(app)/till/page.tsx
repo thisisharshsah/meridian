@@ -32,7 +32,7 @@ const METHODS = [
  */
 export default function TillPage() {
   const { data: session } = useSession();
-  const currency = session?.organization.currency ?? "USD";
+  const currency = session?.organization?.currency ?? "USD";
 
   const [term, setTerm] = React.useState("");
   const [debounced, setDebounced] = React.useState("");

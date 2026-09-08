@@ -68,6 +68,15 @@ const en: Messages = {
   "invite.accepted": "You have joined {name}",
   "invite.failed": "Could not accept that invitation. It may have been withdrawn.",
 
+  "choose.title": "Welcome, {name}",
+  "choose.lede": "Your account is ready. Now pick where you are working.",
+  "choose.invited": "You have been invited",
+  "choose.invitedLede": "Sent to {email}.",
+  "choose.accept": "Join",
+  "choose.start": "Start your own",
+  "choose.startLede": "Set up a business you run. You can be part of others at the same time.",
+  "choose.noneWaiting": "No invitations are waiting for {email}. If you expected one, ask whoever invited you to send it to this address.",
+
   // ---- first run ----
   "setup.title": "Set up your workspace",
   "setup.lede": "Work down the list. Each step uses the one before it, and this page fills itself in as you go.",

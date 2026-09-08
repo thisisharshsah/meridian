@@ -28,7 +28,7 @@ import { cn } from "@/lib/utils";
  */
 export function BoardView({ meta, groupField }: { meta: EntityMeta; groupField: FieldDef }) {
   const { data: session } = useSession();
-  const currency = session?.organization.currency ?? "USD";
+  const currency = session?.organization?.currency ?? "USD";
 
   // A board is only readable at a size a person can scan; beyond that the
   // table view is the honest tool, so say so rather than truncating silently.

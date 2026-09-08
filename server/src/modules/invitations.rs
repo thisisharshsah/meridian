@@ -14,6 +14,7 @@ use serde_json::{json, Value};
 use sqlx::Row;
 
 use crate::auth::ctx::Ctx;
+use crate::auth::extract::UserCtx;
 use crate::auth::password::{
     digest_token, hash_password_async, random_token, verify_password_async,
 };
@@ -96,7 +97,7 @@ async fn join_workspace(
 ///
 /// Matched on the signed-in email rather than anything the caller passes, so
 /// this cannot be used to ask which businesses have invited someone else.
-async fn mine(State(state): State<AppState>, ctx: Ctx) -> AppResult<Json<Value>> {
+async fn mine(State(state): State<AppState>, ctx: UserCtx) -> AppResult<Json<Value>> {
     let rows = sqlx::query(
         "SELECT i.id, o.name AS org_name, r.name AS role_name, i.title, i.expires_at
            FROM invitations i
@@ -137,7 +138,7 @@ async fn mine(State(state): State<AppState>, ctx: Ctx) -> AppResult<Json<Value>>
 /// password they just signed in with is friction with no security in it.
 async fn accept_mine(
     State(state): State<AppState>,
-    ctx: Ctx,
+    ctx: UserCtx,
     Path(id): Path<String>,
 ) -> AppResult<Json<Value>> {
     let row = sqlx::query(

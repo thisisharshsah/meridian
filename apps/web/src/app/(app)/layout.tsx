@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Sidebar } from "@/components/shell/sidebar";
 import { Topbar } from "@/components/shell/topbar";
+import { ChooseWorkspace } from "@/components/shell/choose-workspace";
 import { BottomNav } from "@/components/shell/bottom-nav";
 import { CommandPalette } from "@/components/shell/command-palette";
 import { useAppMeta, useSession } from "@/lib/queries";
@@ -11,7 +12,7 @@ const COLLAPSE_KEY = "suite-sidebar-collapsed";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { data: meta, isLoading } = useAppMeta();
-  const { data: session } = useSession();
+  const { data: session, isPending: sessionPending } = useSession();
   const [paletteOpen, setPaletteOpen] = React.useState(false);
   const [navOpen, setNavOpen] = React.useState(false);
 
@@ -38,6 +39,29 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     });
 
   const modules = meta?.modules ?? [];
+
+  // Nothing is drawn until we know who is asking.
+  //
+  // Rendering the shell first and correcting afterwards is not free: every
+  // screen inside it starts fetching immediately, and for a session with no
+  // workspace all of those come back 401. The proxy answers a 401 by spending
+  // the refresh token, refresh tokens rotate, and a dozen of them racing means
+  // all but one are rejected -- the session is destroyed by its own loading
+  // state. So wait.
+  if (sessionPending) {
+    return (
+      <div className="flex h-dvh items-center justify-center bg-surface-muted">
+        <span className="sr-only">Loading</span>
+      </div>
+    );
+  }
+
+  // A session can exist before a workspace does. There is no sidebar to draw
+  // for a person who belongs nowhere yet, so the whole shell is replaced by the
+  // two choices they actually have.
+  if (session && !session.organization) {
+    return <ChooseWorkspace session={session} />;
+  }
 
   return (
     <div className="flex h-dvh overflow-hidden">

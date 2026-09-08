@@ -78,9 +78,10 @@ export type AppMeta = { modules: ModuleMeta[] };
 
 export type Session = {
   user: { id: string; name: string; email: string; avatar_url: string | null };
-  organization: { id: string; name: string; slug: string; currency: string; timezone: string };
+  /** Null until the person has started a business or accepted an invitation. */
+  organization: { id: string; name: string; slug: string; currency: string; timezone: string } | null;
+  role: string | null;
   organizations: { id: string; name: string; slug: string }[];
-  role: string;
   is_owner: boolean;
   permissions: string[];
 };

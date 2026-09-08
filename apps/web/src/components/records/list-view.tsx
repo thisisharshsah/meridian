@@ -40,7 +40,7 @@ export function ListView({ meta, fixedFilters, embedded }: {
 }) {
   const router = useRouter();
   const { data: session } = useSession();
-  const currency = session?.organization.currency ?? "USD";
+  const currency = session?.organization?.currency ?? "USD";
 
   const [page, setPage] = React.useState(1);
   const [search, setSearch] = React.useState("");
