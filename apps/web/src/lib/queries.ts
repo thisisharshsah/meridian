@@ -34,6 +34,23 @@ export function useEntityMeta(entity: string | undefined) {
   });
 }
 
+export type PendingInvitation = {
+  id: string;
+  organization: string;
+  role_name: string;
+  title: string | null;
+  expires_at: string;
+};
+
+/** Businesses that have invited the address this session belongs to. */
+export function usePendingInvitations() {
+  return useQuery({
+    queryKey: ["my-invitations"],
+    queryFn: () => get<{ data: PendingInvitation[] }>("my-invitations"),
+    staleTime: 60_000,
+  });
+}
+
 export type ListParams = Record<string, string | number | boolean | null | undefined>;
 
 export function useList(entity: string | undefined, params: ListParams = {}) {

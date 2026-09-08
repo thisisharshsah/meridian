@@ -34,6 +34,139 @@ pub fn router() -> Router<AppState> {
         // Reached by the invitee, who has no session yet.
         .route("/invitations/{token}", get(preview))
         .route("/invitations/{token}/accept", post(accept))
+        // Reached by someone already signed in, who was invited at the address
+        // they signed in with. No token: the session already proves who they
+        // are, and a link that has to be found in an inbox is the whole problem.
+        .route("/my-invitations", get(mine))
+        .route("/my-invitations/{id}/accept", post(accept_mine))
+}
+
+/// Put a person into a workspace and close the invitation that let them in.
+///
+/// The role is re-checked at this moment rather than trusted from when the
+/// invitation was written: a role deleted in between would otherwise be handed
+/// to the new member, and `Ctx` would resolve it to no permissions at all with
+/// no explanation of why nothing works.
+#[allow(clippy::too_many_arguments)]
+async fn join_workspace(
+    tx: &mut sqlx::SqliteConnection,
+    org_id: &str,
+    role_id: &str,
+    title: Option<&str>,
+    user_id: &str,
+    invite_id: &str,
+    ts: &str,
+) -> AppResult<()> {
+    let role_alive = sqlx::query("SELECT 1 FROM roles WHERE org_id = ? AND id = ? AND deleted_at IS NULL")
+        .bind(org_id)
+        .bind(role_id)
+        .fetch_optional(&mut *tx)
+        .await?;
+    if role_alive.is_none() {
+        return Err(AppError::conflict(
+            "The role this invitation was for no longer exists — ask for a new invitation",
+        ));
+    }
+
+    sqlx::query(
+        "INSERT INTO memberships (id, org_id, user_id, role_id, is_owner, status, title, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 0, 'active', ?, ?, ?)",
+    )
+    .bind(new_id())
+    .bind(org_id)
+    .bind(user_id)
+    .bind(role_id)
+    .bind(title)
+    .bind(ts)
+    .bind(ts)
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::query("UPDATE invitations SET accepted_at = ?, accepted_by = ?, updated_at = ? WHERE id = ?")
+        .bind(ts)
+        .bind(user_id)
+        .bind(ts)
+        .bind(invite_id)
+        .execute(&mut *tx)
+        .await?;
+    Ok(())
+}
+
+/// Invitations waiting for the address this session belongs to.
+///
+/// Matched on the signed-in email rather than anything the caller passes, so
+/// this cannot be used to ask which businesses have invited someone else.
+async fn mine(State(state): State<AppState>, ctx: Ctx) -> AppResult<Json<Value>> {
+    let rows = sqlx::query(
+        "SELECT i.id, o.name AS org_name, r.name AS role_name, i.title, i.expires_at
+           FROM invitations i
+           JOIN organizations o ON o.id = i.org_id
+           JOIN roles r ON r.id = i.role_id
+          WHERE lower(i.email) = lower(?)
+            AND i.accepted_at IS NULL AND i.revoked_at IS NULL AND i.expires_at > ?
+            AND NOT EXISTS (
+              SELECT 1 FROM memberships m
+               WHERE m.org_id = i.org_id AND m.user_id = ? AND m.deleted_at IS NULL
+            )
+          ORDER BY i.created_at",
+    )
+    .bind(&ctx.email)
+    .bind(now())
+    .bind(&ctx.user_id)
+    .fetch_all(&state.pool)
+    .await?;
+
+    let data: Vec<Value> = rows
+        .iter()
+        .map(|r| {
+            json!({
+                "id": r.try_get::<String, _>("id").unwrap_or_default(),
+                "organization": r.try_get::<String, _>("org_name").unwrap_or_default(),
+                "role_name": r.try_get::<String, _>("role_name").unwrap_or_default(),
+                "title": r.try_get::<Option<String>, _>("title").ok().flatten(),
+                "expires_at": r.try_get::<String, _>("expires_at").unwrap_or_default(),
+            })
+        })
+        .collect();
+
+    Ok(Json(json!({ "data": data })))
+}
+
+/// Accept one of them. No password and no token: the session already proves
+/// this is the person the invitation was addressed to, and asking again for a
+/// password they just signed in with is friction with no security in it.
+async fn accept_mine(
+    State(state): State<AppState>,
+    ctx: Ctx,
+    Path(id): Path<String>,
+) -> AppResult<Json<Value>> {
+    let row = sqlx::query(
+        "SELECT i.org_id, i.role_id, i.title, i.email, o.name AS org_name
+           FROM invitations i JOIN organizations o ON o.id = i.org_id
+          WHERE i.id = ? AND i.accepted_at IS NULL AND i.revoked_at IS NULL AND i.expires_at > ?",
+    )
+    .bind(&id)
+    .bind(now())
+    .fetch_optional(&state.pool)
+    .await?
+    .ok_or_else(|| AppError::not_found("That invitation is no longer open"))?;
+
+    let email: String = row.try_get("email").unwrap_or_default();
+    if !email.eq_ignore_ascii_case(&ctx.email) {
+        return Err(AppError::forbidden("That invitation was sent to a different address"));
+    }
+
+    let org_id: String = row.try_get("org_id").unwrap_or_default();
+    let role_id: String = row.try_get("role_id").unwrap_or_default();
+    let title: Option<String> = row.try_get("title").ok().flatten();
+    let org_name: String = row.try_get("org_name").unwrap_or_default();
+
+    let mut tx = state.pool.begin().await?;
+    let ts = now();
+    join_workspace(&mut tx, &org_id, &role_id, title.as_deref(), &ctx.user_id, &id, &ts).await?;
+    tx.commit().await?;
+
+    Ok(Json(json!({ "organization": org_name, "organization_id": org_id })))
 }
 
 fn now() -> String {
@@ -337,41 +470,7 @@ async fn accept(
         }
     };
 
-    // The role is re-checked here, not just when the invitation was written:
-    // a role deleted in between would otherwise be handed to the new member,
-    // and `Ctx` would resolve it to no permissions at all with no explanation.
-    let role_alive = sqlx::query("SELECT 1 FROM roles WHERE org_id = ? AND id = ? AND deleted_at IS NULL")
-        .bind(&invite.org_id)
-        .bind(&invite.role_id)
-        .fetch_optional(&mut *tx)
-        .await?;
-    if role_alive.is_none() {
-        return Err(AppError::conflict(
-            "The role this invitation was for no longer exists — ask for a new invitation",
-        ));
-    }
-
-    sqlx::query(
-        "INSERT INTO memberships (id, org_id, user_id, role_id, is_owner, status, title, created_at, updated_at)
-         VALUES (?, ?, ?, ?, 0, 'active', ?, ?, ?)",
-    )
-    .bind(new_id())
-    .bind(&invite.org_id)
-    .bind(&user_id)
-    .bind(&invite.role_id)
-    .bind(&invite.title)
-    .bind(&ts)
-    .bind(&ts)
-    .execute(&mut *tx)
-    .await?;
-
-    sqlx::query("UPDATE invitations SET accepted_at = ?, accepted_by = ?, updated_at = ? WHERE id = ?")
-        .bind(&ts)
-        .bind(&user_id)
-        .bind(&ts)
-        .bind(&invite.id)
-        .execute(&mut *tx)
-        .await?;
+    join_workspace(&mut tx, &invite.org_id, &invite.role_id, invite.title.as_deref(), &user_id, &invite.id, &ts).await?;
 
     tx.commit().await?;
 

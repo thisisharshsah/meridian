@@ -3105,3 +3105,72 @@ async fn an_employee_needs_a_job_title() {
         "a name with no job title is not a staff record: {body:?}"
     );
 }
+
+#[tokio::test]
+async fn an_invitation_waits_inside_the_app_not_only_in_an_inbox() {
+    let (app, _state) = test_app().await;
+    let host = new_org(&app, "hostco").await;
+
+    // Someone who already has their own business.
+    let guest_email = format!("guest{}@example.com", 1);
+    let (_, guest_reg) = call(
+        &app,
+        send("POST", "/api/auth/register", "", json!({
+            "name": "Guest Owner", "organization": "Guest Co",
+            "email": guest_email, "password": "hunter2hunter2"
+        })),
+    )
+    .await;
+    let guest = guest_reg["access_token"].as_str().unwrap().to_string();
+
+    // Nothing pending yet.
+    let (_, none) = call(&app, get("/api/my-invitations", &guest)).await;
+    assert_eq!(none["data"].as_array().unwrap().len(), 0);
+
+    // The host invites that address.
+    let (_, roles) = call(&app, get("/api/settings/roles", &host)).await;
+    let role_id = roles["data"][0]["id"].as_str().unwrap().to_string();
+    let (inv_status, _inv) = call(
+        &app,
+        send("POST", "/api/settings/invitations", &host, json!({
+            "email": guest_email, "role_id": role_id, "title": "Bookkeeper"
+        })),
+    )
+    .await;
+    assert!(inv_status.is_success(), "the host can invite");
+
+    // It shows up for them, signed in, with no link to hunt for.
+    let (_, waiting) = call(&app, get("/api/my-invitations", &guest)).await;
+    let list = waiting["data"].as_array().unwrap();
+    assert_eq!(list.len(), 1, "an invitation to my address is mine to see");
+    let invite_id = list[0]["id"].as_str().unwrap().to_string();
+
+    // Somebody else's session must not be able to take it.
+    let (stolen, _) = call(
+        &app,
+        send("POST", &format!("/api/my-invitations/{invite_id}/accept"), &host, Value::Null),
+    )
+    .await;
+    assert_eq!(
+        stolen, StatusCode::FORBIDDEN,
+        "an invitation belongs to the address it was sent to, not to whoever has its id"
+    );
+
+    // The invitee accepts, and now belongs to both businesses.
+    let (ok, joined) = call(
+        &app,
+        send("POST", &format!("/api/my-invitations/{invite_id}/accept"), &guest, Value::Null),
+    )
+    .await;
+    assert!(ok.is_success(), "accepting my own invitation: {joined:?}");
+
+    let (_, me) = call(&app, get("/api/auth/me", &guest)).await;
+    assert_eq!(
+        me["organizations"].as_array().unwrap().len(), 2,
+        "one login, their own business and the one they were invited to"
+    );
+
+    // And it is gone from the waiting list rather than offered twice.
+    let (_, after) = call(&app, get("/api/my-invitations", &guest)).await;
+    assert_eq!(after["data"].as_array().unwrap().len(), 0, "an accepted invitation stops waiting");
+}

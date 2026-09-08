@@ -63,6 +63,11 @@ const en: Messages = {
   "workspace.created": "{name} is ready",
   "workspace.failed": "Could not create that business. Nothing was changed — try again.",
 
+  "invite.waiting": "Invitations",
+  "invite.join": "Join {name}",
+  "invite.accepted": "You have joined {name}",
+  "invite.failed": "Could not accept that invitation. It may have been withdrawn.",
+
   // ---- first run ----
   "setup.title": "Set up your workspace",
   "setup.lede": "Work down the list. Each step uses the one before it, and this page fills itself in as you go.",

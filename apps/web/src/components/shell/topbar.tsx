@@ -3,7 +3,8 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { Building2, Check, LogOut, Moon, Plus, Search, Sun } from "lucide-react";
+import { usePendingInvitations } from "@/lib/queries";
+import { Building2, Check, LogOut, MailPlus, Moon, Plus, Search, Sun } from "lucide-react";
 
 import { toast } from "sonner";
 
@@ -53,6 +54,36 @@ export function Topbar({ session, onSearch }: { session?: Session; onSearch: () 
       router.refresh();
     } catch {
       toast.error("Could not switch workspace. Try again in a moment.");
+    } finally {
+      setSwitching(false);
+    }
+  };
+
+  const invitations = usePendingInvitations();
+
+  /**
+   * Accepting lands you in the business you just joined, because that is what
+   * you were doing. The switch is a second call: joining and choosing which
+   * workspace the session points at are genuinely different things.
+   */
+  const acceptInvite = async (id: string, name: string) => {
+    if (switching) return;
+    setSwitching(true);
+    try {
+      const res = await fetch(`/api/${encodeURIComponent("my-invitations")}/${id}/accept`, { method: "POST" });
+      if (!res.ok) throw new Error();
+      const joined = await res.json();
+      await fetch("/api/session/switch", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ organization_id: joined.organization_id }),
+      });
+      qc.clear();
+      toast.success(t("invite.accepted", undefined, { name }));
+      router.replace("/");
+      router.refresh();
+    } catch {
+      toast.error(t("invite.failed"));
     } finally {
       setSwitching(false);
     }
@@ -114,6 +145,19 @@ export function Topbar({ session, onSearch }: { session?: Session; onSearch: () 
                 {session?.is_owner ? "Owner" : session?.role} · {session?.organization.currency}
               </div>
             </div>
+            {(invitations.data?.data.length ?? 0) > 0 && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>{t("invite.waiting")}</DropdownMenuLabel>
+                {invitations.data?.data.map((inv) => (
+                  <DropdownMenuItem key={inv.id} disabled={switching} onSelect={() => acceptInvite(inv.id, inv.organization)}>
+                    <MailPlus />
+                    <span className="truncate">{t("invite.join", undefined, { name: inv.organization })}</span>
+                  </DropdownMenuItem>
+                ))}
+              </>
+            )}
+
             {(session?.organizations.length ?? 0) > 1 && (
               <>
                 <DropdownMenuSeparator />
