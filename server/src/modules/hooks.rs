@@ -24,6 +24,7 @@ const NUMBERED: &[(&str, &str)] = &[
     ("books.bills", "books.bills"),
     ("books.expenses", "books.expenses"),
     ("inventory.purchase_orders", "inventory.purchase_orders"),
+    ("sales.counter_sales", "sales.counter_sales"),
     ("desk.tickets", "desk.tickets"),
     ("recruit.candidates", "recruit.candidates"),
 ];
@@ -86,6 +87,7 @@ struct DocumentLink {
 fn document_link_for_doc(entity: &str) -> Option<DocumentLink> {
     Some(match entity {
         "sales.quotes" => DocumentLink { doc_table: "quotes", items_table: "quote_items", foreign_key: "quote_id" },
+        "sales.counter_sales" => DocumentLink { doc_table: "counter_sales", items_table: "counter_sale_items", foreign_key: "counter_sale_id" },
         "sales.orders" => DocumentLink { doc_table: "sales_orders", items_table: "sales_order_items", foreign_key: "sales_order_id" },
         "books.invoices" => DocumentLink { doc_table: "invoices", items_table: "invoice_items", foreign_key: "invoice_id" },
         "inventory.purchase_orders" => DocumentLink { doc_table: "purchase_orders", items_table: "purchase_order_items", foreign_key: "purchase_order_id" },
@@ -110,6 +112,7 @@ pub async fn retotal_document(
 fn document_link(entity: &str) -> Option<DocumentLink> {
     Some(match entity {
         "sales.quote_items" => DocumentLink { doc_table: "quotes", items_table: "quote_items", foreign_key: "quote_id" },
+        "sales.counter_sale_items" => DocumentLink { doc_table: "counter_sales", items_table: "counter_sale_items", foreign_key: "counter_sale_id" },
         "sales.order_items" => DocumentLink { doc_table: "sales_orders", items_table: "sales_order_items", foreign_key: "sales_order_id" },
         "books.invoice_items" => DocumentLink { doc_table: "invoices", items_table: "invoice_items", foreign_key: "invoice_id" },
         "inventory.purchase_order_items" => DocumentLink { doc_table: "purchase_orders", items_table: "purchase_order_items", foreign_key: "purchase_order_id" },
@@ -136,6 +139,7 @@ pub async fn after_write(pool: &SqlitePool, ctx: &Ctx, entity: &str, id: &str) -
     match entity {
         "crm.deals" => recalc_deal(pool, ctx, id).await,
         "hr.attendance" => recalc_attendance(pool, ctx, id).await,
+        "sales.counter_sales" => settle_counter_sale(pool, ctx, id).await,
         "hr.payslips" => recalc_payslip(pool, ctx, id).await,
         "hr.pay_runs" => recalc_pay_run(pool, ctx, id).await,
         "books.payments" => {
@@ -663,6 +667,125 @@ async fn recalc_pay_run(pool: &SqlitePool, ctx: &Ctx, run_id: &str) -> AppResult
         .bind(run_id)
         .execute(pool)
         .await?;
+    Ok(())
+}
+
+/// Ringing up a sale takes the goods off the shelf.
+///
+/// A till sale is settled the moment it is completed, so the stock ledger has
+/// to move with it rather than waiting for a delivery note that a shop never
+/// writes. Movements are signed, so a sale is a negative quantity.
+///
+/// Guarded by `stocked_at`: completing an already-completed sale, or any later
+/// edit to it, must not take the same goods off the shelf twice. Voiding a
+/// completed sale puts them back, because a voided sale did not happen and a
+/// ledger that still says it did will not reconcile against the shelf.
+async fn settle_counter_sale(pool: &SqlitePool, ctx: &Ctx, sale_id: &str) -> AppResult<()> {
+    let sale: Option<(String, Option<String>, String)> = sqlx::query_as(
+        "SELECT status, stocked_at, sold_at FROM counter_sales WHERE org_id = ? AND id = ?",
+    )
+    .bind(&ctx.org_id)
+    .bind(sale_id)
+    .fetch_optional(pool)
+    .await?;
+    let Some((status, stocked_at, sold_at)) = sale else {
+        return Ok(());
+    };
+
+    // Change due is arithmetic the cashier should never be doing in their head.
+    sqlx::query(
+        "UPDATE counter_sales SET change_given =
+           CASE WHEN amount_tendered > total THEN amount_tendered - total ELSE 0 END
+         WHERE org_id = ? AND id = ?",
+    )
+    .bind(&ctx.org_id)
+    .bind(sale_id)
+    .execute(pool)
+    .await?;
+
+    let completed = status == "completed";
+    let already = stocked_at.is_some();
+
+    if completed && !already {
+        let lines: Vec<(String, i64)> = sqlx::query_as(
+            "SELECT item_id, quantity FROM counter_sale_items
+              WHERE org_id = ? AND counter_sale_id = ? AND deleted_at IS NULL
+                AND item_id IS NOT NULL",
+        )
+        .bind(&ctx.org_id)
+        .bind(sale_id)
+        .fetch_all(pool)
+        .await?;
+
+        let stamp = now();
+        let moved_on = sold_at.get(..10).unwrap_or("").to_string();
+        for (item_id, quantity) in &lines {
+            sqlx::query(
+                "INSERT INTO stock_moves
+                   (id, org_id, item_id, move_type, quantity, moved_on,
+                    reference_entity, reference_id, created_at, updated_at, created_by, updated_by)
+                 VALUES (?, ?, ?, 'sale', ?, ?, 'sales.counter_sales', ?, ?, ?, ?, ?)",
+            )
+            .bind(crate::common::ids::new_id())
+            .bind(&ctx.org_id)
+            .bind(item_id)
+            .bind(-quantity)
+            .bind(&moved_on)
+            .bind(sale_id)
+            .bind(&stamp)
+            .bind(&stamp)
+            .bind(&ctx.user_id)
+            .bind(&ctx.user_id)
+            .execute(pool)
+            .await?;
+        }
+
+        sqlx::query("UPDATE counter_sales SET stocked_at = ? WHERE org_id = ? AND id = ?")
+            .bind(&stamp)
+            .bind(&ctx.org_id)
+            .bind(sale_id)
+            .execute(pool)
+            .await?;
+
+        for (item_id, _) in &lines {
+            recalc_item_stock(pool, ctx, item_id).await?;
+        }
+        return Ok(());
+    }
+
+    if !completed && already {
+        let items: Vec<(String,)> = sqlx::query_as(
+            "SELECT DISTINCT item_id FROM stock_moves
+              WHERE org_id = ? AND reference_entity = 'sales.counter_sales'
+                AND reference_id = ? AND deleted_at IS NULL",
+        )
+        .bind(&ctx.org_id)
+        .bind(sale_id)
+        .fetch_all(pool)
+        .await?;
+
+        let stamp = now();
+        sqlx::query(
+            "UPDATE stock_moves SET deleted_at = ?
+              WHERE org_id = ? AND reference_entity = 'sales.counter_sales'
+                AND reference_id = ? AND deleted_at IS NULL",
+        )
+        .bind(&stamp)
+        .bind(&ctx.org_id)
+        .bind(sale_id)
+        .execute(pool)
+        .await?;
+
+        sqlx::query("UPDATE counter_sales SET stocked_at = NULL WHERE org_id = ? AND id = ?")
+            .bind(&ctx.org_id)
+            .bind(sale_id)
+            .execute(pool)
+            .await?;
+
+        for (item_id,) in &items {
+            recalc_item_stock(pool, ctx, item_id).await?;
+        }
+    }
     Ok(())
 }
 

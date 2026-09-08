@@ -2834,3 +2834,101 @@ async fn a_payslip_is_built_from_what_was_already_recorded() {
     let (_, run) = call(&app, get(&format!("/api/e/hr.pay_runs/{run_id}"), &owner)).await;
     assert_eq!(run["total_net"], json!(0), "a run total cannot outlive the slips behind it");
 }
+
+#[tokio::test]
+async fn completing_a_till_sale_takes_the_goods_off_the_shelf_once() {
+    let (app, _state) = test_app().await;
+    let owner = new_org(&app, "till").await;
+
+    let (_, item) = call(
+        &app,
+        send("POST", "/api/e/inventory.items", &owner, json!({ "name": "Tinned beans", "sku": "TB-1" })),
+    )
+    .await;
+    let item_id = item["id"].as_str().unwrap().to_string();
+
+    call(
+        &app,
+        send("POST", "/api/e/inventory.stock_moves", &owner, json!({
+            "item_id": item_id, "move_type": "purchase", "quantity": "100", "moved_on": "2026-03-01"
+        })),
+    )
+    .await;
+
+    let (_, sale) = call(
+        &app,
+        send("POST", "/api/e/sales.counter_sales", &owner, json!({
+            "sold_at": "2026-03-02T10:15:00Z", "payment_method": "cash", "amount_tendered": "20"
+        })),
+    )
+    .await;
+    let sale_id = sale["id"].as_str().unwrap().to_string();
+    assert!(
+        sale["number"].as_str().unwrap_or("").starts_with("RC-"),
+        "a receipt numbers itself; the till cannot ask the cashier for one"
+    );
+
+    call(
+        &app,
+        send("POST", "/api/e/sales.counter_sale_items", &owner, json!({
+            "counter_sale_id": sale_id, "item_id": item_id,
+            "description": "Tinned beans", "quantity": "3", "unit_price": "4.50"
+        })),
+    )
+    .await;
+
+    let (_, sale) = call(&app, get(&format!("/api/e/sales.counter_sales/{sale_id}"), &owner)).await;
+    assert_eq!(sale["total"], json!(1_350), "three at 4.50 is 13.50");
+
+    // Still open: nothing has left the shelf.
+    let (_, it) = call(&app, get(&format!("/api/e/inventory.items/{item_id}"), &owner)).await;
+    assert_eq!(it["stock_on_hand"], json!(100_000), "an open sale has not been handed over yet");
+
+    // Complete it.
+    call(
+        &app,
+        send("PATCH", &format!("/api/e/sales.counter_sales/{sale_id}"), &owner, json!({ "status": "completed" })),
+    )
+    .await;
+    let (_, it) = call(&app, get(&format!("/api/e/inventory.items/{item_id}"), &owner)).await;
+    assert_eq!(it["stock_on_hand"], json!(97_000), "three tins left the shelf");
+
+    let (_, sale) = call(&app, get(&format!("/api/e/sales.counter_sales/{sale_id}"), &owner)).await;
+    assert_eq!(sale["change_given"], json!(650), "twenty tendered against 13.50 is 6.50 change");
+
+    // Editing a completed sale must not sell the same tins again.
+    call(
+        &app,
+        send("PATCH", &format!("/api/e/sales.counter_sales/{sale_id}"), &owner, json!({ "notes": "regular" })),
+    )
+    .await;
+    let (_, it) = call(&app, get(&format!("/api/e/inventory.items/{item_id}"), &owner)).await;
+    assert_eq!(it["stock_on_hand"], json!(97_000), "the same goods cannot leave the shelf twice");
+
+    // Voiding puts them back, or the ledger stops matching the shelf.
+    call(
+        &app,
+        send("PATCH", &format!("/api/e/sales.counter_sales/{sale_id}"), &owner, json!({ "status": "voided" })),
+    )
+    .await;
+    let (_, it) = call(&app, get(&format!("/api/e/inventory.items/{item_id}"), &owner)).await;
+    assert_eq!(it["stock_on_hand"], json!(100_000), "a voided sale did not happen");
+}
+
+#[tokio::test]
+async fn a_till_sale_needs_no_customer() {
+    let (app, _state) = test_app().await;
+    let owner = new_org(&app, "anon").await;
+
+    let (status, sale) = call(
+        &app,
+        send("POST", "/api/e/sales.counter_sales", &owner, json!({
+            "sold_at": "2026-03-02T10:15:00Z"
+        })),
+    )
+    .await;
+    assert!(
+        status.is_success(),
+        "a shop does not learn the name of most people it sells to: {sale:?}"
+    );
+}

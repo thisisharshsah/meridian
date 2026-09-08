@@ -31,6 +31,7 @@ pub const SEQUENCE_SEEDS: &[(&str, &str)] = &[
     ("books.payments", "PMT-"),
     ("books.expenses", "EXP-"),
     ("inventory.purchase_orders", "PO-"),
+    ("sales.counter_sales", "RC-"),
     ("desk.tickets", "TKT-"),
     ("recruit.candidates", "CND-"),
 ];

@@ -141,4 +141,74 @@ pub fn register(r: &mut Registry) {
         embedded: true,
         read_only: false,
     });
+
+    r.add(EntityDef {
+        key: "sales.counter_sales",
+        table: "counter_sales",
+        module: "sales",
+        label: "Counter sale",
+        label_plural: "Counter sales",
+        icon: "ShoppingCart",
+        title_field: "number",
+        fields: {
+            let mut f = vec![
+                text("number", "Receipt").readonly().in_list(),
+                datetime("sold_at", "Sold at").required().in_list(),
+                select("status", "Status", vec![
+                    opt("open", "Open", "warning"),
+                    opt("completed", "Completed", "success"),
+                    opt("voided", "Voided", "neutral"),
+                ]).required().with_default("open").in_list(),
+                select("payment_method", "Paid by", vec![
+                    opt("cash", "Cash", "success"),
+                    opt("card", "Card", "info"),
+                    opt("transfer", "Transfer", "brand"),
+                    opt("other", "Other", "neutral"),
+                ]).required().with_default("cash").in_list(),
+                // Optional on purpose: the shop does not learn the name of
+                // most people it sells to, and demanding one would make the
+                // till unusable for exactly the businesses it is for.
+                reference("account_id", "Customer", "crm.accounts"),
+                currency_field(),
+            ];
+            f.extend(document_totals());
+            f.extend(vec![
+                money("amount_tendered", "Tendered"),
+                money("change_given", "Change").readonly().in_list(),
+                reference("served_by", "Served by", "core.users").in_list(),
+                long_text("notes", "Notes"),
+            ]);
+            f
+        },
+        default_sort: ("sold_at", SortDir::Desc),
+        children: vec![ChildDef {
+            entity: "sales.counter_sale_items",
+            foreign_key: "counter_sale_id",
+            label: "Items",
+            inline: true,
+        }],
+        has_activities: false,
+        has_notes: false,
+        global_search: true,
+        embedded: false,
+        read_only: false,
+    });
+
+    r.add(EntityDef {
+        key: "sales.counter_sale_items",
+        table: "counter_sale_items",
+        module: "sales",
+        label: "Sale line",
+        label_plural: "Sale lines",
+        icon: "List",
+        title_field: "description",
+        fields: line_item_fields("counter_sale_id", "Sale", "sales.counter_sales"),
+        default_sort: ("sort_order", SortDir::Asc),
+        children: vec![],
+        has_activities: false,
+        has_notes: false,
+        global_search: false,
+        embedded: true,
+        read_only: false,
+    });
 }
