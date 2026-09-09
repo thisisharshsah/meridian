@@ -252,8 +252,12 @@ export function ListView({ meta, fixedFilters, embedded }: {
               setPage(1);
             }}
           >
-            <SelectTrigger className="w-auto min-w-[9rem]">
-              <SelectValue placeholder={f.label} />
+            {/* The field name stays on screen. As a placeholder it vanished the
+                moment a value was picked, leaving a lone "Closed won" with
+                nothing saying what it filtered. */}
+            <SelectTrigger className="w-auto min-w-[9rem]" aria-label={`Filter by ${f.label}`}>
+              <span className="mr-1 text-muted-foreground">{f.label}:</span>
+              <SelectValue placeholder="All" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="__all">All {f.label.toLowerCase()}</SelectItem>

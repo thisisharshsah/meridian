@@ -23,7 +23,10 @@ pub fn register(r: &mut Registry) {
         icon: "UserPlus",
         title_field: "full_name",
         fields: vec![
-            text("full_name", "Name").required().in_list(),
+            // Composed from the two below rather than asked for. This used to
+            // be a third name field, required alongside last name, so the same
+            // person was typed twice and could disagree with itself.
+            text("full_name", "Name").readonly().in_list(),
             text("first_name", "First name"),
             text("last_name", "Last name").required(),
             text("company", "Company").required().in_list(),
@@ -120,7 +123,10 @@ pub fn register(r: &mut Registry) {
         icon: "Contact",
         title_field: "full_name",
         fields: vec![
-            text("full_name", "Name").required().in_list(),
+            // Composed from the two below rather than asked for. This used to
+            // be a third name field, required alongside last name, so the same
+            // person was typed twice and could disagree with itself.
+            text("full_name", "Name").readonly().in_list(),
             text("first_name", "First name"),
             text("last_name", "Last name").required(),
             reference("account_id", "Account", "crm.accounts").in_list(),

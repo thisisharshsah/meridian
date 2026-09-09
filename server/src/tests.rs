@@ -3250,3 +3250,49 @@ async fn signing_in_before_accepting_an_invitation_works() {
     );
     assert_eq!(login["organization"], Value::Null);
 }
+
+#[tokio::test]
+async fn a_person_is_named_once_not_three_times() {
+    let (app, _state) = test_app().await;
+    let owner = new_org(&app, "names").await;
+
+    // The form no longer offers full_name at all; first and last are enough.
+    let (status, lead) = call(
+        &app,
+        send("POST", "/api/e/crm.leads", &owner, json!({
+            "first_name": "Ada", "last_name": "Lovelace", "company": "Analytical Engines"
+        })),
+    )
+    .await;
+    assert!(status.is_success(), "a lead needs a name, not three of them: {lead:?}");
+    assert_eq!(lead["full_name"], json!("Ada Lovelace"), "composed, not typed");
+
+    // Correcting the surname has to move the title with it, or the list keeps
+    // showing the old name and search keeps finding it under that.
+    let id = lead["id"].as_str().unwrap().to_string();
+    call(
+        &app,
+        send("PATCH", &format!("/api/e/crm.leads/{id}"), &owner, json!({ "last_name": "Byron" })),
+    )
+    .await;
+    let (_, fixed) = call(&app, get(&format!("/api/e/crm.leads/{id}"), &owner)).await;
+    assert_eq!(fixed["full_name"], json!("Ada Byron"), "the composed name follows its parts");
+
+    // A mononym is a real name and must not come out with a leading space.
+    let (_, mono) = call(
+        &app,
+        send("POST", "/api/e/crm.contacts", &owner, json!({ "last_name": "Prince" })),
+    )
+    .await;
+    assert_eq!(mono["full_name"], json!("Prince"));
+
+    // And whatever the client sends for the composed field is ignored.
+    let (_, liar) = call(
+        &app,
+        send("POST", "/api/e/crm.contacts", &owner, json!({
+            "first_name": "Grace", "last_name": "Hopper", "full_name": "Somebody Else"
+        })),
+    )
+    .await;
+    assert_eq!(liar["full_name"], json!("Grace Hopper"), "the server owns this column");
+}

@@ -70,40 +70,45 @@ export function RefPicker({
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          id={id}
-          type="button"
-          aria-describedby={describedBy}
-          aria-invalid={invalid}
-          className={cn(
-            "flex h-8.5 w-full items-center justify-between gap-2 rounded-md border bg-surface px-2.5 text-left text-sm shadow-xs transition-colors",
-            "focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-brand",
-            invalid ? "border-danger" : "border-border",
-          )}
-        >
-          <span className={cn("truncate", !value && "text-subtle-foreground")}>
-            {value ? (selectedLabel ?? "…") : "Select…"}
-          </span>
-          <span className="flex items-center gap-1">
-            {value && (
-              <span
-                role="button"
-                tabIndex={-1}
-                aria-label="Clear"
-                className="rounded p-0.5 text-subtle-foreground hover:bg-surface-hover hover:text-foreground"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onChange(null);
-                }}
-              >
-                <X className="size-3" />
-              </span>
+      {/* Clear sits beside the trigger, not inside it. A button nested in a
+          button is invalid markup, and this one carried tabIndex={-1}, so the
+          only way to unset a reference was with a mouse. */}
+      <div className="relative">
+        <PopoverTrigger asChild>
+          <button
+            id={id}
+            type="button"
+            aria-describedby={describedBy}
+            aria-invalid={invalid}
+            className={cn(
+              "flex h-8.5 w-full items-center justify-between gap-2 rounded-md border bg-surface py-1 pl-2.5 text-left text-sm shadow-xs transition-colors",
+              "focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-brand",
+              value ? "pr-14" : "pr-8",
+              invalid ? "border-danger" : "border-border",
             )}
-            <ChevronDown className="size-3.5 shrink-0 opacity-50" />
-          </span>
-        </button>
-      </PopoverTrigger>
+          >
+            <span className={cn("truncate", !value && "text-subtle-foreground")}>
+              {value ? (selectedLabel ?? "…") : "Select…"}
+            </span>
+          </button>
+        </PopoverTrigger>
+
+        <ChevronDown
+          className="pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 opacity-50"
+          aria-hidden="true"
+        />
+
+        {value && (
+          <button
+            type="button"
+            aria-label={`Clear ${selectedLabel ?? label ?? "selection"}`}
+            onClick={() => onChange(null)}
+            className="absolute right-7 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center rounded text-subtle-foreground transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-brand"
+          >
+            <X className="size-3" />
+          </button>
+        )}
+      </div>
 
       <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
         <input

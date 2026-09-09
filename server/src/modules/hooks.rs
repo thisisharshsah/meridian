@@ -36,6 +36,12 @@ const NUMBERED: &[(&str, &str)] = &[
 /// the case where a column is both NOT NULL and not the client's to choose —
 /// a recurring profile's next billing date being the obvious one.
 pub fn before_create(entity: &str, body: &mut Map<String, Value>) {
+    // full_name is a read-only column the client never sends, and it is NOT
+    // NULL, so the insert needs it composed before it runs.
+    if matches!(entity, "crm.leads" | "crm.contacts") {
+        body.insert("full_name".into(), Value::String(person_name(body)));
+    }
+
     if entity == "books.recurring" {
         // The first invoice is due on the day the schedule starts.
         if !body.contains_key("next_run_date") {
@@ -44,6 +50,14 @@ pub fn before_create(entity: &str, body: &mut Map<String, Value>) {
             }
         }
     }
+}
+
+/// "First Last", from whichever halves are present. A mononym is a real name,
+/// so a missing first name yields the surname rather than a leading space.
+fn person_name(body: &Map<String, Value>) -> String {
+    let part = |k: &str| body.get(k).and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+    let (first, last) = (part("first_name"), part("last_name"));
+    format!("{first} {last}").trim().to_string()
 }
 
 pub fn needs_number(entity: &str) -> Option<&'static str> {
@@ -138,6 +152,8 @@ pub async fn after_write(pool: &SqlitePool, ctx: &Ctx, entity: &str, id: &str) -
 
     match entity {
         "crm.deals" => recalc_deal(pool, ctx, id).await,
+        "crm.leads" => recompose_name(pool, ctx, RECOMPOSE_LEAD_NAME, id).await,
+        "crm.contacts" => recompose_name(pool, ctx, RECOMPOSE_CONTACT_NAME, id).await,
         "hr.attendance" => recalc_attendance(pool, ctx, id).await,
         "sales.counter_sales" => settle_counter_sale(pool, ctx, id).await,
         "hr.payslips" => recalc_payslip(pool, ctx, id).await,
@@ -792,6 +808,29 @@ async fn settle_counter_sale(pool: &SqlitePool, ctx: &Ctx, sale_id: &str) -> App
     }
     Ok(())
 }
+
+/// Keep the composed name in step with its parts.
+///
+/// Done on every write rather than only on create: correcting a surname has to
+/// move the record's title with it, or the list still shows the old name and
+/// search still finds the record under it.
+async fn recompose_name(
+    pool: &SqlitePool,
+    ctx: &Ctx,
+    sql: &'static str,
+    id: &str,
+) -> AppResult<()> {
+    sqlx::query(sql).bind(&ctx.org_id).bind(id).execute(pool).await?;
+    Ok(())
+}
+
+const RECOMPOSE_LEAD_NAME: &str =
+    "UPDATE leads SET full_name = TRIM(COALESCE(first_name, '') || ' ' || COALESCE(last_name, ''))
+      WHERE org_id = ? AND id = ?";
+
+const RECOMPOSE_CONTACT_NAME: &str =
+    "UPDATE contacts SET full_name = TRIM(COALESCE(first_name, '') || ' ' || COALESCE(last_name, ''))
+      WHERE org_id = ? AND id = ?";
 
 /// Stock on hand is the sum of the movement ledger, so the number on the item
 /// can always be explained by the rows behind it.

@@ -56,6 +56,13 @@ async fn create_via_engine(
         }
     }
 
+    // Same order as the engine's own create route: strip what the client does
+    // not own, then let the server fill in what the columns require. This path
+    // skipped the second half, so a record created by an action was missing
+    // anything a hook composes -- which stayed invisible only for as long as
+    // nothing it creates had such a column.
+    hooks::before_create(def.key, &mut body);
+
     if hooks::needs_number(def.key).is_some() {
         let mut tx = state.pool.begin().await?;
         hooks::assign_number(&mut tx, ctx, def.key, &mut body).await?;
