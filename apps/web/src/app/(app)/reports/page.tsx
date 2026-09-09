@@ -15,6 +15,7 @@ import { get, qs } from "@/lib/api";
 import { formatMoney, formatPercent, formatQuantity } from "@/lib/format";
 import { useSession } from "@/lib/queries";
 import { cn } from "@/lib/utils";
+import { t } from "@/lib/i18n";
 
 type ReportInfo = {
   key: string;
@@ -75,9 +76,9 @@ export default function ReportsPage() {
   return (
     <div className="p-5">
       <header className="mb-4">
-        <h1 className="text-xl font-semibold tracking-tight">Reports</h1>
+        <h1 className="text-xl font-semibold tracking-tight">{t("reports.title")}</h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          Read-only views across the whole workspace.
+          {t("reports.lede")}
         </p>
       </header>
 
@@ -118,8 +119,8 @@ export default function ReportsPage() {
           {!active ? (
             <EmptyState
               icon={BarChart3}
-              title="No reports available"
-              description="Reports appear here once your role can view the underlying records."
+              title={t("reports.noneTitle")}
+              description={t("reports.noneBody")}
             />
           ) : report.isLoading && !report.data ? (
             <Skeleton className="h-96 w-full" />
@@ -213,7 +214,7 @@ function ReportTable({
 
         <div className="flex items-end gap-2">
           <label className="text-xs text-muted-foreground">
-            From
+            {t("reports.from")}
             <Input
               type="date"
               value={from}
@@ -237,8 +238,8 @@ function ReportTable({
           {result.rows.length === 0 ? (
             <EmptyState
               icon={BarChart3}
-              title="Nothing to show"
-              description="No records fall inside this date range."
+              title={t("reports.emptyTitle")}
+              description={t("reports.emptyBody")}
             />
           ) : (
             <Table>
@@ -275,9 +276,9 @@ function ReportTable({
                           )}
                           <span className="relative">
                             {c.type === "text" && value === "Reorder" ? (
-                              <Badge tone="warning" dot>Reorder</Badge>
+                              <Badge tone="warning" dot>{t("reports.reorder")}</Badge>
                             ) : c.type === "text" && value === "Out of stock" ? (
-                              <Badge tone="danger" dot>Out of stock</Badge>
+                              <Badge tone="danger" dot>{t("reports.outOfStock")}</Badge>
                             ) : (
                               format(value, c.type)
                             )}

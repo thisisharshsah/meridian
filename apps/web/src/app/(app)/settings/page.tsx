@@ -22,6 +22,7 @@ import { IntegrationsTab } from "@/components/settings/integrations";
 import { ApiError, get, patch } from "@/lib/api";
 import { CURRENCIES } from "@/lib/constants";
 import { formatDate, relativeTime } from "@/lib/format";
+import { t } from "@/lib/i18n";
 
 type Org = {
   id: string; name: string; slug: string; currency: string; country: string | null;
@@ -44,9 +45,9 @@ export default function SettingsPage() {
   return (
     <div className="p-5">
       <header className="mb-4">
-        <h1 className="text-xl font-semibold tracking-tight">Workspace settings</h1>
+        <h1 className="text-xl font-semibold tracking-tight">{t("settings.title")}</h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          Your organization, the people in it, and what each role can reach.
+          {t("settings.lede")}
         </p>
       </header>
 
@@ -54,23 +55,23 @@ export default function SettingsPage() {
         <TabsList>
           <TabsTrigger value="organization">
             <Building2 className="size-3.5" />
-            Organization
+            {t("settings.tab.organization")}
           </TabsTrigger>
           <TabsTrigger value="members">
             <Users className="size-3.5" />
-            Members
+            {t("settings.tab.members")}
           </TabsTrigger>
           <TabsTrigger value="roles">
             <ShieldCheck className="size-3.5" />
-            Roles
+            {t("settings.tab.roles")}
           </TabsTrigger>
           <TabsTrigger value="automations">
             <Workflow className="size-3.5" />
-            Automation
+            {t("settings.tab.automation")}
           </TabsTrigger>
           <TabsTrigger value="integrations">
             <Webhook className="size-3.5" />
-            Integrations
+            {t("settings.tab.integrations")}
           </TabsTrigger>
         </TabsList>
 
@@ -133,7 +134,7 @@ function OrganizationTab() {
     <div className="grid max-w-4xl gap-4 lg:grid-cols-[minmax(0,1fr)_16rem]">
       <Card>
         <CardHeader>
-          <CardTitle>Organization</CardTitle>
+          <CardTitle>{t("settings.tab.organization")}</CardTitle>
         </CardHeader>
         <CardContent>
           <form
@@ -161,7 +162,7 @@ function OrganizationTab() {
                 label="Base currency"
                 htmlFor="org-currency"
                 error={errors.currency}
-                hint="Every stored amount is in this currency."
+                hint={t("settings.currencyHint")}
               >
                 <Select
                   value={form.currency ?? "USD"}
@@ -192,11 +193,11 @@ function OrganizationTab() {
 
             {readOnly ? (
               <p className="text-xs text-muted-foreground">
-                Only an owner can change these settings.
+                {t("settings.ownerOnly")}
               </p>
             ) : (
               <Button type="submit" variant="primary" loading={save.isPending}>
-                Save changes
+                {t("action.save")}
               </Button>
             )}
           </form>
@@ -205,7 +206,7 @@ function OrganizationTab() {
 
       <Card className="h-fit">
         <CardHeader>
-          <CardTitle>At a glance</CardTitle>
+          <CardTitle>{t("settings.atAGlance")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
           <Row label="Workspace URL" value={data.slug} mono />
@@ -257,7 +258,7 @@ function MembersTab() {
     <div className="space-y-4">
     <Card className="max-w-5xl">
       <CardHeader>
-        <CardTitle>Members</CardTitle>
+        <CardTitle>{t("settings.tab.members")}</CardTitle>
         <span className="text-xs text-muted-foreground">
           {members.data.data.length} in this workspace
         </span>
@@ -266,11 +267,11 @@ function MembersTab() {
         <Table>
           <THead>
             <TR className="hover:bg-transparent">
-              <TH>Person</TH>
-              <TH>Role</TH>
-              <TH>Status</TH>
-              <TH>Last seen</TH>
-              <TH>Joined</TH>
+              <TH>{t("settings.col.person")}</TH>
+              <TH>{t("settings.col.role")}</TH>
+              <TH>{t("settings.col.status")}</TH>
+              <TH>{t("settings.col.lastSeen")}</TH>
+              <TH>{t("settings.col.joined")}</TH>
             </TR>
           </THead>
           <TBody>
@@ -285,7 +286,7 @@ function MembersTab() {
                         {m.is_owner && (
                           <Badge tone="brand">
                             <KeyRound className="size-2.5" />
-                            Owner
+                            {t("settings.status.owner")}
                           </Badge>
                         )}
                       </p>
@@ -304,7 +305,7 @@ function MembersTab() {
                       onValueChange={(v) => update.mutate({ id: m.membership_id, body: { role_id: v } })}
                     >
                       <SelectTrigger className="w-40">
-                        <SelectValue placeholder="No role" />
+                        <SelectValue placeholder={t("settings.noRole")} />
                       </SelectTrigger>
                       <SelectContent>
                         {(roles.data?.data ?? []).map((r) => (
@@ -329,9 +330,9 @@ function MembersTab() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="active">Active</SelectItem>
-                        <SelectItem value="invited">Invited</SelectItem>
-                        <SelectItem value="suspended">Suspended</SelectItem>
+                        <SelectItem value="active">{t("settings.status.active")}</SelectItem>
+                        <SelectItem value="invited">{t("settings.status.invited")}</SelectItem>
+                        <SelectItem value="suspended">{t("settings.status.suspended")}</SelectItem>
                       </SelectContent>
                     </Select>
                   ) : (

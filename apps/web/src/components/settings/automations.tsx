@@ -20,6 +20,7 @@ import { ApiError, del, get, patch, post } from "@/lib/api";
 import { relativeTime } from "@/lib/format";
 import { optionsOf, type FieldDef } from "@/lib/meta";
 import { useEntityMeta } from "@/lib/queries";
+import { t } from "@/lib/i18n";
 
 type Condition = { field: string; op: string; value: string };
 type ActionSpec = {
@@ -702,7 +703,7 @@ function AutomationDialog({
 
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-              Cancel
+              {t("action.cancel")}
             </Button>
             <Button type="submit" variant="primary" loading={save.isPending}>
               {existing ? "Save rule" : "Create rule"}

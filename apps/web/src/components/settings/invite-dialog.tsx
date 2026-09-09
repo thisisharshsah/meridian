@@ -16,6 +16,7 @@ import { EmptyState } from "@/components/ui/misc";
 import { FieldRow, FormError } from "@/components/form/field";
 import { ApiError, del, get, post } from "@/lib/api";
 import { formatDate, relativeTime } from "@/lib/format";
+import { t } from "@/lib/i18n";
 
 type Role = { id: string; key: string; name: string; is_system: boolean };
 type Invite = {
@@ -54,17 +55,17 @@ export function InviteSection({ canManage }: { canManage: boolean }) {
   return (
     <Card className="max-w-5xl">
       <CardHeader>
-        <CardTitle>Pending invitations</CardTitle>
+        <CardTitle>{t("invite.pending")}</CardTitle>
         <Button variant="primary" size="sm" onClick={() => setOpen(true)}>
           <UserPlus />
-          Invite someone
+          {t("invite.someone")}
         </Button>
       </CardHeader>
       <CardContent className="p-0">
         {pending.length === 0 ? (
           <EmptyState
             icon={Mail}
-            title="No invitations outstanding"
+            title={t("invite.noneOutstanding")}
             description="Invite a colleague and hand them the link yourself — this workspace does not send email."
           />
         ) : (
@@ -85,7 +86,7 @@ export function InviteSection({ canManage }: { canManage: boolean }) {
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  aria-label="Revoke"
+                  aria-label={t("invite.revoke")}
                   onClick={() => revoke.mutate(i.id)}
                 >
                   <Trash2 />
@@ -168,7 +169,7 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
         {link ? (
           <>
             <DialogHeader>
-              <DialogTitle>Invitation ready</DialogTitle>
+              <DialogTitle>{t("invite.ready")}</DialogTitle>
               <DialogDescription>
                 Send this link to {email}. It works once, expires in 14 days, and cannot be
                 retrieved again — so copy it now.
@@ -186,7 +187,7 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
             </DialogBody>
             <DialogFooter>
               <Button variant="primary" onClick={() => onOpenChange(false)}>
-                Done
+                {t("invite.done")}
               </Button>
             </DialogFooter>
           </>
@@ -200,7 +201,7 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
             }}
           >
             <DialogHeader>
-              <DialogTitle>Invite someone</DialogTitle>
+              <DialogTitle>{t("invite.someone")}</DialogTitle>
               <DialogDescription>
                 You will get a link to pass on yourself — this workspace does not send email.
               </DialogDescription>
@@ -214,7 +215,7 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
                   id="invite-email"
                   type="email"
                   autoFocus
-                  placeholder="colleague@company.com"
+                  placeholder={t("invite.emailPlaceholder")}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   aria-invalid={!!errors.email}
@@ -224,7 +225,7 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
               <FieldRow label="Role" htmlFor="invite-role" error={errors.role_id} required>
                 <Select value={roleId} onValueChange={setRoleId}>
                   <SelectTrigger id="invite-role">
-                    <SelectValue placeholder="Choose a role" />
+                    <SelectValue placeholder={t("invite.rolePlaceholder")} />
                   </SelectTrigger>
                   <SelectContent>
                     {(roles.data?.data ?? []).map((r) => (
@@ -236,10 +237,10 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
                 </Select>
               </FieldRow>
 
-              <FieldRow label="Job title" htmlFor="invite-title" hint="Optional.">
+              <FieldRow label="Job title" htmlFor="invite-title" hint={t("invite.optional")}>
                 <Input
                   id="invite-title"
-                  placeholder="Account Executive"
+                  placeholder={t("invite.titlePlaceholder")}
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                 />
@@ -248,10 +249,10 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
 
             <DialogFooter>
               <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-                Cancel
+                {t("action.cancel")}
               </Button>
               <Button type="submit" variant="primary" loading={create.isPending} disabled={!roleId}>
-                Create link
+                {t("invite.createLink")}
               </Button>
             </DialogFooter>
           </form>

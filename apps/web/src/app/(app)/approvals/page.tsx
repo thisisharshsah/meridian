@@ -16,6 +16,7 @@ import { EmptyState, Skeleton } from "@/components/ui/misc";
 import { ApiError, get, post } from "@/lib/api";
 import { relativeTime } from "@/lib/format";
 import { entityPath } from "@/lib/meta";
+import { t } from "@/lib/i18n";
 
 type Request = {
   id: string;
@@ -37,17 +38,17 @@ export default function ApprovalsPage() {
   return (
     <div className="p-5">
       <header className="mb-4">
-        <h1 className="text-xl font-semibold tracking-tight">Approvals</h1>
+        <h1 className="text-xl font-semibold tracking-tight">{t("approvals.title")}</h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          Records held until somebody signs them off.
+          {t("approvals.lede")}
         </p>
       </header>
 
       <Tabs defaultValue="pending">
         <TabsList>
-          <TabsTrigger value="pending">Waiting on you</TabsTrigger>
-          <TabsTrigger value="mine">You asked for</TabsTrigger>
-          <TabsTrigger value="decided">Decided</TabsTrigger>
+          <TabsTrigger value="pending">{t("approvals.waitingOnYou")}</TabsTrigger>
+          <TabsTrigger value="mine">{t("approvals.youAskedFor")}</TabsTrigger>
+          <TabsTrigger value="decided">{t("approvals.decided")}</TabsTrigger>
         </TabsList>
         {["pending", "mine", "decided"].map((scope) => (
           <TabsContent key={scope} value={scope} className="pt-4">
@@ -129,7 +130,7 @@ function RequestList({ scope }: { scope: string }) {
                 {r.status === "pending" ? (
                   <div className="flex items-center gap-2">
                     <Input
-                      placeholder="Comment (optional)"
+                      placeholder={t("approvals.comment")}
                       className="w-48"
                       value={comments[r.id] ?? ""}
                       onChange={(e) => setComments((s) => ({ ...s, [r.id]: e.target.value }))}
@@ -144,7 +145,7 @@ function RequestList({ scope }: { scope: string }) {
                       }}
                     >
                       <Check />
-                      Approve
+                      {t("approvals.approve")}
                     </Button>
                     <Button
                       variant="secondary"
@@ -156,7 +157,7 @@ function RequestList({ scope }: { scope: string }) {
                       }}
                     >
                       <X />
-                      Reject
+                      {t("approvals.reject")}
                     </Button>
                   </div>
                 ) : (

@@ -18,6 +18,7 @@ import { Icon } from "@/components/icon";
 import { FieldRow, FormError } from "@/components/form/field";
 import { ApiError, del, get, patch, post } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { t } from "@/lib/i18n";
 
 type Role = {
   id: string; key: string; name: string; description: string | null;
@@ -453,7 +454,7 @@ function RoleDialog({
               {grantCount} grant{grantCount === 1 ? "" : "s"}
             </span>
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-              Cancel
+              {t("action.cancel")}
             </Button>
             <Button type="submit" variant="primary" loading={save.isPending} disabled={!grantCount}>
               {existing ? "Save role" : "Create role"}
