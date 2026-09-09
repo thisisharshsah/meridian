@@ -4,12 +4,13 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePendingInvitations } from "@/lib/queries";
-import { Building2, Check, LogOut, MailPlus, Moon, Plus, Search, Sun } from "lucide-react";
+import { LogOut, MailPlus, Moon, Search, Sun } from "lucide-react";
 
 import { toast } from "sonner";
 
 import { Avatar } from "@/components/ui/avatar";
-import { NewWorkspaceDialog } from "@/components/shell/new-workspace-dialog";
+import { WorkspaceSwitcher } from "@/components/shell/workspace-switcher";
+import { useSwitchWorkspace } from "@/lib/use-workspace";
 import { t } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,33 +32,7 @@ export function Topbar({ session, onSearch }: { session?: Session; onSearch: () 
     setDark(document.documentElement.classList.contains("dark"));
   }, []);
 
-  const [switching, setSwitching] = React.useState(false);
-  const [creating, setCreating] = React.useState(false);
-
-  /**
-   * Switching workspaces replaces the session cookies, so every cached answer
-   * belongs to the business we just left. Clearing the cache before navigating
-   * is what stops one company's records flashing up inside another.
-   */
-  const switchTo = async (organization_id: string) => {
-    if (switching) return;
-    setSwitching(true);
-    try {
-      const res = await fetch("/api/session/switch", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ organization_id }),
-      });
-      if (!res.ok) throw new Error();
-      qc.clear();
-      router.replace("/");
-      router.refresh();
-    } catch {
-      toast.error("Could not switch workspace. Try again in a moment.");
-    } finally {
-      setSwitching(false);
-    }
-  };
+  const { switchTo, switching } = useSwitchWorkspace();
 
   const invitations = usePendingInvitations();
 
@@ -68,24 +43,14 @@ export function Topbar({ session, onSearch }: { session?: Session; onSearch: () 
    */
   const acceptInvite = async (id: string, name: string) => {
     if (switching) return;
-    setSwitching(true);
     try {
       const res = await fetch(`/api/${encodeURIComponent("my-invitations")}/${id}/accept`, { method: "POST" });
       if (!res.ok) throw new Error();
       const joined = await res.json();
-      await fetch("/api/session/switch", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ organization_id: joined.organization_id }),
-      });
-      qc.clear();
       toast.success(t("invite.accepted", undefined, { name }));
-      router.replace("/");
-      router.refresh();
+      await switchTo(joined.organization_id);
     } catch {
       toast.error(t("invite.failed"));
-    } finally {
-      setSwitching(false);
     }
   };
 
@@ -112,7 +77,9 @@ export function Topbar({ session, onSearch }: { session?: Session; onSearch: () 
   };
 
   return (
-    <header className="flex h-13 shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
+    <header className="flex h-13 shrink-0 items-center gap-2 border-b border-border bg-surface px-3 sm:gap-3 sm:px-4">
+      <WorkspaceSwitcher session={session} />
+      <span className="hidden h-5 w-px shrink-0 bg-border sm:block" aria-hidden="true" />
       <button
         type="button"
         onClick={onSearch}
@@ -158,28 +125,7 @@ export function Topbar({ session, onSearch }: { session?: Session; onSearch: () 
               </>
             )}
 
-            {(session?.organizations.length ?? 0) > 1 && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuLabel>{t("workspace.switch")}</DropdownMenuLabel>
-                {session?.organizations.map((o) => (
-                  <DropdownMenuItem
-                    key={o.id}
-                    disabled={o.id === session.organization?.id || switching}
-                    onSelect={() => switchTo(o.id)}
-                  >
-                    {o.id === session.organization?.id ? <Check /> : <Building2 />}
-                    <span className="truncate">{o.name}</span>
-                  </DropdownMenuItem>
-                ))}
-              </>
-            )}
-
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => setCreating(true)}>
-              <Plus />
-              {t("workspace.create")}
-            </DropdownMenuItem>
             <DropdownMenuItem destructive onSelect={signOut}>
               <LogOut />
               {t("action.signOut")}
@@ -188,7 +134,6 @@ export function Topbar({ session, onSearch }: { session?: Session; onSearch: () 
         </DropdownMenu>
       </div>
 
-      <NewWorkspaceDialog open={creating} onOpenChange={setCreating} />
     </header>
   );
 }

@@ -54,6 +54,8 @@ const en: Messages = {
 
   // ---- workspaces ----
   "workspace.switch": "Switch business",
+  "workspace.switchFailed": "Could not switch business. Nothing has changed — try again.",
+  "workspace.current": "Current business",
   "workspace.create": "Start another business",
   "workspace.createLede": "You already have an account, so this only needs a name. Roles, numbering and ownership are set up for you.",
   "workspace.name": "Business name",

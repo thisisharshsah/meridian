@@ -3,10 +3,11 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Command } from "cmdk";
-import { Search } from "lucide-react";
+import { Building2, Search } from "lucide-react";
 
 import { Icon } from "@/components/icon";
-import { useAppMeta, useGlobalSearch } from "@/lib/queries";
+import { useAppMeta, useGlobalSearch, useSession } from "@/lib/queries";
+import { useSwitchWorkspace } from "@/lib/use-workspace";
 import { entityPath } from "@/lib/meta";
 import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
@@ -18,6 +19,8 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
   const debounced = useDebounced(term, 180);
 
   const { data: meta } = useAppMeta();
+  const { data: session } = useSession();
+  const { switchTo } = useSwitchWorkspace();
   const { data: results, isFetching } = useGlobalSearch(debounced);
 
   React.useEffect(() => {
@@ -67,6 +70,13 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
   // it becomes useful -- the list was only ever shown to someone who had not
   // yet said what they wanted.
   const needle = term.trim().toLowerCase();
+
+  // Switching from here is the quickest route there is: Cmd-K, type the name,
+  // Enter. Only the ones you are not already in, since "switch to where I
+  // already am" is not an offer.
+  const others = (session?.organizations ?? []).filter(
+    (o) => o.id !== session?.organization?.id && (!needle || o.name.toLowerCase().includes(needle)),
+  );
   const jumpTo = (needle
     ? screens.filter((sc) => `${sc.label_plural} ${sc.module}`.toLowerCase().includes(needle))
     : screens
@@ -106,6 +116,31 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
           <Command.Empty className="px-3 py-8 text-center text-sm text-muted-foreground">
             {debounced.length >= 2 ? t("palette.nothing") : t("palette.hint")}
           </Command.Empty>
+
+          {others.length > 0 && (
+            <Command.Group
+              heading={
+                <span className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-subtle-foreground">
+                  {t("workspace.switch")}
+                </span>
+              }
+            >
+              {others.map((o) => (
+                <Command.Item
+                  key={o.id}
+                  value={`switch-${o.id}`}
+                  onSelect={() => {
+                    onOpenChange(false);
+                    switchTo(o.id);
+                  }}
+                  className="flex cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-sm data-[selected=true]:bg-surface-hover"
+                >
+                  <Building2 className="size-4 text-subtle-foreground" />
+                  <span className="truncate">{o.name}</span>
+                </Command.Item>
+              ))}
+            </Command.Group>
+          )}
 
           {jumpTo.length > 0 && (
             <Command.Group
