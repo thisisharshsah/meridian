@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { Building2, LogOut, MailPlus, Plus } from "lucide-react";
+import { ArrowRight, Building2, LogOut, MailPlus, Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -50,6 +50,25 @@ export function ChooseWorkspace({ session }: { session?: Session }) {
     }
   };
 
+  const enter = async (organization_id: string) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const res = await fetch("/api/session/switch", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ organization_id }),
+      });
+      if (!res.ok) throw new Error();
+      qc.clear();
+      router.replace("/");
+      router.refresh();
+    } catch {
+      toast.error(t("choose.enterFailed"));
+      setBusy(false);
+    }
+  };
+
   const signOut = async () => {
     await fetch("/api/session/logout", { method: "POST" }).catch(() => undefined);
     qc.clear();
@@ -58,6 +77,7 @@ export function ChooseWorkspace({ session }: { session?: Session }) {
   };
 
   const waiting = invitations.data?.data ?? [];
+  const mine = session?.organizations ?? [];
 
   return (
     <div className="min-h-dvh bg-surface-muted px-4 py-10">
@@ -65,10 +85,40 @@ export function ChooseWorkspace({ session }: { session?: Session }) {
         <header className="flex flex-col gap-1">
           <Wordmark />
           <h1 className="mt-3 text-xl font-semibold tracking-tight">
-            {t("choose.title", undefined, { name: session?.user.name?.split(" ")[0] ?? "there" })}
+            {mine.length > 0
+              ? t("choose.titleReturning", undefined, { name: session?.user.name?.split(" ")[0] ?? "there" })
+              : t("choose.title", undefined, { name: session?.user.name?.split(" ")[0] ?? "there" })}
           </h1>
-          <p className="text-sm text-muted-foreground">{t("choose.lede")}</p>
+          <p className="text-sm text-muted-foreground">
+            {mine.length > 0 ? t("choose.ledeReturning") : t("choose.lede")}
+          </p>
         </header>
+
+        {mine.length > 0 && (
+          <Card>
+            <CardHeader className="flex-col items-stretch gap-0">
+              <CardTitle>{t("choose.yours")}</CardTitle>
+              <p className="mt-0.5 text-sm text-muted-foreground">{t("choose.yoursLede")}</p>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {mine.map((o) => (
+                <button
+                  key={o.id}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => enter(o.id)}
+                  className="flex w-full items-center gap-3 rounded-md border border-border p-3 text-left transition-colors hover:border-brand/50 hover:bg-surface-hover disabled:opacity-60"
+                >
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand-subtle text-brand">
+                    <Building2 className="size-4" aria-hidden="true" />
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium">{o.name}</span>
+                  <ArrowRight className="size-4 shrink-0 text-subtle-foreground" aria-hidden="true" />
+                </button>
+              ))}
+            </CardContent>
+          </Card>
+        )}
 
         {waiting.length > 0 && (
           <Card>
@@ -115,14 +165,18 @@ export function ChooseWorkspace({ session }: { session?: Session }) {
             <p className="mt-0.5 text-sm text-muted-foreground">{t("choose.startLede")}</p>
           </CardHeader>
           <CardContent>
-            <Button variant={waiting.length ? "secondary" : "primary"} size="lg" onClick={() => setCreating(true)}>
+            <Button
+              variant={waiting.length || mine.length ? "secondary" : "primary"}
+              size="lg"
+              onClick={() => setCreating(true)}
+            >
               <Plus />
               {t("workspace.create")}
             </Button>
           </CardContent>
         </Card>
 
-        {waiting.length === 0 && !invitations.isLoading && (
+        {waiting.length === 0 && mine.length === 0 && !invitations.isLoading && (
           <p className="flex items-start gap-2 px-1 text-xs text-muted-foreground">
             <Building2 className="mt-px size-3.5 shrink-0" aria-hidden="true" />
             {t("choose.noneWaiting", undefined, { email: session?.user.email ?? "" })}

@@ -69,6 +69,11 @@ const en: Messages = {
   "invite.failed": "Could not accept that invitation. It may have been withdrawn.",
 
   "choose.title": "Welcome, {name}",
+  "choose.titleReturning": "Welcome back, {name}",
+  "choose.ledeReturning": "Choose which business you are working in.",
+  "choose.yours": "Your businesses",
+  "choose.yoursLede": "Pick one to open it. You can switch at any time from the account menu.",
+  "choose.enterFailed": "Could not open that business. Try again in a moment.",
   "choose.lede": "Your account is ready. Now pick where you are working.",
   "choose.invited": "You have been invited",
   "choose.invitedLede": "Sent to {email}.",

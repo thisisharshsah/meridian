@@ -211,18 +211,28 @@ async fn login(
             }
             id.clone()
         }
-        None => sqlx::query(
-            "SELECT org_id FROM memberships
-             WHERE user_id = ? AND status = 'active' AND deleted_at IS NULL
-             ORDER BY created_at LIMIT 1",
-        )
-        .bind(&user_id)
-        .fetch_optional(&state.pool)
-        .await?
-        // Belonging to nothing yet is a real state, not a failure: an invited
-        // person may sign in before accepting, and must be able to.
-        .map(|r| r.try_get::<String, _>("org_id").unwrap_or_default())
-        .unwrap_or_default(),
+        // No organisation asked for, so the answer depends on how many they
+        // have. One: go straight in, because there is nothing to decide.
+        // Several: sign them in belonging to none of them yet and let them
+        // pick, rather than guessing the oldest and dropping them into a
+        // business they may not have meant to open. None: also a real state --
+        // an invited person may sign in before accepting.
+        None => {
+            let mut mine = sqlx::query(
+                "SELECT org_id FROM memberships
+                 WHERE user_id = ? AND status = 'active' AND deleted_at IS NULL
+                 ORDER BY created_at LIMIT 2",
+            )
+            .bind(&user_id)
+            .fetch_all(&state.pool)
+            .await?;
+
+            if mine.len() == 1 {
+                mine.remove(0).try_get::<String, _>("org_id").unwrap_or_default()
+            } else {
+                String::new()
+            }
+        }
     };
 
     sqlx::query("UPDATE users SET last_login_at = ? WHERE id = ?")
