@@ -113,8 +113,20 @@ export default function DashboardPage() {
 
   // A grid of zeroes tells a first-time owner nothing. Once anything at all
   // exists the figures start meaning something, so they come back immediately.
+  // Every figure on this page is a count, and a failed request counts zero.
+  // Without this an established business whose API is down is shown the
+  // brand-new-workspace guide and a wall of $0.00, which says the data is gone
+  // rather than that it could not be reached.
+  const figuresFailed =
+    openPipeline.isError || receivable.isError || invoiceTotals.isError || accounts.isError;
+
   const nothingYet =
-    !loading && !accounts.isLoading && !hasCustomers && !hasDeals && !hasInvoices;
+    !loading &&
+    !accounts.isLoading &&
+    !figuresFailed &&
+    !hasCustomers &&
+    !hasDeals &&
+    !hasInvoices;
 
   return (
     <div className="p-5">
@@ -127,9 +139,24 @@ export default function DashboardPage() {
         </p>
       </header>
 
+      {figuresFailed && (
+        <Card className="mb-5 border-warning/40 bg-warning-subtle">
+          <CardContent className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning-strong" aria-hidden="true" />
+            <div>
+              <p className="text-sm font-medium">These figures are out of date</p>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                We couldn&rsquo;t reach your data just now, so anything below may be missing or
+                showing zero. Nothing has been lost.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <ClockCard />
 
-      <SetupGuide steps={setupSteps} />
+      {!figuresFailed && <SetupGuide steps={setupSteps} />}
 
       <ModuleLauncher modules={meta.data?.modules ?? []} />
 

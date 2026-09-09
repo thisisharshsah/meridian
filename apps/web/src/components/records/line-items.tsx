@@ -14,6 +14,7 @@ import { ApiError } from "@/lib/api";
 import { formatMoney } from "@/lib/format";
 import type { ChildDef, EntityMeta, FieldDef } from "@/lib/meta";
 import { useCreate, useDelete, useEntityMeta, useList, useUpdate, type Record_ } from "@/lib/queries";
+import { LoadError } from "@/components/records/load-error";
 
 const EDITABLE = ["description", "quantity", "unit_price", "discount_percent", "tax_rate"];
 
@@ -35,7 +36,7 @@ export function LineItems({
   currency: string;
 }) {
   const { data: meta } = useEntityMeta(child.entity);
-  const { data, isLoading } = useList(child.entity, {
+  const { data, isLoading, isError, error, refetch } = useList(child.entity, {
     [child.foreign_key]: parentId,
     per_page: 200,
     sort: "sort_order",
@@ -44,6 +45,10 @@ export function LineItems({
   const create = useCreate(child.entity);
   const update = useUpdate(child.entity);
   const remove = useDelete(child.entity);
+
+  if (isError) {
+    return <LoadError what={meta?.label_plural.toLowerCase() ?? "lines"} error={error} onRetry={() => refetch()} />;
+  }
 
   if (!meta || isLoading) {
     return <Skeleton className="h-48 w-full" />;

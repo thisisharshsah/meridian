@@ -19,6 +19,7 @@ import { formatDate, formatMoney } from "@/lib/format";
 import { entityPath, optionsOf, type EntityMeta, type FieldDef } from "@/lib/meta";
 import { useList, useSession, useUpdate, type Record_ } from "@/lib/queries";
 import { cn } from "@/lib/utils";
+import { LoadError } from "@/components/records/load-error";
 
 /**
  * Board view for any entity with a select field to group by — deals by stage,
@@ -32,7 +33,10 @@ export function BoardView({ meta, groupField }: { meta: EntityMeta; groupField: 
 
   // A board is only readable at a size a person can scan; beyond that the
   // table view is the honest tool, so say so rather than truncating silently.
-  const { data, isLoading } = useList(meta.key, { per_page: 200, sort: `-${amountField(meta) ?? "created_at"}` });
+  const { data, isLoading, isError, error, refetch } = useList(meta.key, {
+    per_page: 200,
+    sort: `-${amountField(meta) ?? "created_at"}`,
+  });
   const update = useUpdate(meta.key);
 
   const [dragging, setDragging] = React.useState<Record_ | null>(null);
@@ -76,6 +80,12 @@ export function BoardView({ meta, groupField }: { meta: EntityMeta; groupField: 
       toast.error(err instanceof ApiError ? err.message : "Could not move that card");
     }
   };
+
+  // Before the empty state, not after it: a board that failed to load must not
+  // tell someone with a full pipeline that they have no deals.
+  if (isError) {
+    return <LoadError what={meta.label_plural.toLowerCase()} error={error} onRetry={() => refetch()} />;
+  }
 
   if (isLoading) {
     return (

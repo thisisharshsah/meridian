@@ -22,6 +22,8 @@ import { entityPath, type EntityMeta, type FieldDef } from "@/lib/meta";
 import { useDelete, useEntityMeta, useRecord, useSession } from "@/lib/queries";
 import { formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { LoadError } from "@/components/records/load-error";
+import { ApiError } from "@/lib/api";
 
 /**
  * Record page: a header with the identifying fields, the full field list, the
@@ -32,7 +34,7 @@ export function DetailView({ meta, id }: { meta: EntityMeta; id: string }) {
   const { data: session } = useSession();
   const currency = session?.organization?.currency ?? "USD";
 
-  const { data: record, isLoading, isError } = useRecord(meta.key, id);
+  const { data: record, isLoading, isError, error, refetch } = useRecord(meta.key, id);
   const remove = useDelete(meta.key);
   const [editing, setEditing] = React.useState(false);
   const [confirming, setConfirming] = React.useState(false);
@@ -45,6 +47,17 @@ export function DetailView({ meta, id }: { meta: EntityMeta; id: string }) {
       <div className="space-y-4 p-5">
         <Skeleton className="h-12 w-72" />
         <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+
+  // A record that could not be fetched is not a record that does not exist.
+  // Telling someone their invoice is gone when the network hiccuped is the
+  // wrong end of a very alarming spectrum.
+  if (isError && !(error instanceof ApiError && error.status === 404)) {
+    return (
+      <div className="p-5">
+        <LoadError what={meta.label.toLowerCase()} error={error} onRetry={() => refetch()} />
       </div>
     );
   }

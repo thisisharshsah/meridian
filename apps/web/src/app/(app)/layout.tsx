@@ -7,12 +7,19 @@ import { ChooseWorkspace } from "@/components/shell/choose-workspace";
 import { BottomNav } from "@/components/shell/bottom-nav";
 import { CommandPalette } from "@/components/shell/command-palette";
 import { useAppMeta, useSession } from "@/lib/queries";
+import { Skeleton } from "@/components/ui/misc";
+import { LoadError } from "@/components/records/load-error";
 
 const COLLAPSE_KEY = "suite-sidebar-collapsed";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { data: meta, isLoading } = useAppMeta();
-  const { data: session, isPending: sessionPending } = useSession();
+  const {
+    data: session,
+    isPending: sessionPending,
+    isError: sessionFailed,
+    refetch: refetchSession,
+  } = useSession();
   const [paletteOpen, setPaletteOpen] = React.useState(false);
   const [navOpen, setNavOpen] = React.useState(false);
 
@@ -48,10 +55,26 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   // the refresh token, refresh tokens rotate, and a dozen of them racing means
   // all but one are rejected -- the session is destroyed by its own loading
   // state. So wait.
-  if (sessionPending) {
+  if (sessionPending && !session) {
     return (
-      <div className="flex h-dvh items-center justify-center bg-surface-muted">
+      <div className="flex h-dvh flex-col gap-3 p-5">
+        <Skeleton className="h-9 w-56" />
+        <Skeleton className="h-9 w-full max-w-md" />
+        <Skeleton className="h-72 w-full" />
         <span className="sr-only">Loading</span>
+      </div>
+    );
+  }
+
+  // The service being unreachable is its own screen. Falling through to the
+  // shell paints an app whose every panel is empty, which reads as data loss;
+  // holding the loading state paints nothing at all, which reads as broken.
+  if (sessionFailed && !session) {
+    return (
+      <div className="flex h-dvh items-center justify-center bg-surface-muted p-6">
+        <div className="w-full max-w-sm">
+          <LoadError what="workspace" onRetry={() => refetchSession()} />
+        </div>
       </div>
     );
   }

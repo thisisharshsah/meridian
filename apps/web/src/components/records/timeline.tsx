@@ -7,6 +7,7 @@ import { EmptyState, Skeleton } from "@/components/ui/misc";
 import { relativeTime } from "@/lib/format";
 import { useAuditTrail, type AuditEvent } from "@/lib/queries";
 import type { EntityMeta } from "@/lib/meta";
+import { LoadError } from "@/components/records/load-error";
 
 const ICONS: Record<string, typeof PencilLine> = {
   create: FilePlus2,
@@ -16,7 +17,13 @@ const ICONS: Record<string, typeof PencilLine> = {
 
 /** Record history, read straight from the append-only audit log. */
 export function Timeline({ meta, id }: { meta: EntityMeta; id: string }) {
-  const { data, isLoading } = useAuditTrail(meta.key, id);
+  const { data, isLoading, isError, error, refetch } = useAuditTrail(meta.key, id);
+
+  // "Nothing yet" and "we could not fetch the history" are different claims,
+  // and the second one matters when someone is checking who changed a record.
+  if (isError) {
+    return <LoadError what="history" error={error} onRetry={() => refetch()} />;
+  }
 
   if (isLoading) {
     return (
