@@ -3358,3 +3358,141 @@ async fn signing_in_with_one_business_goes_straight_in() {
         "one business is not a choice, and making someone confirm it every morning is friction"
     );
 }
+
+#[tokio::test]
+async fn the_tax_summary_adds_up_what_was_always_stored() {
+    let (app, _state) = test_app().await;
+    let owner = new_org(&app, "taxes").await;
+
+    let (_, cust) = call(
+        &app,
+        send("POST", "/api/e/crm.accounts", &owner, json!({ "name": "Harbour Cafe" })),
+    )
+    .await;
+    let cust_id = cust["id"].as_str().unwrap().to_string();
+
+    // Charged: an invoice with tax on its line.
+    let (_, inv) = call(
+        &app,
+        send("POST", "/api/e/books.invoices", &owner, json!({
+            "account_id": cust_id, "invoice_date": "2026-04-10", "due_date": "2026-05-10"
+        })),
+    )
+    .await;
+    let inv_id = inv["id"].as_str().unwrap().to_string();
+    call(
+        &app,
+        send("POST", "/api/e/books.invoice_items", &owner, json!({
+            "invoice_id": inv_id, "description": "Repair", "quantity": "1",
+            "unit_price": "1000", "tax_rate": "20"
+        })),
+    )
+    .await;
+
+    // Paid: an expense carrying tax.
+    call(
+        &app,
+        send("POST", "/api/e/books.expenses", &owner, json!({
+            "description": "Parts", "amount": "200", "tax_amount": "40", "expense_date": "2026-04-12"
+        })),
+    )
+    .await;
+
+    let (status, rep) = call(
+        &app,
+        get("/api/reports/tax_summary?from=2026-04-01&to=2026-06-30", &owner),
+    )
+    .await;
+    assert!(status.is_success(), "the report runs: {rep:?}");
+
+    let rows = rep["rows"].as_array().expect("rows");
+    let find = |src: &str| {
+        rows.iter().find(|r| r["source"] == json!(src)).unwrap_or_else(|| panic!("no {src} row"))
+    };
+    assert_eq!(find("Invoices")["tax"], json!(20_000), "20% of 1000 is 200.00");
+    assert_eq!(find("Expenses")["tax"], json!(4_000), "40.00 of tax paid");
+    assert_eq!(
+        find("Due to the tax office")["tax"], json!(16_000),
+        "charged less paid is what the return asks for"
+    );
+    assert_eq!(
+        find("Due to the tax office")["documents"], json!(null),
+        "the net-due line is arithmetic, not a pile of paperwork"
+    );
+    // Charged and paid do not add up to anything, and the last row is already
+    // the sum of the others, so this report has no footer.
+    assert_eq!(rep["totals"], json!({}), "no total row is offered");
+    assert_eq!(
+        find("Due to the tax office")["_summary"], json!(true),
+        "the conclusion is marked as one"
+    );
+
+    // A period the documents fall outside of owes nothing.
+    let (_, empty) = call(
+        &app,
+        get("/api/reports/tax_summary?from=2026-01-01&to=2026-03-31", &owner),
+    )
+    .await;
+    let erows = empty["rows"].as_array().unwrap();
+    let due = erows.iter().find(|r| r["source"] == json!("Due to the tax office")).unwrap();
+    assert_eq!(due["tax"], json!(0), "a quarter with no documents in it is not a quarter with tax due");
+}
+
+/// The demo workspace is how anyone first meets the product, and it exercises
+/// nearly every entity in one pass. It broke once because a create path
+/// skipped `before_create` and nothing noticed until someone ran it by hand.
+#[tokio::test]
+async fn the_demo_workspace_seeds_and_can_be_signed_into() {
+    let (app, state) = test_app().await;
+
+    crate::seed::run(&state).await.expect("the seeder runs clean");
+
+    let (status, session) = call(
+        &app,
+        anon("POST", "/api/auth/login", json!({
+            "email": crate::seed::DEMO_EMAIL, "password": crate::seed::DEMO_PASSWORD
+        })),
+    )
+    .await;
+    assert!(status.is_success(), "the demo account signs in: {session:?}");
+
+    let token = session["access_token"].as_str().expect("a token").to_string();
+
+    // A few of the tables the seeder fills, one per module it touches, so a
+    // half-finished run fails here rather than looking fine. The queries are
+    // spelled out because SQL in this codebase is never built from a string.
+    for (table, sql, least) in [
+        ("contacts", "SELECT COUNT(*) FROM contacts", 1i64),
+        ("invoices", "SELECT COUNT(*) FROM invoices", 1),
+        ("items", "SELECT COUNT(*) FROM items", 1),
+        ("deals", "SELECT COUNT(*) FROM deals", 1),
+        ("expenses", "SELECT COUNT(*) FROM expenses", 5),
+    ] {
+        let count: i64 = sqlx::query_scalar(sql).fetch_one(&state.pool).await.unwrap();
+        assert!(count >= least, "{table} has {count} rows, wanted at least {least}");
+    }
+
+    // Nothing derived was left blank: the name hooks ran on every path.
+    let blank: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM contacts WHERE full_name IS NULL OR full_name = ''")
+            .fetch_one(&state.pool)
+            .await
+            .unwrap();
+    assert_eq!(blank, 0, "every seeded contact got a composed name");
+
+    // Running it twice is what a re-deploy does, and it must not duplicate.
+    let count_users = || sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM users").fetch_one(&state.pool);
+    let before = count_users().await.unwrap();
+    crate::seed::run(&state).await.expect("a second run is a no-op");
+    assert_eq!(before, count_users().await.unwrap(), "seeding twice does not double the people");
+
+    // And the seeded books add up to something the tax report can read.
+    let (_, rep) =
+        call(&app, get("/api/reports/tax_summary?from=2020-01-01&to=2099-12-31", &token)).await;
+    let rows = rep["rows"].as_array().expect("rows");
+    let expenses = rows.iter().find(|r| r["source"] == json!("Expenses")).unwrap();
+    assert!(
+        expenses["tax"].as_i64().unwrap_or(0) > 0,
+        "the demo shows tax paid on expenses, not an empty row"
+    );
+}

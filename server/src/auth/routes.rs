@@ -310,7 +310,7 @@ async fn logout(State(state): State<AppState>, ctx: Ctx) -> AppResult<Json<serde
 /// are in, what you may do, and which other organizations you can switch to.
 async fn me(State(state): State<AppState>, ctx: UserCtx) -> AppResult<Json<serde_json::Value>> {
     let org = match &ctx.org_id {
-        Some(id) => sqlx::query("SELECT id, name, slug, currency, timezone FROM organizations WHERE id = ?")
+        Some(id) => sqlx::query("SELECT id, name, slug, currency, timezone, fiscal_year_start_month FROM organizations WHERE id = ?")
             .bind(id)
             .fetch_optional(&state.pool)
             .await?,
@@ -377,6 +377,10 @@ async fn me(State(state): State<AppState>, ctx: UserCtx) -> AppResult<Json<serde
             "slug": o.try_get::<String, _>("slug").unwrap_or_default(),
             "currency": o.try_get::<String, _>("currency").unwrap_or_else(|_| "USD".into()),
             "timezone": o.try_get::<String, _>("timezone").unwrap_or_else(|_| "UTC".into()),
+            // Carried on the session so every screen can bound a period by the
+            // business's own year. It has been stored since the first migration
+            // and read by nothing.
+            "fiscal_year_start_month": o.try_get::<i64, _>("fiscal_year_start_month").unwrap_or(1),
         })),
         "organizations": orgs.iter().map(|r| json!({
             "id": r.try_get::<String, _>("id").unwrap_or_default(),

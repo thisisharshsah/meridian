@@ -8,7 +8,6 @@ use std::collections::HashMap;
 
 use chrono::{Duration, Utc};
 use serde_json::{json, Map, Value};
-use sqlx::Row;
 
 use crate::auth::ctx::Ctx;
 use crate::auth::password::hash_password;
@@ -47,6 +46,12 @@ async fn make(state: &AppState, ctx: &Ctx, entity: &str, body: Value) -> anyhow:
             map.remove(f.name);
         }
     }
+
+    // The third place that creates records, and it has to run the same two
+    // steps as the other two: drop what the caller does not own, then let the
+    // hooks fill in what the columns require. Missing this broke the seeder
+    // outright the moment a hook started composing a NOT NULL column.
+    hooks::before_create(def.key, &mut map);
 
     let id = if hooks::needs_number(def.key).is_some() {
         let mut tx = state.pool.begin().await?;
@@ -423,16 +428,18 @@ pub async fn run(state: &AppState) -> anyhow::Result<()> {
         bump("bills");
     }
 
-    for (i, (desc, cat, amount, status, when, billable)) in [
-        ("Flights — Stuttgart site visit", "travel", "1284.40", "approved", -9i64, true),
-        ("Team offsite catering", "meals", "612.00", "submitted", -4, false),
-        ("Design tooling licences", "software", "2400.00", "reimbursed", -22, false),
-        ("Trade show booth", "marketing", "8600.00", "approved", -31, false),
-        ("Replacement laptop", "hardware", "2150.00", "draft", -1, false),
+    // `amount` is the net; the tax beside it is what the return can reclaim.
+    // Flights carry none, as passenger transport usually does not.
+    for (i, (desc, cat, amount, tax, status, when, billable)) in [
+        ("Flights — Stuttgart site visit", "travel", "1284.40", "0", "approved", -9i64, true),
+        ("Team offsite catering", "meals", "612.00", "122.40", "submitted", -4, false),
+        ("Design tooling licences", "software", "2400.00", "480.00", "reimbursed", -22, false),
+        ("Trade show booth", "marketing", "8600.00", "1720.00", "approved", -31, false),
+        ("Replacement laptop", "hardware", "2150.00", "430.00", "draft", -1, false),
     ].iter().enumerate() {
         make(state, &ctx, "books.expenses", json!({
             "description": desc, "category": cat, "amount": amount,
-            "tax_amount": "0", "expense_date": day(*when), "status": status,
+            "tax_amount": tax, "expense_date": day(*when), "status": status,
             "billable": billable, "vendor_id": vendors[i % vendors.len()],
             "account_id": accounts[i % accounts.len()],
         })).await?;

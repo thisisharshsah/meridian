@@ -79,7 +79,11 @@ export type AppMeta = { modules: ModuleMeta[] };
 export type Session = {
   user: { id: string; name: string; email: string; avatar_url: string | null };
   /** Null until the person has started a business or accepted an invitation. */
-  organization: { id: string; name: string; slug: string; currency: string; timezone: string } | null;
+  organization: {
+    id: string; name: string; slug: string; currency: string; timezone: string;
+    /** 1-12. The month the business's financial year starts in. */
+    fiscal_year_start_month: number;
+  } | null;
   role: string | null;
   organizations: { id: string; name: string; slug: string }[];
   is_owner: boolean;

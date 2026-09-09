@@ -35,6 +35,10 @@ const INT: &str = "int";
 const PERCENT: &str = "percent";
 const QUANTITY: &str = "quantity";
 
+/// A row flagged with this is the report's conclusion rather than one more
+/// line of data: the web app sets it off, and no total folds it back in.
+const SUMMARY_ROW: &str = "_summary";
+
 struct ReportDef {
     key: &'static str,
     name: &'static str,
@@ -43,6 +47,10 @@ struct ReportDef {
     icon: &'static str,
     /// Entity whose view permission gates this report.
     requires: &'static str,
+    /// Whether a footer summing the numeric columns means anything. It does
+    /// for a list of customers; it does not where the rows are of different
+    /// kinds, or where one row is already the sum of the others.
+    totals: bool,
 }
 
 const REPORTS: &[ReportDef] = &[
@@ -52,6 +60,16 @@ const REPORTS: &[ReportDef] = &[
         description: "What each customer owes, bucketed by how late it is.",
         module: "books",
         icon: "Receipt",
+        totals: true,
+        requires: "books.invoices",
+    },
+    ReportDef {
+        key: "tax_summary",
+        name: "Tax summary",
+        description: "Tax charged on sales against tax paid on purchases, for the period.",
+        module: "books",
+        icon: "Landmark",
+        totals: false,
         requires: "books.invoices",
     },
     ReportDef {
@@ -60,6 +78,7 @@ const REPORTS: &[ReportDef] = &[
         description: "Invoiced against collected, month by month.",
         module: "books",
         icon: "Banknote",
+        totals: true,
         requires: "books.invoices",
     },
     ReportDef {
@@ -68,6 +87,7 @@ const REPORTS: &[ReportDef] = &[
         description: "Billed and collected per customer, largest first.",
         module: "books",
         icon: "Building2",
+        totals: true,
         requires: "books.invoices",
     },
     ReportDef {
@@ -76,6 +96,7 @@ const REPORTS: &[ReportDef] = &[
         description: "Where the money went, and how much is still unapproved.",
         module: "books",
         icon: "CreditCard",
+        totals: true,
         requires: "books.expenses",
     },
     ReportDef {
@@ -84,6 +105,7 @@ const REPORTS: &[ReportDef] = &[
         description: "Won, open and weighted pipeline for each person.",
         module: "crm",
         icon: "Users",
+        totals: true,
         requires: "crm.deals",
     },
     ReportDef {
@@ -92,6 +114,7 @@ const REPORTS: &[ReportDef] = &[
         description: "Open deals, their value, and the weighted forecast.",
         module: "crm",
         icon: "Target",
+        totals: true,
         requires: "crm.deals",
     },
     ReportDef {
@@ -100,6 +123,7 @@ const REPORTS: &[ReportDef] = &[
         description: "How leads from each source ended up.",
         module: "crm",
         icon: "UserPlus",
+        totals: true,
         requires: "crm.leads",
     },
     ReportDef {
@@ -108,6 +132,7 @@ const REPORTS: &[ReportDef] = &[
         description: "Hours logged per project, billable against not.",
         module: "projects",
         icon: "Clock",
+        totals: true,
         requires: "projects.timesheets",
     },
     ReportDef {
@@ -116,6 +141,7 @@ const REPORTS: &[ReportDef] = &[
         description: "Inventory value, and what has fallen below its reorder point.",
         module: "inventory",
         icon: "Package",
+        totals: true,
         requires: "inventory.items",
     },
     ReportDef {
@@ -124,6 +150,7 @@ const REPORTS: &[ReportDef] = &[
         description: "Open tickets by assignee and priority.",
         module: "desk",
         icon: "LifeBuoy",
+        totals: true,
         requires: "desk.tickets",
     },
 ];
@@ -207,6 +234,7 @@ fn total_numeric(rows: &[Value], columns: &[Value]) -> Value {
         // for a read-only report.
         let sum: i64 = rows
             .iter()
+            .filter(|r| r[SUMMARY_ROW] != Value::Bool(true))
             .filter_map(|r| r.get(key).and_then(|v| v.as_i64()))
             .fold(0i64, |acc, v| acc.saturating_add(v));
         totals.insert(key.to_string(), Value::Number(sum.into()));
@@ -235,6 +263,7 @@ async fn run(
 
     let (columns, rows) = match def.key {
         "ar_aging" => ar_aging(&state, &ctx).await?,
+        "tax_summary" => tax_summary(&state, &ctx, &from, &to).await?,
         "revenue_by_month" => revenue_by_month(&state, &ctx, &from, &to).await?,
         "top_customers" => top_customers(&state, &ctx, &from, &to).await?,
         "expenses_by_category" => expenses_by_category(&state, &ctx, &from, &to).await?,
@@ -247,7 +276,11 @@ async fn run(
         other => return Err(AppError::not_found(format!("Report `{other}`"))),
     };
 
-    let totals = total_numeric(&rows, &columns);
+    let totals = if def.totals {
+        total_numeric(&rows, &columns)
+    } else {
+        json!({})
+    };
 
     Ok(Json(json!({
         "key": def.key,
@@ -306,6 +339,85 @@ async fn ar_aging(state: &AppState, ctx: &Ctx) -> AppResult<(Vec<Value>, Vec<Val
     .await?;
 
     Ok((columns.clone(), rows.iter().map(|r| row_to_json(r, &columns)).collect()))
+}
+
+/// Tax charged against tax paid, for a period.
+///
+/// Every number here was already being stored and none of it was ever added
+/// up: an invoice has carried a tax total since the first migration, and a
+/// quarterly return was a spreadsheet job with exported data.
+///
+/// One row per source rather than a single net figure, because a return asks
+/// for the halves separately and an accountant will want to see which document
+/// type each came from. Voided invoices, voided sales and rejected expenses are
+/// excluded — they are not tax events.
+async fn tax_summary(
+    state: &AppState,
+    ctx: &Ctx,
+    from: &str,
+    to: &str,
+) -> AppResult<(Vec<Value>, Vec<Value>)> {
+    let columns = vec![
+        col("source", "Source", TEXT),
+        col("direction", "Direction", TEXT),
+        col("documents", "Documents", INT),
+        col("net", "Net", MONEY),
+        col("tax", "Tax", MONEY),
+    ];
+
+    let row = |source: &str, direction: &str, docs: Option<i64>, net: Option<i64>, tax: i64| {
+        json!({ "source": source, "direction": direction, "documents": docs, "net": net, "tax": tax })
+    };
+
+    let (inv_n, inv_net, inv_tax): (i64, i64, i64) = sqlx::query_as(
+        "SELECT COUNT(*), COALESCE(SUM(total - tax_total), 0), COALESCE(SUM(tax_total), 0)
+           FROM invoices
+          WHERE org_id = ? AND deleted_at IS NULL AND status <> 'void'
+            AND invoice_date BETWEEN ? AND ?",
+    )
+    .bind(&ctx.org_id).bind(from).bind(to).fetch_one(&state.pool).await?;
+
+    let (till_n, till_net, till_tax): (i64, i64, i64) = sqlx::query_as(
+        "SELECT COUNT(*), COALESCE(SUM(total - tax_total), 0), COALESCE(SUM(tax_total), 0)
+           FROM counter_sales
+          WHERE org_id = ? AND deleted_at IS NULL AND status = 'completed'
+            AND substr(sold_at, 1, 10) BETWEEN ? AND ?",
+    )
+    .bind(&ctx.org_id).bind(from).bind(to).fetch_one(&state.pool).await?;
+
+    let (bill_n, bill_net, bill_tax): (i64, i64, i64) = sqlx::query_as(
+        "SELECT COUNT(*), COALESCE(SUM(total - tax_total), 0), COALESCE(SUM(tax_total), 0)
+           FROM bills
+          WHERE org_id = ? AND deleted_at IS NULL AND status <> 'void'
+            AND bill_date BETWEEN ? AND ?",
+    )
+    .bind(&ctx.org_id).bind(from).bind(to).fetch_one(&state.pool).await?;
+
+    let (exp_n, exp_net, exp_tax): (i64, i64, i64) = sqlx::query_as(
+        "SELECT COUNT(*), COALESCE(SUM(amount), 0), COALESCE(SUM(tax_amount), 0)
+           FROM expenses
+          WHERE org_id = ? AND deleted_at IS NULL AND status <> 'rejected'
+            AND expense_date BETWEEN ? AND ?",
+    )
+    .bind(&ctx.org_id).bind(from).bind(to).fetch_one(&state.pool).await?;
+
+    let charged = inv_tax + till_tax;
+    let paid = bill_tax + exp_tax;
+
+    let rows = vec![
+        row("Invoices", "Charged", Some(inv_n), Some(inv_net), inv_tax),
+        row("Counter sales", "Charged", Some(till_n), Some(till_net), till_tax),
+        row("Supplier bills", "Paid", Some(bill_n), Some(bill_net), bill_tax),
+        row("Expenses", "Paid", Some(exp_n), Some(exp_net), exp_tax),
+        // The figure the return actually asks for. Negative means reclaimable.
+        {
+            let mut r = row("Due to the tax office", "Charged less paid", None, None, charged - paid);
+            r[SUMMARY_ROW] = Value::Bool(true);
+            r
+        },
+    ];
+
+    Ok((columns, rows))
 }
 
 async fn revenue_by_month(

@@ -33,7 +33,7 @@ type ReportResult = {
   name: string;
   description: string;
   columns: Column[];
-  rows: Record<string, string | number | null>[];
+  rows: Record<string, string | number | boolean | null>[];
   totals: Record<string, number>;
   from: string;
   to: string;
@@ -47,8 +47,17 @@ export default function ReportsPage() {
   const currency = session?.organization?.currency ?? "USD";
 
   const [selected, setSelected] = React.useState<string | null>(null);
-  const [from, setFrom] = React.useState(() => isoMonthsAgo(12));
-  const [to, setTo] = React.useState(() => new Date().toISOString().slice(0, 10));
+  // Default to the business's own financial year rather than a rolling twelve
+  // months. A tax return is filed for a year the business declared, and that
+  // month has been sitting in settings unused since the first migration.
+  const fyStart = session?.organization?.fiscal_year_start_month ?? 1;
+  const [from, setFrom] = React.useState(() => financialYear(fyStart).from);
+  const [to, setTo] = React.useState(() => financialYear(fyStart).to);
+
+  const setRange = (r: { from: string; to: string }) => {
+    setFrom(r.from);
+    setTo(r.to);
+  };
 
   const catalog = useQuery({
     queryKey: ["reports"],
@@ -132,6 +141,8 @@ export default function ReportsPage() {
               to={to}
               onFrom={setFrom}
               onTo={setTo}
+              onRange={setRange}
+              fyStart={fyStart}
             />
           ) : null}
         </div>
@@ -141,7 +152,7 @@ export default function ReportsPage() {
 }
 
 function ReportTable({
-  result, currency, from, to, onFrom, onTo,
+  result, currency, from, to, onFrom, onTo, onRange, fyStart,
 }: {
   result: ReportResult;
   currency: string;
@@ -149,6 +160,8 @@ function ReportTable({
   to: string;
   onFrom: (v: string) => void;
   onTo: (v: string) => void;
+  onRange?: (r: { from: string; to: string }) => void;
+  fyStart: number;
 }) {
   const format = (value: unknown, type: string): string => {
     if (value === null || value === undefined) return "—";
@@ -207,12 +220,32 @@ function ReportTable({
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-end gap-3">
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 basis-64">
           <h2 className="text-base font-semibold tracking-tight">{result.name}</h2>
           <p className="text-xs text-muted-foreground">{result.description}</p>
         </div>
 
-        <div className="flex items-end gap-2">
+        <div className="flex flex-wrap items-end gap-2">
+          {/* A return is filed for a declared year, so offer those years rather
+              than making someone work out the dates each quarter. */}
+          {onRange && (
+            <div className="flex gap-1">
+              {[
+                { label: t("reports.thisYear"), r: financialYear(fyStart) },
+                { label: t("reports.lastYear"), r: previousFinancialYear(fyStart) },
+              ].map((q) => (
+                <button
+                  key={q.label}
+                  type="button"
+                  onClick={() => onRange(q.r)}
+                  aria-pressed={from === q.r.from && to === q.r.to}
+                  className="min-h-8 rounded-full border border-border px-2.5 text-xs text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground aria-pressed:border-brand aria-pressed:bg-brand-subtle aria-pressed:text-brand"
+                >
+                  {q.label}
+                </button>
+              ))}
+            </div>
+          )}
           <label className="text-xs text-muted-foreground">
             {t("reports.from")}
             <Input
@@ -254,7 +287,16 @@ function ReportTable({
               </THead>
               <TBody>
                 {result.rows.map((row, i) => (
-                  <TR key={i} className="hover:bg-surface-hover/40">
+                  <TR
+                    key={i}
+                    className={cn(
+                      "hover:bg-surface-hover/40",
+                      // A row the report marks as its conclusion reads as one,
+                      // not as one more line of data.
+                      row._summary === true &&
+                        "border-t-2 border-border bg-surface-hover/30 font-semibold hover:bg-surface-hover/30",
+                    )}
+                  >
                     {result.columns.map((c) => {
                       const numeric = NUMERIC.includes(c.type);
                       const isBar = c.key === barColumn;
@@ -324,4 +366,30 @@ function isoMonthsAgo(months: number) {
   const d = new Date();
   d.setMonth(d.getMonth() - months);
   return d.toISOString().slice(0, 10);
+}
+
+/** The current financial year, given the month it starts in. */
+function financialYear(startMonth: number) {
+  const now = new Date();
+  const m = Math.min(12, Math.max(1, startMonth));
+  const startYear = now.getMonth() + 1 >= m ? now.getFullYear() : now.getFullYear() - 1;
+  const start = new Date(startYear, m - 1, 1);
+  const end = new Date(startYear + 1, m - 1, 0);
+  const iso = (d: Date) => {
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  };
+  return { from: iso(start), to: iso(end) };
+}
+
+/** The one before it, which is the one usually being filed. */
+function previousFinancialYear(startMonth: number) {
+  const cur = financialYear(startMonth);
+  const shift = (s: string) => {
+    const d = new Date(s);
+    d.setFullYear(d.getFullYear() - 1);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  };
+  return { from: shift(cur.from), to: shift(cur.to) };
 }

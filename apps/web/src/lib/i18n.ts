@@ -153,6 +153,8 @@ const en: Messages = {
   "reports.title": "Reports",
   "reports.lede": "Read-only views across the whole workspace.",
   "reports.from": "From",
+  "reports.thisYear": "This financial year",
+  "reports.lastYear": "Last financial year",
   "reports.reorder": "Reorder",
   "reports.outOfStock": "Out of stock",
   "reports.noneTitle": "No reports available",
