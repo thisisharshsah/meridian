@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { Check, Minus } from "lucide-react";
+import { Check, X } from "lucide-react";
 
 import { Badge, toneOf } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { entityPath, optionFor, type FieldDef } from "@/lib/meta";
 import { formatDate, formatDateTime, formatMoney, formatPercent, formatQuantity } from "@/lib/format";
+import { t } from "@/lib/i18n";
 
 /**
  * Renders one field for display. Every list cell and detail row goes through
@@ -44,10 +45,20 @@ export function FieldValue({
       return <span className="tnum">{new Intl.NumberFormat().format(value as number)}</span>;
 
     case "bool":
+      // A tick on its own is a shape, not an answer: it has no text for a
+      // screen reader and, on a column of them, no way to tell "no" from
+      // "nobody filled this in" -- the empty case above renders a dash, and so
+      // did false.
       return value ? (
-        <Check className="size-4 text-success" />
+        <span className="inline-flex items-center gap-1 text-success-strong">
+          <Check className="size-4 shrink-0" aria-hidden="true" />
+          <span className="text-xs">{t("value.yes")}</span>
+        </span>
       ) : (
-        <Minus className="size-4 text-subtle-foreground" />
+        <span className="inline-flex items-center gap-1 text-muted-foreground">
+          <X className="size-4 shrink-0" aria-hidden="true" />
+          <span className="text-xs">{t("value.no")}</span>
+        </span>
       );
 
     case "date":

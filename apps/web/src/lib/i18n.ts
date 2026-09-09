@@ -51,6 +51,8 @@ const en: Messages = {
   "action.edit": "Edit",
 
   "action.signOut": "Sign out",
+  "value.yes": "Yes",
+  "value.no": "No",
 
   // ---- workspaces ----
   "workspace.switch": "Switch business",
