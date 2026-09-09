@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Columns3, MoreHorizontal, Plus, Rows3, Search,
   Trash2, X,
@@ -42,13 +42,32 @@ export function ListView({ meta, fixedFilters, embedded }: {
   const { data: session } = useSession();
   const currency = session?.organization?.currency ?? "USD";
 
+  // Seeded from the URL, because the app hands out links carrying these: the
+  // palette's "see all N" link sets q, and the dashboard tiles link to a stage
+  // or a status. Ignoring them meant every one of those links quietly landed
+  // on an unfiltered list, showing the wrong thing without saying so.
+  const searchParams = useSearchParams();
+  const initialQuery = searchParams.get("q") ?? "";
+  const initialFilters = React.useMemo(() => {
+    const seeded: Record<string, string> = {};
+    for (const f of meta.fields) {
+      if (f.kind.type !== "select") continue;
+      const v = searchParams.get(f.name);
+      if (v) seeded[f.name] = v;
+    }
+    return seeded;
+    // Read once on mount: re-seeding on every navigation would fight the
+    // filters the reader has since changed by hand.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meta.key]);
+
   const [page, setPage] = React.useState(1);
-  const [search, setSearch] = React.useState("");
-  const [debounced, setDebounced] = React.useState("");
+  const [search, setSearch] = React.useState(initialQuery);
+  const [debounced, setDebounced] = React.useState(initialQuery);
   const [sort, setSort] = React.useState<string>(
     `${meta.default_sort.dir === "desc" ? "-" : ""}${meta.default_sort.field}`,
   );
-  const [filters, setFilters] = React.useState<Record<string, string>>({});
+  const [filters, setFilters] = React.useState<Record<string, string>>(initialFilters);
   const [creating, setCreating] = React.useState(false);
   const [editing, setEditing] = React.useState<Record_ | null>(null);
 

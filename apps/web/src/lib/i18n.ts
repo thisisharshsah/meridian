@@ -77,6 +77,13 @@ const en: Messages = {
   "choose.startLede": "Set up a business you run. You can be part of others at the same time.",
   "choose.noneWaiting": "No invitations are waiting for {email}. If you expected one, ask whoever invited you to send it to this address.",
 
+  "palette.label": "Search",
+  "palette.close": "Close search",
+  "palette.placeholder": "Search records, or jump to a screen…",
+  "palette.goTo": "Go to",
+  "palette.nothing": "Nothing found.",
+  "palette.hint": "Type to search your records.",
+
   // ---- first run ----
   "setup.title": "Set up your workspace",
   "setup.lede": "Work down the list. Each step uses the one before it, and this page fills itself in as you go.",
