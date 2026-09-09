@@ -94,8 +94,12 @@ const en: Messages = {
   "palette.hint": "Type to search your records.",
 
   // ---- first run ----
-  "setup.title": "Set up your workspace",
-  "setup.lede": "Work down the list. Each step uses the one before it, and this page fills itself in as you go.",
+  "setup.title": "Your first week",
+  "setup.lede": "Put in what the business already knows. Each step uses the one before it, and this page fills itself in as you go.",
+  "setup.product.title": "Add what you sell",
+  "setup.product.why": "Goods or services. They go on quotes, invoices and the till, and stock is counted from here.",
+  "setup.product.cta": "Add a product",
+  "setup.after": "After this week: invoices go out and payments come in daily, staff clock in, payroll runs monthly — and the year\u2019s figures build themselves from all of it.",
   "setup.progress": "{done} of {total} done",
   "setup.hide": "I know my way around — hide this",
   "setup.customer.title": "Add a customer",

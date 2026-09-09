@@ -132,6 +132,10 @@ export function SetupGuide({ steps }: { steps: SetupStep[] }) {
           );
         })}
 
+        {/* The arc past setup. Without it the guide reads as five chores; with
+            it, the chores are the first week of something that keeps going. */}
+        <p className="pt-1 text-center text-xs text-muted-foreground">{t("setup.after")}</p>
+
         <div className="pt-1 text-center">
           <button
             type="button"

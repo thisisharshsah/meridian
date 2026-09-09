@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import {
-  AlertTriangle, ArrowUpRight, Banknote, Building2, CircleDollarSign, Receipt, Target, Ticket,
+  AlertTriangle, ArrowUpRight, Banknote, Building2, CircleDollarSign, Package, Receipt, Target, Ticket,
   TrendingUp, UserPlus,
 } from "lucide-react";
 
@@ -68,10 +68,12 @@ export default function DashboardPage() {
   // nothing about what to do next. Detect that state and lead with a first
   // task instead of a dashboard that reports on data they have not entered.
   const accounts = useList("crm.accounts", { per_page: 1 });
+  const products = useList("inventory.items", { per_page: 1 });
   const members = useList("core.users", { per_page: 2 });
   const meta = useAppMeta();
 
   const hasCustomers = (accounts.data?.data.length ?? 0) > 0;
+  const hasProducts = (products.data?.data.length ?? 0) > 0;
   const hasDeals = openDealCount > 0 || (recentDeals.data?.data.length ?? 0) > 0;
   const hasInvoices = (invoiceTotals.data?.data.length ?? 0) > 0;
   const hasTeam = (members.data?.data.length ?? 0) > 1;
@@ -84,6 +86,14 @@ export default function DashboardPage() {
       href: "/crm/accounts",
       cta: t("setup.customer.title"),
       done: hasCustomers,
+    },
+    {
+      icon: Package,
+      title: t("setup.product.title"),
+      why: t("setup.product.why"),
+      href: "/inventory/items",
+      cta: t("setup.product.cta"),
+      done: hasProducts,
     },
     {
       icon: Target,
