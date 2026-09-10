@@ -42,10 +42,10 @@ export function InviteSection({ canManage }: { canManage: boolean }) {
   const revoke = useMutation({
     mutationFn: (id: string) => del(`settings/invitations/${id}`),
     onSuccess: () => {
-      toast.success("Invitation revoked");
+      toast.success(t("invite.revoked"));
       qc.invalidateQueries({ queryKey: ["settings", "invitations"] });
     },
-    onError: () => toast.error("Could not revoke that invitation"),
+    onError: () => toast.error(t("invite.revokeFailed")),
   });
 
   if (!canManage) return null;
@@ -66,7 +66,7 @@ export function InviteSection({ canManage }: { canManage: boolean }) {
           <EmptyState
             icon={Mail}
             title={t("invite.noneOutstanding")}
-            description="Invite a colleague and hand them the link yourself — this workspace does not send email."
+            description={t("invite.handItOver")}
           />
         ) : (
           <ul className="divide-y divide-border">
@@ -159,7 +159,7 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
       setTimeout(() => setCopied(false), 2000);
     } catch {
       // Clipboard access is blocked in some contexts; the link stays selectable.
-      toast.message("Select the link and copy it manually");
+      toast.message(t("invite.copyManually"));
     }
   };
 
@@ -210,7 +210,7 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
             <DialogBody className="space-y-4">
               <FormError message={formError} />
 
-              <FieldRow label="Email" htmlFor="invite-email" error={errors.email} required>
+              <FieldRow label={t("invite.email")} htmlFor="invite-email" error={errors.email} required>
                 <Input
                   id="invite-email"
                   type="email"
@@ -222,7 +222,7 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
                 />
               </FieldRow>
 
-              <FieldRow label="Role" htmlFor="invite-role" error={errors.role_id} required>
+              <FieldRow label={t("invite.role")} htmlFor="invite-role" error={errors.role_id} required>
                 <Select value={roleId} onValueChange={setRoleId}>
                   <SelectTrigger id="invite-role">
                     <SelectValue placeholder={t("invite.rolePlaceholder")} />

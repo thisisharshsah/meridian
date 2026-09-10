@@ -9,6 +9,7 @@ import { CommandPalette } from "@/components/shell/command-palette";
 import { useAppMeta, useSession } from "@/lib/queries";
 import { Skeleton } from "@/components/ui/misc";
 import { LoadError } from "@/components/records/load-error";
+import { t } from "@/lib/i18n";
 
 const COLLAPSE_KEY = "suite-sidebar-collapsed";
 
@@ -61,7 +62,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <Skeleton className="h-9 w-56" />
         <Skeleton className="h-9 w-full max-w-md" />
         <Skeleton className="h-72 w-full" />
-        <span className="sr-only">Loading</span>
+        <span className="sr-only">{t("dash.loading")}</span>
       </div>
     );
   }
@@ -103,7 +104,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="fixed inset-0 z-40 md:hidden">
           <button
             type="button"
-            aria-label="Close menu"
+            aria-label={t("nav.closeMenu")}
             onClick={() => setNavOpen(false)}
             className="absolute inset-0 bg-black/40"
           />

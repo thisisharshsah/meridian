@@ -18,7 +18,7 @@ import { FieldRow, FormError } from "@/components/form/field";
 import { ApiError, del, get, patch, post } from "@/lib/api";
 import { relativeTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { t } from "@/lib/i18n";
+import { plural, t } from "@/lib/i18n";
 
 type Hook = {
   id: string; name: string; url: string; events: string[]; is_active: boolean;
@@ -57,29 +57,29 @@ export function IntegrationsTab({ canManage }: { canManage: boolean }) {
     mutationFn: ({ id, is_active }: { id: string; is_active: boolean }) =>
       patch(`settings/webhooks/${id}`, { is_active }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["settings", "webhooks"] }),
-    onError: () => toast.error("Could not change that webhook"),
+    onError: () => toast.error(t("hook.toggleFailed")),
   });
 
   const remove = useMutation({
     mutationFn: (id: string) => del(`settings/webhooks/${id}`),
     onSuccess: () => {
-      toast.success("Webhook deleted");
+      toast.success(t("hook.deleted"));
       qc.invalidateQueries({ queryKey: ["settings", "webhooks"] });
     },
   });
 
   const ping = useMutation({
     mutationFn: (id: string) => post(`settings/webhooks/${id}/test`, {}),
-    onSuccess: () => toast.success("Test delivery queued"),
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : "Could not send a test"),
+    onSuccess: () => toast.success(t("hook.testQueued")),
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : t("hook.testFailed")),
   });
 
   if (!canManage) {
     return (
       <EmptyState
         icon={Webhook}
-        title="Only an owner can manage integrations"
-        description="Ask an owner of this workspace to set up webhooks."
+        title={t("hook.deniedTitle")}
+        description={t("hook.deniedBody")}
       />
     );
   }
@@ -90,22 +90,22 @@ export function IntegrationsTab({ canManage }: { canManage: boolean }) {
     <div className="max-w-4xl space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle>Webhooks</CardTitle>
+          <CardTitle>{t("hook.title")}</CardTitle>
           <Button variant="primary" size="sm" onClick={() => setCreating(true)}>
             <Plus />
-            New webhook
+            {t("hook.new")}
           </Button>
         </CardHeader>
         <CardContent className="p-0">
           {data.data.length === 0 ? (
             <EmptyState
               icon={Webhook}
-              title="No webhooks yet"
-              description="Send a signed POST to another system whenever a record changes."
+              title={t("hook.emptyTitle")}
+              description={t("hook.emptyBody")}
               action={
                 <Button variant="primary" onClick={() => setCreating(true)}>
                   <Plus />
-                  New webhook
+                  {t("hook.new")}
                 </Button>
               }
             />
@@ -134,15 +134,12 @@ export function IntegrationsTab({ canManage }: { canManage: boolean }) {
                       ))}
                       {h.events.length > 4 && <span>+{h.events.length - 4}</span>}
                     </p>
-                    <p className="mt-1 text-xs text-subtle-foreground">
-                      {h.delivered_count} delivered
-                      {h.last_delivered_at ? `, last ${relativeTime(h.last_delivered_at)}` : ""}
-                    </p>
+                    <p className="mt-1 text-xs text-subtle-foreground">{deliveredLabel(h)}</p>
                     {h.last_error && (
                       <p className="mt-1 flex items-start gap-1 text-xs text-danger">
                         <AlertTriangle className="mt-px size-3 shrink-0" />
                         {h.last_error}
-                        {h.failure_streak > 1 && ` (${h.failure_streak} in a row)`}
+                        {h.failure_streak > 1 && t("hook.streak", undefined, { n: h.failure_streak })}
                       </p>
                     )}
                   </div>
@@ -154,8 +151,8 @@ export function IntegrationsTab({ canManage }: { canManage: boolean }) {
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      aria-label="Send a test"
-                      title="Send a test delivery"
+                      aria-label={t("hook.sendTest")}
+                      title={t("hook.sendTestTitle")}
                       onClick={() => ping.mutate(h.id)}
                     >
                       <Send />
@@ -163,12 +160,14 @@ export function IntegrationsTab({ canManage }: { canManage: boolean }) {
                     <Switch
                       checked={h.is_active}
                       onCheckedChange={(v) => toggle.mutate({ id: h.id, is_active: v })}
-                      aria-label={`Turn ${h.name} ${h.is_active ? "off" : "on"}`}
+                      aria-label={t(h.is_active ? "hook.toggleOff" : "hook.toggleOn", undefined, {
+                        name: h.name,
+                      })}
                     />
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      aria-label="Delete"
+                      aria-label={t("action.delete")}
                       onClick={() => remove.mutate(h.id)}
                     >
                       <Trash2 />
@@ -182,12 +181,8 @@ export function IntegrationsTab({ canManage }: { canManage: boolean }) {
       </Card>
 
       <p className="text-xs text-muted-foreground">
-        Every request carries <code className="font-mono">X-Meridian-Signature</code>, an HMAC-SHA256
-        of the timestamp and body under the webhook&rsquo;s secret — verify it before trusting a
-        payload.{" "}
-        {data.allow_private
-          ? "Private network addresses are permitted on this server."
-          : "Private and loopback addresses are refused; set WEBHOOKS_ALLOW_PRIVATE=1 to permit them."}
+        {t("hook.signatureNote", undefined, { header: "X-Meridian-Signature" })}{" "}
+        {t(data.allow_private ? "hook.privateAllowed" : "hook.privateRefused")}
       </p>
 
       <WebhookDialog
@@ -198,6 +193,14 @@ export function IntegrationsTab({ canManage }: { canManage: boolean }) {
       <DeliveriesDialog hook={inspecting} onOpenChange={(v) => !v && setInspecting(null)} />
     </div>
   );
+}
+
+/** How much a webhook has delivered, as a sentence the catalogue owns. */
+function deliveredLabel(h: Hook): string {
+  const delivered = plural("hook.deliveredCount", h.delivered_count);
+  return h.last_delivered_at
+    ? t("hook.deliveredLast", undefined, { delivered, when: relativeTime(h.last_delivered_at) })
+    : delivered;
 }
 
 function WebhookDialog({
@@ -239,7 +242,7 @@ function WebhookDialog({
         setErrors(e.fieldMap);
         if (!Object.keys(e.fieldMap).length) setFormError(e.message);
       } else {
-        setFormError("Could not create that webhook");
+        setFormError(t("hook.createFailed"));
       }
     },
   });
@@ -250,11 +253,8 @@ function WebhookDialog({
         {secret ? (
           <>
             <DialogHeader>
-              <DialogTitle>Webhook created</DialogTitle>
-              <DialogDescription>
-                This signing secret is shown once and is not stored anywhere you can read it back.
-                The receiving system needs it to verify signatures.
-              </DialogDescription>
+              <DialogTitle>{t("hook.createdTitle")}</DialogTitle>
+              <DialogDescription>{t("hook.createdLede")}</DialogDescription>
             </DialogHeader>
             <DialogBody>
               <div className="flex items-center gap-2 rounded-md border border-border bg-surface-muted p-2">
@@ -268,18 +268,18 @@ function WebhookDialog({
                       setCopied(true);
                       setTimeout(() => setCopied(false), 2000);
                     } catch {
-                      toast.message("Select the secret and copy it manually");
+                      toast.message(t("hook.copyManually"));
                     }
                   }}
                 >
                   {copied ? <Check /> : <Copy />}
-                  {copied ? "Copied" : "Copy"}
+                  {t(copied ? "hook.copied" : "hook.copy")}
                 </Button>
               </div>
             </DialogBody>
             <DialogFooter>
               <Button variant="primary" onClick={() => onOpenChange(false)}>
-                Done
+                {t("hook.done")}
               </Button>
             </DialogFooter>
           </>
@@ -294,26 +294,24 @@ function WebhookDialog({
             className="flex min-h-0 flex-col"
           >
             <DialogHeader>
-              <DialogTitle>New webhook</DialogTitle>
-              <DialogDescription>
-                Post a signed payload to another system when these records change.
-              </DialogDescription>
+              <DialogTitle>{t("hook.dialogTitle")}</DialogTitle>
+              <DialogDescription>{t("hook.dialogLede")}</DialogDescription>
             </DialogHeader>
 
             <DialogBody className="space-y-4">
               <FormError message={formError} />
 
               <div className="grid gap-4 sm:grid-cols-2">
-                <FieldRow label="Name" htmlFor="hook-name" error={errors.name} required>
+                <FieldRow label={t("hook.name")} htmlFor="hook-name" error={errors.name} required>
                   <Input
                     id="hook-name"
                     autoFocus
-                    placeholder="Deal notifier"
+                    placeholder={t("hook.namePlaceholder")}
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                   />
                 </FieldRow>
-                <FieldRow label="Endpoint URL" htmlFor="hook-url" error={errors.url} required>
+                <FieldRow label={t("hook.url")} htmlFor="hook-url" error={errors.url} required>
                   <Input
                     id="hook-url"
                     placeholder="https://example.com/hooks/meridian"
@@ -326,7 +324,7 @@ function WebhookDialog({
 
               <div>
                 <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-subtle-foreground">
-                  Events
+                  {t("hook.events")}
                 </p>
                 {errors.events && <p className="mb-2 text-xs text-danger">{errors.events}</p>}
                 <div className="max-h-72 overflow-y-auto rounded-md border border-border scrollbar-thin">
@@ -369,13 +367,13 @@ function WebhookDialog({
 
             <DialogFooter>
               <span className="mr-auto text-xs text-muted-foreground">
-                {events.size} event{events.size === 1 ? "" : "s"}
+                {plural("hook.eventCount", events.size)}
               </span>
               <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
                 {t("action.cancel")}
               </Button>
               <Button type="submit" variant="primary" loading={create.isPending}>
-                Create webhook
+                {t("hook.create")}
               </Button>
             </DialogFooter>
           </form>
@@ -402,13 +400,13 @@ function DeliveriesDialog({
       <DialogContent size="lg">
         <DialogHeader>
           <DialogTitle>{hook?.name}</DialogTitle>
-          <DialogDescription>The last 50 delivery attempts.</DialogDescription>
+          <DialogDescription>{t("hook.deliveriesLede")}</DialogDescription>
         </DialogHeader>
         <DialogBody className="p-0">
           {!data ? (
             <Skeleton className="m-4 h-40" />
           ) : data.data.length === 0 ? (
-            <EmptyState icon={Send} title="Nothing delivered yet" />
+            <EmptyState icon={Send} title={t("hook.nothingDelivered")} />
           ) : (
             <ul className="divide-y divide-border">
               {data.data.map((d) => (
@@ -420,7 +418,7 @@ function DeliveriesDialog({
                   <span className="ml-auto text-muted-foreground">
                     {d.response_code ? `HTTP ${d.response_code}` : "—"}
                     {d.duration_ms !== null ? ` · ${d.duration_ms}ms` : ""}
-                    {d.attempts > 1 ? ` · attempt ${d.attempts}` : ""}
+                    {d.attempts > 1 ? t("hook.attempt", undefined, { n: d.attempts }) : ""}
                   </span>
                   <span className="text-subtle-foreground">{relativeTime(d.created_at)}</span>
                 </li>
@@ -430,7 +428,7 @@ function DeliveriesDialog({
         </DialogBody>
         <DialogFooter>
           <Button variant="secondary" onClick={() => onOpenChange(false)}>
-            Close
+            {t("hook.close")}
           </Button>
         </DialogFooter>
       </DialogContent>

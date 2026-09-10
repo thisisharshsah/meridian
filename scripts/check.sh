@@ -25,6 +25,7 @@ step() {
 # its own commit if you want it.
 step "rust: build" cargo build --manifest-path server/Cargo.toml --quiet
 step "rust: tests" cargo test --manifest-path server/Cargo.toml --quiet
+step "web: words" node scripts/i18n-lint.mjs
 # Invoked exactly as package.json does, from apps/web: run from the root
 # with --project instead and tsc resolves paths differently and fails.
 step "web: types" bash -c 'cd apps/web && ./node_modules/.bin/tsc --noEmit'
@@ -36,6 +37,7 @@ printf '\n── counts\n'
 printf '   entities : %s\n' "$(grep -rc 'r.add(EntityDef' server/src/modules/*.rs | awk -F: '{s+=$2} END {print s}')"
 printf '   tests    : %s\n' "$(cargo test --manifest-path server/Cargo.toml 2>/dev/null | grep -oE '[0-9]+ passed' | head -1)"
 printf '   migrations: %s\n' "$(ls server/migrations/*.sql | wc -l | tr -d ' ')"
+printf '   phrases  : %s\n' "$(grep -c '": "' apps/web/src/lib/i18n.ts | tr -d ' ')"
 
 if [[ $fail -ne 0 ]]; then
   printf '\n✗ something above failed\n' >&2

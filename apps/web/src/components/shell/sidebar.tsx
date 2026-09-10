@@ -102,7 +102,7 @@ export function Sidebar({
         <Link
           href="/"
           className="text-sidebar-foreground hover:text-foreground"
-          aria-label="Aurovie Business home"
+          aria-label={t("nav.home.aria", undefined, { app: t("app.name") })}
         >
           {collapsed ? <Logo size={24} /> : <Wordmark />}
         </Link>

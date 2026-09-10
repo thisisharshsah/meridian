@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { t } from "@/lib/i18n";
 
 /** Four quadrants for the four sides of a business: sell, bill, deliver, support. */
 export function Logo({ className, size = 28 }: { className?: string; size?: number }) {
@@ -21,7 +22,7 @@ export function Wordmark({ className }: { className?: string }) {
   return (
     <span className={cn("flex items-center gap-2", className)}>
       <Logo size={24} />
-      <span className="text-[15px] font-semibold tracking-tight">Aurovie Business</span>
+      <span className="text-[15px] font-semibold tracking-tight">{t("app.name")}</span>
     </span>
   );
 }

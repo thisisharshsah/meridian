@@ -75,7 +75,7 @@ export function SetupGuide({ steps }: { steps: SetupStep[] }) {
           aria-valuenow={done}
           aria-valuemin={0}
           aria-valuemax={steps.length}
-          aria-label="Setup progress"
+          aria-label={t("dash.progress")}
         >
           <div
             className="h-full rounded-full bg-brand transition-[width] duration-500"

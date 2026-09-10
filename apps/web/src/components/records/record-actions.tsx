@@ -16,6 +16,7 @@ import { Checkbox } from "@/components/ui/misc";
 import { ApiError, post } from "@/lib/api";
 import type { EntityMeta } from "@/lib/meta";
 import type { Record_ } from "@/lib/queries";
+import { t } from "@/lib/i18n";
 
 /**
  * The verbs that move a record to the next stage of the business, as opposed
@@ -43,7 +44,7 @@ export function RecordActions({
         <>
           <Button variant="primary" onClick={() => setConvertLead(true)}>
             <Sparkles />
-            Convert
+            {t("record.convert")}
           </Button>
           <ConvertLeadDialog
             open={convertLead}
@@ -88,7 +89,7 @@ export function RecordActions({
           }
         >
           <ArrowRightLeft />
-          Create invoice
+          {t("record.createInvoice")}
         </Button>
       );
     }
@@ -107,7 +108,7 @@ export function RecordActions({
           }
         >
           <Play />
-          Generate now
+          {t("record.generateNow")}
         </Button>
       );
     }
@@ -125,7 +126,7 @@ export function RecordActions({
           }
         >
           <Send />
-          Issue invoice
+          {t("record.issueInvoice")}
         </Button>
       );
     }
@@ -206,7 +207,7 @@ function ConvertLeadDialog({
         },
       );
       await qc.invalidateQueries();
-      toast.success("Lead converted");
+      toast.success(t("record.leadConverted"));
       onOpenChange(false);
       router.push(r.deal_id ? `/crm/deals/${r.deal_id}` : `/crm/accounts/${r.account_id}`);
     } catch (err) {
@@ -221,7 +222,7 @@ function ConvertLeadDialog({
       <DialogContent size="sm">
         <form onSubmit={submit}>
           <DialogHeader>
-            <DialogTitle>Convert lead</DialogTitle>
+            <DialogTitle>{t("record.convertLead")}</DialogTitle>
             <DialogDescription>
               Creates an account for {String(record.company ?? "this company")} and a contact for{" "}
               {String(record.full_name ?? "this person")}. The lead stays on record, marked
@@ -239,16 +240,16 @@ function ConvertLeadDialog({
                 className="mt-0.5"
               />
               <span className="text-sm">
-                Also open a deal
+                {t("record.alsoOpenDeal")}
                 <span className="block text-xs text-muted-foreground">
-                  Starts in Qualification so it shows on the pipeline board.
+                  {t("record.alsoOpenDealWhy")}
                 </span>
               </span>
             </label>
 
             {createDeal && (
               <div className="space-y-3 border-l-2 border-border pl-3">
-                <FieldRow label="Deal name" htmlFor="deal-name">
+                <FieldRow label={t("record.dealName")} htmlFor="deal-name">
                   <Input id="deal-name" value={dealName} onChange={(e) => setDealName(e.target.value)} />
                 </FieldRow>
                 <div className="grid grid-cols-2 gap-3">
@@ -261,7 +262,7 @@ function ConvertLeadDialog({
                       onChange={(e) => setAmount(e.target.value)}
                     />
                   </FieldRow>
-                  <FieldRow label="Expected close" htmlFor="deal-close">
+                  <FieldRow label={t("record.expectedClose")} htmlFor="deal-close">
                     <Input
                       id="deal-close"
                       type="date"
@@ -276,10 +277,10 @@ function ConvertLeadDialog({
 
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-              Cancel
+              {t("action.cancel")}
             </Button>
             <Button type="submit" variant="primary" loading={saving}>
-              Convert lead
+              {t("record.convertLead")}
             </Button>
           </DialogFooter>
         </form>

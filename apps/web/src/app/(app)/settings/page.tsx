@@ -113,7 +113,7 @@ function OrganizationTab() {
   const save = useMutation({
     mutationFn: (body: Partial<Org>) => patch<Org>("settings/organization", body),
     onSuccess: () => {
-      toast.success("Workspace updated");
+      toast.success(t("settings.updated"));
       qc.invalidateQueries();
     },
     onError: (e) => {
@@ -148,7 +148,7 @@ function OrganizationTab() {
           >
             <FormError message={formError} />
 
-            <FieldRow label="Name" htmlFor="org-name" error={errors.name} required>
+            <FieldRow label={t("settings.orgName")} htmlFor="org-name" error={errors.name} required>
               <Input
                 id="org-name"
                 value={form.name ?? ""}
@@ -159,7 +159,7 @@ function OrganizationTab() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <FieldRow
-                label="Base currency"
+                label={t("settings.baseCurrency")}
                 htmlFor="org-currency"
                 error={errors.currency}
                 hint={t("settings.currencyHint")}
@@ -181,7 +181,7 @@ function OrganizationTab() {
                 </Select>
               </FieldRow>
 
-              <FieldRow label="Country" htmlFor="org-country" error={errors.country}>
+              <FieldRow label={t("settings.country")} htmlFor="org-country" error={errors.country}>
                 <Input
                   id="org-country"
                   value={form.country ?? ""}
@@ -209,11 +209,11 @@ function OrganizationTab() {
           <CardTitle>{t("settings.atAGlance")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
-          <Row label="Workspace URL" value={data.slug} mono />
-          <Row label="Members" value={String(data.member_count)} />
-          <Row label="Roles" value={String(data.role_count)} />
-          <Row label="Time zone" value={data.timezone} />
-          <Row label="Created" value={formatDate(data.created_at)} />
+          <Row label={t("settings.workspaceUrl")} value={data.slug} mono />
+          <Row label={t("settings.members")} value={String(data.member_count)} />
+          <Row label={t("settings.roles")} value={String(data.role_count)} />
+          <Row label={t("settings.timezone")} value={data.timezone} />
+          <Row label={t("settings.created")} value={formatDate(data.created_at)} />
         </CardContent>
       </Card>
     </div>
@@ -244,7 +244,7 @@ function MembersTab() {
     mutationFn: ({ id, body }: { id: string; body: Record<string, unknown> }) =>
       patch(`settings/members/${id}`, body),
     onSuccess: () => {
-      toast.success("Member updated");
+      toast.success(t("settings.memberUpdated"));
       qc.invalidateQueries({ queryKey: ["settings"] });
     },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : "Could not update that member"),

@@ -49,6 +49,16 @@ const en: Messages = {
   "action.clear": "Clear",
   "action.open": "Open",
   "action.edit": "Edit",
+  "action.add": "Add",
+  "action.addLine": "Add line",
+  "action.tryAgain": "Try again",
+  "action.next": "Next",
+  "action.previous": "Previous",
+  "action.viewTable": "Table",
+  "action.viewBoard": "Board",
+  "action.moreDetails": "More details",
+  "action.optionalCount": "(optional, {n})",
+  "action.createOne": "Create {thing}",
 
   "action.signOut": "Sign out",
   "value.yes": "Yes",
@@ -153,6 +163,7 @@ const en: Messages = {
   "reports.title": "Reports",
   "reports.lede": "Read-only views across the whole workspace.",
   "reports.from": "From",
+  "reports.to": "To",
   "reports.thisYear": "This financial year",
   "reports.lastYear": "Last financial year",
   "reports.reorder": "Reorder",
@@ -259,6 +270,260 @@ const en: Messages = {
   "help.hr.pay_runs.period_start": "First day this run pays for.",
   "help.hr.payslips.gross": "Pay before anything is taken off.",
   "help.hr.payslips.deductions": "Tax, pension and anything else withheld.",
+
+  // ---- signing in and signing up ----
+  "auth.signIn": "Sign in",
+  "auth.welcome": "Welcome back to your workspace.",
+  "auth.email": "Work email",
+  "auth.password": "Password",
+  "auth.firstTime": "First time here?",
+  "auth.createWorkspace": "Create a new workspace",
+  "auth.createAccount": "Create your account",
+  "auth.intent": "What are you here to do?",
+  "auth.yourName": "Your name",
+  "auth.namePlaceholder": "Ada Lovelace",
+  "auth.businessName": "Business name",
+  "auth.businessPlaceholder": "Rivera Plumbing",
+  "auth.currency": "Currency",
+  "auth.inviteUnavailable": "Invitation unavailable",
+  "auth.goToSignIn": "Go to sign in",
+  "auth.linkStale": "Ask whoever invited you to send a fresh link.",
+  "auth.invitedAs": "You have been invited as {role}.",
+  "auth.pitch": "Run the whole business from one workspace.",
+  "auth.haveAccount": "Already have an account?",
+
+  // ---- home ----
+  "dash.stale": "These figures are out of date",
+  "dash.openPipeline": "Open pipeline",
+  "dash.won": "Won",
+  "dash.receivable": "Receivable",
+  "dash.openTickets": "Open tickets",
+  "dash.pipelineByStage": "Pipeline by stage",
+  "dash.noDeals": "No open deals",
+  "dash.noDealsWhy": "Add a deal to see your pipeline.",
+  "dash.invoicesByStatus": "Invoices by status",
+  "dash.noInvoices": "No invoices yet",
+  "dash.noInvoicesWhy": "Bill a customer to see this chart.",
+  "dash.nothingOverdue": "Nothing overdue",
+  "dash.nothingOverdueWhy": "Every invoice is inside its terms.",
+  "dash.latestDeals": "Latest deals",
+  "dash.noDealsYet": "No deals yet",
+  "dash.noDealsYetWhy": "Your newest deals will show up here.",
+  "dash.loading": "Loading",
+  "dash.progress": "Setup progress",
+  "dash.allDeals": "All deals",
+  "dash.allInvoices": "All invoices",
+  "dash.overdueInvoices": "Overdue invoices",
+
+  // ---- records ----
+  "record.details": "Details",
+  "record.history": "History",
+  "record.totals": "Totals",
+  "record.gone": "It may have been deleted, or you may not have access to it.",
+  "record.deleteFailed": "Could not delete this record",
+  "record.backHome": "Back to home",
+  "record.select": "Select…",
+  "record.searchPlaceholder": "Search…",
+  "record.searching": "Searching…",
+  "record.all": "All",
+  "record.nothingYet": "Nothing yet",
+  "record.nothingYetWhy": "Changes to this record will appear here.",
+  "record.drag": "Drag",
+  "record.noLines": "No lines yet",
+  "record.noLinesWhy": "Add the products or services this document covers.",
+  "record.item": "Item",
+  "record.amount": "Amount",
+  "record.removeLine": "Remove line",
+  "record.convert": "Convert",
+  "record.convertLead": "Convert lead",
+  "record.leadConverted": "Lead converted",
+  "record.dealName": "Deal name",
+  "record.expectedClose": "Expected close",
+  "record.createInvoice": "Create invoice",
+  "record.generateNow": "Generate now",
+  "record.issueInvoice": "Issue invoice",
+  "record.alsoOpenDeal": "Also open a deal",
+  "record.alsoOpenDealWhy": "Starts in Qualification so it shows on the pipeline board.",
+  "record.cannotUndo": "This cannot be undone.",
+  "record.close": "Close",
+
+  // ---- clocking on ----
+  "clock.inDone": "Clocked in",
+  "clock.inFailed": "Could not clock you in. Try again in a moment.",
+  "clock.outDone": "Clocked out",
+  "clock.outFailed": "Could not clock you out. Try again in a moment.",
+
+  // ---- workspace settings ----
+  "settings.updated": "Workspace updated",
+  "settings.memberUpdated": "Member updated",
+  "settings.orgName": "Name",
+  "settings.baseCurrency": "Base currency",
+  "settings.country": "Country",
+  "settings.workspaceUrl": "Workspace URL",
+  "settings.members": "Members",
+  "settings.roles": "Roles",
+  "settings.timezone": "Time zone",
+  "settings.created": "Created",
+
+  // ---- invitations, the till, and the chrome ----
+  "invite.revoked": "Invitation revoked",
+  "invite.revokeFailed": "Could not revoke that invitation",
+  "invite.handItOver": "Invite a colleague and hand them the link yourself — this workspace does not send email.",
+  "invite.copyManually": "Select the link and copy it manually",
+  "invite.email": "Email",
+  "invite.role": "Role",
+  "till.saleFailed": "The sale did not go through. Nothing was charged — try again.",
+  "till.scanLabel": "Scan a barcode or search products",
+  "nav.primary": "Primary",
+  "nav.home.aria": "{app} home",
+  "nav.toggleTheme": "Toggle theme",
+
+  // ---- roles ----
+  "role.title": "Roles",
+  "role.new": "New role",
+  "role.records": "Records",
+  "role.builtIn": "Built in",
+  "role.duplicate": "Duplicate",
+  "role.deleted": "Role deleted",
+  "role.name": "Role name",
+  "role.namePlaceholder": "Billing Clerk",
+  "role.description": "Description",
+  "role.descriptionPlaceholder": "What this role is for",
+
+  // ---- webhooks ----
+  "hook.title": "Webhooks",
+  "hook.new": "New webhook",
+  "hook.emptyTitle": "No webhooks yet",
+  "hook.emptyBody": "Send a signed POST to another system whenever a record changes.",
+  "hook.deniedTitle": "Only an owner can manage integrations",
+  "hook.deniedBody": "Ask an owner of this workspace to set up webhooks.",
+  "hook.deliveredCount.one": "{n} delivered",
+  "hook.deliveredCount.other": "{n} delivered",
+  "hook.deliveredLast": "{delivered}, last {when}",
+  "hook.streak": " ({n} in a row)",
+  "hook.sendTest": "Send a test",
+  "hook.sendTestTitle": "Send a test delivery",
+  "hook.testQueued": "Test delivery queued",
+  "hook.testFailed": "Could not send a test",
+  "hook.toggleOn": "Turn {name} on",
+  "hook.toggleOff": "Turn {name} off",
+  "hook.toggleFailed": "Could not change that webhook",
+  "hook.deleted": "Webhook deleted",
+  "hook.deleteFailed": "Could not delete that webhook",
+  "hook.createFailed": "Could not create that webhook",
+  "hook.signatureNote": "Every request carries {header}, an HMAC-SHA256 of the timestamp and body under the webhook’s secret — verify it before trusting a payload.",
+  "hook.privateAllowed": "Private network addresses are permitted on this server.",
+  "hook.privateRefused": "Private and loopback addresses are refused; set WEBHOOKS_ALLOW_PRIVATE=1 to permit them.",
+
+  "hook.createdTitle": "Webhook created",
+  "hook.createdLede": "This signing secret is shown once and is not stored anywhere you can read it back. The receiving system needs it to verify signatures.",
+  "hook.copy": "Copy",
+  "hook.copied": "Copied",
+  "hook.copyManually": "Select the secret and copy it manually",
+  "hook.done": "Done",
+  "hook.dialogTitle": "New webhook",
+  "hook.dialogLede": "Post a signed payload to another system when these records change.",
+  "hook.name": "Name",
+  "hook.namePlaceholder": "Deal notifier",
+  "hook.url": "Endpoint URL",
+  "hook.events": "Events",
+  "hook.eventCount.one": "{n} event",
+  "hook.eventCount.other": "{n} events",
+  "hook.create": "Create webhook",
+
+  "hook.deliveriesLede": "The last 50 delivery attempts.",
+  "hook.nothingDelivered": "Nothing delivered yet",
+  "hook.attempt": " · attempt {n}",
+  "hook.close": "Close",
+
+  // ---- automation rules ----
+  "auto.title": "Automation rules",
+  "auto.new": "New rule",
+  "auto.emptyTitle": "No rules yet",
+  "auto.emptyBody": "Set a field, or open a task, whenever a record meets conditions you choose.",
+  "auto.deniedTitle": "Only an owner can manage automation",
+  "auto.deniedBody": "Ask an owner of this workspace to set up rules.",
+  "auto.summary": "On {entity} · when {trigger}",
+  "auto.actionCount.one": "{n} action",
+  "auto.actionCount.other": "{n} actions",
+  "auto.followUp": "{days}-day follow-up",
+  "auto.neverFired": "Not fired yet",
+  "auto.firedCount.one": "Fired once",
+  "auto.firedCount.other": "Fired {n} times",
+  "auto.firedLast": "{fired}, last {when}",
+  "auto.on": "On",
+  "auto.off": "Off",
+  "auto.toggleOn": "Turn {name} on",
+  "auto.toggleOff": "Turn {name} off",
+  "auto.deleteRule": "Delete rule",
+  "auto.deleted": "Rule deleted",
+  "auto.deleteFailed": "Could not delete that rule",
+  "auto.toggleFailed": "Could not change that rule",
+  "auto.saveFailed": "Could not save that rule",
+  "auto.created": "Rule created",
+  "auto.updated": "Rule updated",
+  "auto.note": "Rules run once, on the write that triggered them. A field a rule sets does not fire further rules, which is what keeps two rules from triggering each other forever.",
+
+  "auto.dialogNew": "New automation rule",
+  "auto.dialogEdit": "Edit rule",
+  "auto.dialogLede": "When something happens to a record and your conditions hold, run these actions.",
+  "auto.name": "Rule name",
+  "auto.namePlaceholder": "Won deal handover",
+  "auto.entity": "Record type",
+  "auto.trigger": "Run when",
+  "auto.create": "Create rule",
+  "auto.saveRule": "Save rule",
+  "auto.choose": "Choose",
+
+  "auto.trigger.on_create": "a record is created",
+  "auto.trigger.on_update": "a record is updated",
+  "auto.trigger.on_create_or_update": "a record is created or updated",
+
+  "auto.conditions": "Conditions",
+  "auto.matchAll": "match all",
+  "auto.matchAny": "match any",
+  "auto.noConditions": "No conditions — the rule runs on every matching write.",
+  "auto.addCondition": "Add condition",
+  "auto.removeCondition": "Remove condition",
+  "auto.field": "Field",
+  "auto.value": "Value",
+
+  "auto.op.eq": "is",
+  "auto.op.ne": "is not",
+  "auto.op.gt": "is greater than",
+  "auto.op.gte": "is at least",
+  "auto.op.lt": "is less than",
+  "auto.op.lte": "is at most",
+  "auto.op.contains": "contains",
+  "auto.op.is_empty": "is empty",
+  "auto.op.is_not_empty": "is not empty",
+  "auto.op.changed": "changed",
+  "auto.op.changed_to": "changed to",
+
+  "auto.then": "Then",
+  "auto.addAction": "Add action",
+  "auto.removeAction": "Remove action",
+  "auto.act.set_field": "Set a field",
+  "auto.act.create_task": "Create a task",
+  "auto.subjectPlaceholder": "Task subject — use {{name}} to include the record",
+  "auto.waitDays": "Wait days",
+  "auto.waitDaysHelp": "Wait this many days before creating the task. The rule’s conditions are re-checked then.",
+  "auto.dueInDays": "Due in days",
+  "auto.assignTo": "Assign to",
+  "auto.priority": "Priority",
+  "auto.assignOwner": "The record owner",
+  "auto.assignActor": "Whoever made the change",
+  "auto.priority.low": "Low",
+  "auto.priority.normal": "Normal",
+  "auto.priority.high": "High",
+
+  "jobs.title": "Scheduled work",
+  "jobs.counts": "{waiting} waiting · {done} completed",
+  "jobs.failed": " · {n} failed",
+  "jobs.followUp": "Follow-up action",
+  "jobs.runs": "runs {when}",
+  "jobs.attempt": "attempt {n}",
+
   "help.sales.counter_sales.amount_tendered": "What the customer handed over. Change is worked out for you.",
   "help.sales.counter_sales.account_id": "Only if they want it on account. Leave blank for a passing customer.",
 };
@@ -281,6 +546,32 @@ export function t(key: string, fallback?: string, vars?: Record<string, string |
   const raw = CATALOGUES[active]?.[key] ?? CATALOGUES.en[key] ?? fallback ?? key;
   if (!vars) return raw;
   return raw.replace(/\{(\w+)\}/g, (m, name) => String(vars[name] ?? m));
+}
+
+/**
+ * A count and the noun that agrees with it.
+ *
+ * English has two forms, so `n === 1 ? "" : "s"` is written all over most
+ * codebases -- and it is the single hardest thing to unpick when a second
+ * language arrives. Polish has three forms and Arabic six, and which one
+ * applies is a property of the language, not of the sentence. `Intl.PluralRules`
+ * knows them all, so a catalogue supplies whichever of
+ * `<key>.zero|one|two|few|many|other` its language uses and this picks between
+ * them. `other` is the one every language has, so it is the fallback.
+ *
+ * The count is passed to the message as `{n}`, already grouped for the locale.
+ */
+export function plural(key: string, n: number, vars?: Record<string, string | number>): string {
+  const form = new Intl.PluralRules(active).select(n);
+  const raw =
+    CATALOGUES[active]?.[`${key}.${form}`]
+    ?? CATALOGUES[active]?.[`${key}.other`]
+    ?? CATALOGUES.en[`${key}.${form}`]
+    ?? CATALOGUES.en[`${key}.other`]
+    ?? key;
+  return raw.replace(/\{(\w+)\}/g, (m, name) =>
+    name === "n" ? new Intl.NumberFormat(active).format(n) : String(vars?.[name] ?? m),
+  );
 }
 
 function pick(key: string, serverValue: string): string {

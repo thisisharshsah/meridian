@@ -15,6 +15,7 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { FieldRow, FormError } from "@/components/form/field";
 import { submitSession } from "@/lib/auth-client";
+import { t } from "@/lib/i18n";
 
 const schema = z.object({
   email: z.string().min(1, "Email is required").email("Enter a valid email address"),
@@ -40,8 +41,8 @@ export default function LoginPage() {
 function LoginShell() {
   return (
     <div>
-      <h2 className="text-xl font-semibold tracking-tight">Sign in</h2>
-      <p className="mt-1 text-sm text-muted-foreground">Welcome back to your workspace.</p>
+      <h2 className="text-xl font-semibold tracking-tight">{t("auth.signIn")}</h2>
+      <p className="mt-1 text-sm text-muted-foreground">{t("auth.welcome")}</p>
       <div className="mt-7 space-y-4">
         <div className="h-14 animate-pulse rounded-md bg-surface-muted" />
         <div className="h-14 animate-pulse rounded-md bg-surface-muted" />
@@ -77,13 +78,13 @@ function LoginForm() {
 
   return (
     <div>
-      <h2 className="text-xl font-semibold tracking-tight">Sign in</h2>
-      <p className="mt-1 text-sm text-muted-foreground">Welcome back to your workspace.</p>
+      <h2 className="text-xl font-semibold tracking-tight">{t("auth.signIn")}</h2>
+      <p className="mt-1 text-sm text-muted-foreground">{t("auth.welcome")}</p>
 
       <form onSubmit={onSubmit} className="mt-7 space-y-4" noValidate>
         <FormError message={formError} />
 
-        <FieldRow label="Work email" error={form.formState.errors.email?.message} htmlFor="email">
+        <FieldRow label={t("auth.email")} error={form.formState.errors.email?.message} htmlFor="email">
           <Input
             id="email"
             type="email"
@@ -96,7 +97,7 @@ function LoginForm() {
           />
         </FieldRow>
 
-        <FieldRow label="Password" error={form.formState.errors.password?.message} htmlFor="password">
+        <FieldRow label={t("auth.password")} error={form.formState.errors.password?.message} htmlFor="password">
           <PasswordInput
             id="password"
             autoComplete="current-password"
@@ -123,9 +124,9 @@ function LoginForm() {
           way OUT of this screen matters as much as the way through it. A grey
           sentence asks a first-time owner to spot a link; a button does not. */}
       <div className="mt-6 border-t border-border pt-5 text-center">
-        <p className="text-sm text-muted-foreground">First time here?</p>
+        <p className="text-sm text-muted-foreground">{t("auth.firstTime")}</p>
         <Button variant="secondary" size="lg" className="mt-2 w-full" asChild>
-          <Link href="/register">Create a new workspace</Link>
+          <Link href="/register">{t("auth.createWorkspace")}</Link>
         </Button>
       </div>
     </div>

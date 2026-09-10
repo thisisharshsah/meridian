@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Logo } from "@/components/brand/logo";
 import { BarChart3, Boxes, Receipt, Users } from "lucide-react";
+import { t } from "@/lib/i18n";
 
 const PILLARS = [
   { icon: Users, title: "Sell", body: "Leads, deals and pipelines with a shared customer record." },
@@ -24,12 +25,12 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         />
         <Link href="/" className="relative flex items-center gap-2.5">
           <Logo size={30} className="[&>rect]:fill-white/15" />
-          <span className="text-lg font-semibold tracking-tight">Aurovie Business</span>
+          <span className="text-lg font-semibold tracking-tight">{t("app.name")}</span>
         </Link>
 
         <div className="relative max-w-md">
           <h1 className="text-3xl font-semibold leading-tight tracking-tight">
-            Run the whole business from one workspace.
+            {t("auth.pitch")}
           </h1>
           <p className="mt-3 text-sm/relaxed opacity-80">
             Sales, finance, inventory, projects, people and support — sharing one customer

@@ -62,7 +62,7 @@ export function RolesTab({ canManage }: { canManage: boolean }) {
   const remove = useMutation({
     mutationFn: (id: string) => del(`settings/roles/${id}`),
     onSuccess: () => {
-      toast.success("Role deleted");
+      toast.success(t("role.deleted"));
       qc.invalidateQueries({ queryKey: ["settings"] });
     },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : "Could not delete that role"),
@@ -74,11 +74,11 @@ export function RolesTab({ canManage }: { canManage: boolean }) {
     <div className="max-w-5xl space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle>Roles</CardTitle>
+          <CardTitle>{t("role.title")}</CardTitle>
           {canManage && (
             <Button variant="primary" size="sm" onClick={() => setCreating(true)}>
               <Plus />
-              New role
+              {t("role.new")}
             </Button>
           )}
         </CardHeader>
@@ -97,7 +97,7 @@ export function RolesTab({ canManage }: { canManage: boolean }) {
                 <div className="min-w-0 flex-1">
                   <p className="flex items-center gap-2 text-sm font-medium">
                     {role.name}
-                    {role.is_system && <Badge tone="neutral">Built in</Badge>}
+                    {role.is_system && <Badge tone="neutral">{t("role.builtIn")}</Badge>}
                     <span className="text-xs font-normal text-muted-foreground">
                       {role.member_count} member{role.member_count === 1 ? "" : "s"}
                     </span>
@@ -135,7 +135,7 @@ export function RolesTab({ canManage }: { canManage: boolean }) {
                       variant="ghost"
                       size="icon-sm"
                       aria-label={`Duplicate ${role.name}`}
-                      title="Duplicate"
+                      title={t("role.duplicate")}
                       onClick={() => setCloning(role)}
                     >
                       <Copy />
@@ -352,20 +352,20 @@ function RoleDialog({
             <FormError message={formError} />
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <FieldRow label="Role name" htmlFor="role-name" error={errors.name} required>
+              <FieldRow label={t("role.name")} htmlFor="role-name" error={errors.name} required>
                 <Input
                   id="role-name"
                   autoFocus
-                  placeholder="Billing Clerk"
+                  placeholder={t("role.namePlaceholder")}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   aria-invalid={!!errors.name}
                 />
               </FieldRow>
-              <FieldRow label="Description" htmlFor="role-desc">
+              <FieldRow label={t("role.description")} htmlFor="role-desc">
                 <Input
                   id="role-desc"
-                  placeholder="What this role is for"
+                  placeholder={t("role.descriptionPlaceholder")}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                 />
@@ -384,7 +384,7 @@ function RoleDialog({
                   <thead className="bg-surface-muted">
                     <tr className="border-b border-border">
                       <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">
-                        Records
+                        {t("role.records")}
                       </th>
                       {ACTIONS.map((a) => (
                         <th

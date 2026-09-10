@@ -9,6 +9,7 @@ import { EmptyState, Skeleton } from "@/components/ui/misc";
 import { ApiError } from "@/lib/api";
 import { useEntityMeta } from "@/lib/queries";
 import type { EntityMeta } from "@/lib/meta";
+import { t } from "@/lib/i18n";
 
 /**
  * Resolves an entity key to its metadata before rendering a screen, and turns
@@ -59,7 +60,7 @@ export function EntityGate({
           }
           action={
             <Button variant="secondary" asChild>
-              <Link href="/">Back to home</Link>
+              <Link href="/">{t("record.backHome")}</Link>
             </Button>
           }
         />

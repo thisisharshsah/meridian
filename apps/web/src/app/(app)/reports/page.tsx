@@ -256,7 +256,7 @@ function ReportTable({
             />
           </label>
           <label className="text-xs text-muted-foreground">
-            To
+            {t("reports.to")}
             <Input type="date" value={to} onChange={(e) => onTo(e.target.value)} className="mt-0.5 w-36" />
           </label>
           <Button variant="secondary" onClick={exportCsv} disabled={!result.rows.length}>

@@ -110,9 +110,9 @@ export function ClockCard() {
         clock_in: new Date().toISOString(),
         status: "present",
       });
-      toast.success("Clocked in");
+      toast.success(t("clock.inDone"));
     } catch {
-      toast.error("Could not clock you in. Try again in a moment.");
+      toast.error(t("clock.inFailed"));
     }
   };
 
@@ -123,9 +123,9 @@ export function ClockCard() {
         id: record.id as string,
         body: { clock_out: new Date().toISOString() },
       });
-      toast.success("Clocked out");
+      toast.success(t("clock.outDone"));
     } catch {
-      toast.error("Could not clock you out. Try again in a moment.");
+      toast.error(t("clock.outFailed"));
     }
   };
 

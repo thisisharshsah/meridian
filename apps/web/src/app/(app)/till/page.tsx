@@ -148,7 +148,7 @@ export default function TillPage() {
       );
       clear();
     } catch {
-      toast.error("The sale did not go through. Nothing was charged — try again.");
+      toast.error(t("till.saleFailed"));
     } finally {
       setBusy(false);
     }
@@ -165,7 +165,7 @@ export default function TillPage() {
             onChange={(e) => setTerm(e.target.value)}
             onKeyDown={onSearchKey}
             placeholder={t("till.searchPlaceholder")}
-            aria-label="Scan a barcode or search products"
+            aria-label={t("till.scanLabel")}
             className="h-11 pl-9 text-base"
           />
         </div>

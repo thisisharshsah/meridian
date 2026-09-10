@@ -41,7 +41,7 @@ export function BottomNav({
 
   return (
     <nav
-      aria-label="Primary"
+      aria-label={t("nav.primary")}
       // The safe-area padding keeps the row clear of the iOS home indicator,
       // which otherwise sits directly over the right-hand item.
       className="fixed inset-x-0 bottom-0 z-30 flex border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] md:hidden"

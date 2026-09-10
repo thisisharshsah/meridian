@@ -86,14 +86,14 @@ export function Topbar({ session, onSearch }: { session?: Session; onSearch: () 
         className="flex h-8 w-full max-w-xs items-center gap-2 rounded-md border border-border bg-surface-muted px-2.5 text-sm text-subtle-foreground transition-colors hover:bg-surface-hover"
       >
         <Search className="size-3.5" />
-        <span>Search…</span>
+        <span>{t("record.searchPlaceholder")}</span>
         <kbd className="ml-auto rounded border border-border bg-surface px-1.5 py-px font-mono text-[10px]">
           ⌘K
         </kbd>
       </button>
 
       <div className="ml-auto flex items-center gap-1">
-        <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label="Toggle theme">
+        <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label={t("nav.toggleTheme")}>
           {dark ? <Sun /> : <Moon />}
         </Button>
 

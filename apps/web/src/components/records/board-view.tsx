@@ -20,6 +20,7 @@ import { entityPath, optionsOf, type EntityMeta, type FieldDef } from "@/lib/met
 import { useList, useSession, useUpdate, type Record_ } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { LoadError } from "@/components/records/load-error";
+import { t } from "@/lib/i18n";
 
 /**
  * Board view for any entity with a select field to group by — deals by stage,
@@ -186,7 +187,7 @@ function Column({
             className="flex items-center justify-center gap-1 rounded-md border border-dashed border-border py-1.5 text-xs text-subtle-foreground transition-colors hover:border-border-strong hover:text-foreground"
           >
             <Plus className="size-3" />
-            Add
+            {t("action.add")}
           </button>
         )}
       </div>
@@ -226,7 +227,7 @@ function CardBody({
         <span
           {...(handle ?? {})}
           className="mt-0.5 cursor-grab touch-none text-subtle-foreground active:cursor-grabbing"
-          aria-label="Drag"
+          aria-label={t("record.drag")}
         >
           <GripVertical className="size-3.5" />
         </span>

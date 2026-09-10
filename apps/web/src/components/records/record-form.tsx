@@ -19,6 +19,7 @@ import { FieldInput } from "@/components/records/field-input";
 import { ApiError } from "@/lib/api";
 import type { EntityMeta, FieldDef } from "@/lib/meta";
 import { useCreate, useUpdate, type Record_ } from "@/lib/queries";
+import { t } from "@/lib/i18n";
 
 /**
  * Create/edit dialog generated from the entity metadata. Field-level errors
@@ -197,9 +198,9 @@ export function RecordForm({
                 <summary className="cursor-pointer list-none px-3 py-2 text-sm font-medium marker:content-none">
                   <span className="inline-flex items-center gap-1.5">
                     <ChevronRight className="size-4 transition-transform group-open:rotate-90" aria-hidden="true" />
-                    More details
+                    {t("action.moreDetails")}
                     <span className="font-normal text-muted-foreground">
-                      (optional, {secondary.length})
+                      {t("action.optionalCount", undefined, { n: secondary.length })}
                     </span>
                   </span>
                 </summary>
@@ -212,10 +213,10 @@ export function RecordForm({
 
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-              Cancel
+              {t("action.cancel")}
             </Button>
             <Button type="submit" variant="primary" loading={pending}>
-              {editing ? "Save changes" : `Create ${meta.label.toLowerCase()}`}
+              {editing ? t("action.save") : t("action.createOne", undefined, { thing: meta.label.toLowerCase() })}
             </Button>
           </DialogFooter>
         </form>

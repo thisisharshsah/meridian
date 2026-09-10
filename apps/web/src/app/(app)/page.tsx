@@ -154,7 +154,7 @@ export default function DashboardPage() {
           <CardContent className="flex items-start gap-3">
             <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning-strong" aria-hidden="true" />
             <div>
-              <p className="text-sm font-medium">These figures are out of date</p>
+              <p className="text-sm font-medium">{t("dash.stale")}</p>
               <p className="mt-0.5 text-sm text-muted-foreground">
                 We couldn&rsquo;t reach your data just now, so anything below may be missing or
                 showing zero. Nothing has been lost.
@@ -173,7 +173,7 @@ export default function DashboardPage() {
       {!nothingYet && (
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Stat
-          label="Open pipeline"
+          label={t("dash.openPipeline")}
           value={formatMoney(openPipelineValue, currency)}
           sub={`${openDealCount} open deal${openDealCount === 1 ? "" : "s"}`}
           icon={Target}
@@ -182,7 +182,7 @@ export default function DashboardPage() {
           href="/crm/deals"
         />
         <Stat
-          label="Won"
+          label={t("dash.won")}
           value={formatMoney(wonValue, currency)}
           sub="Closed won, all time"
           icon={TrendingUp}
@@ -191,7 +191,7 @@ export default function DashboardPage() {
           href="/crm/deals?stage=closed_won"
         />
         <Stat
-          label="Receivable"
+          label={t("dash.receivable")}
           value={formatMoney(receivableValue, currency)}
           sub="Outstanding on unpaid invoices"
           icon={CircleDollarSign}
@@ -200,7 +200,7 @@ export default function DashboardPage() {
           href="/books/invoices"
         />
         <Stat
-          label="Open tickets"
+          label={t("dash.openTickets")}
           value={String(openTickets)}
           sub="Awaiting a response or fix"
           icon={Ticket}
@@ -214,10 +214,10 @@ export default function DashboardPage() {
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Pipeline by stage</CardTitle>
+            <CardTitle>{t("dash.pipelineByStage")}</CardTitle>
             <Button variant="ghost" size="sm" asChild>
               <Link href="/crm/deals">
-                All deals <ArrowUpRight />
+                {t("dash.allDeals")} <ArrowUpRight />
               </Link>
             </Button>
           </CardHeader>
@@ -225,7 +225,7 @@ export default function DashboardPage() {
             {openPipeline.isLoading ? (
               <Skeleton className="h-52 w-full" />
             ) : pipelineRows.length === 0 ? (
-              <EmptyState icon={Target} title="No open deals" description="Add a deal to see your pipeline." />
+              <EmptyState icon={Target} title={t("dash.noDeals")} description={t("dash.noDealsWhy")} />
             ) : (
               <PipelineChart rows={pipelineRows} currency={currency} />
             )}
@@ -234,10 +234,10 @@ export default function DashboardPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Invoices by status</CardTitle>
+            <CardTitle>{t("dash.invoicesByStatus")}</CardTitle>
             <Button variant="ghost" size="sm" asChild>
               <Link href="/books/invoices">
-                All invoices <ArrowUpRight />
+                {t("dash.allInvoices")} <ArrowUpRight />
               </Link>
             </Button>
           </CardHeader>
@@ -245,7 +245,7 @@ export default function DashboardPage() {
             {invoiceTotals.isLoading ? (
               <Skeleton className="h-52 w-full" />
             ) : (invoiceTotals.data?.data.length ?? 0) === 0 ? (
-              <EmptyState icon={Receipt} title="No invoices yet" description="Bill a customer to see this chart." />
+              <EmptyState icon={Receipt} title={t("dash.noInvoices")} description={t("dash.noInvoicesWhy")} />
             ) : (
               <StatusBars rows={invoiceTotals.data!.data} currency={currency} />
             )}
@@ -258,7 +258,7 @@ export default function DashboardPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-1.5">
               <AlertTriangle className="size-3.5 text-warning" />
-              Overdue invoices
+              {t("dash.overdueInvoices")}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
@@ -269,7 +269,7 @@ export default function DashboardPage() {
                 ))}
               </div>
             ) : (overdue.data?.data.length ?? 0) === 0 ? (
-              <EmptyState icon={Banknote} title="Nothing overdue" description="Every invoice is inside its terms." />
+              <EmptyState icon={Banknote} title={t("dash.nothingOverdue")} description={t("dash.nothingOverdueWhy")} />
             ) : (
               <ul className="divide-y divide-border">
                 {overdue.data!.data.map((inv) => {
@@ -302,7 +302,7 @@ export default function DashboardPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Latest deals</CardTitle>
+            <CardTitle>{t("dash.latestDeals")}</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             {recentDeals.isLoading ? (
@@ -312,7 +312,7 @@ export default function DashboardPage() {
                 ))}
               </div>
             ) : (recentDeals.data?.data.length ?? 0) === 0 ? (
-              <EmptyState icon={Target} title="No deals yet" description="Your newest deals will show up here." />
+              <EmptyState icon={Target} title={t("dash.noDealsYet")} description={t("dash.noDealsYetWhy")} />
             ) : (
               <ul className="divide-y divide-border">
                 {recentDeals.data!.data.map((d) => (

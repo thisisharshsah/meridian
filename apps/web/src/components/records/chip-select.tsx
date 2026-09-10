@@ -6,6 +6,7 @@ import { Check, X } from "lucide-react";
 import { badgeVariants, toneOf } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { SelectOption } from "@/lib/meta";
+import { t } from "@/lib/i18n";
 
 /**
  * A short option list laid out as chips rather than hidden behind a dropdown.
@@ -95,7 +96,7 @@ export function ChipSelect({
           className="inline-flex min-h-8 max-md:min-h-10 items-center gap-1 rounded-full px-2 text-xs text-subtle-foreground transition-colors hover:text-foreground"
         >
           <X className="size-3" aria-hidden="true" />
-          Clear
+          {t("action.clear")}
         </button>
       )}
     </div>

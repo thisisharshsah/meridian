@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { FieldRow, FormError } from "@/components/form/field";
 import { submitSession } from "@/lib/auth-client";
 import { CURRENCIES } from "@/lib/constants";
+import { t } from "@/lib/i18n";
 
 const schema = z.object({
   name: z.string().min(1, "Your name is required"),
@@ -64,7 +65,7 @@ export default function RegisterPage() {
 
   return (
     <div>
-      <h2 className="text-xl font-semibold tracking-tight">Create your account</h2>
+      <h2 className="text-xl font-semibold tracking-tight">{t("auth.createAccount")}</h2>
       <p className="mt-1 text-sm text-muted-foreground">
         {starting
           ? "You will own this business, with full access to everything in it."
@@ -73,7 +74,7 @@ export default function RegisterPage() {
 
       <div
         role="radiogroup"
-        aria-label="What are you here to do?"
+        aria-label={t("auth.intent")}
         className="mt-4 grid grid-cols-2 gap-2"
       >
         {[
@@ -102,21 +103,21 @@ export default function RegisterPage() {
       <form onSubmit={onSubmit} className="mt-7 space-y-4" noValidate>
         <FormError message={formError} />
 
-        <FieldRow label="Your name" error={form.formState.errors.name?.message} htmlFor="name" required>
-          <Input id="name" autoFocus placeholder="Ada Lovelace" aria-invalid={!!form.formState.errors.name}
+        <FieldRow label={t("auth.yourName")} error={form.formState.errors.name?.message} htmlFor="name" required>
+          <Input id="name" autoFocus placeholder={t("auth.namePlaceholder")} aria-invalid={!!form.formState.errors.name}
             aria-describedby={form.formState.errors.name ? "name-error" : undefined} {...form.register("name")} />
         </FieldRow>
 
         {starting && (
           <FieldRow
-            label="Business name"
+            label={t("auth.businessName")}
             error={form.formState.errors.organization?.message}
             htmlFor="organization"
             required
           >
             <Input
               id="organization"
-              placeholder="Rivera Plumbing"
+              placeholder={t("auth.businessPlaceholder")}
               aria-invalid={!!form.formState.errors.organization}
               aria-describedby={form.formState.errors.organization ? "organization-error" : undefined}
               {...form.register("organization")}
@@ -125,7 +126,7 @@ export default function RegisterPage() {
         )}
 
         <div className={starting ? "grid grid-cols-[1fr_7rem] gap-3" : ""}>
-          <FieldRow label="Work email" error={form.formState.errors.email?.message} htmlFor="email" required>
+          <FieldRow label={t("auth.email")} error={form.formState.errors.email?.message} htmlFor="email" required>
             <Input
               id="email"
               type="email"
@@ -138,7 +139,7 @@ export default function RegisterPage() {
           </FieldRow>
 
           {starting && (
-          <FieldRow label="Currency" htmlFor="currency">
+          <FieldRow label={t("auth.currency")} htmlFor="currency">
             <Select
               value={form.watch("currency")}
               onValueChange={(v) => form.setValue("currency", v, { shouldDirty: true })}
@@ -159,7 +160,7 @@ export default function RegisterPage() {
         </div>
 
         <FieldRow
-          label="Password"
+          label={t("auth.password")}
           error={form.formState.errors.password?.message}
           htmlFor="password"
           hint="At least 8 characters."
@@ -182,9 +183,9 @@ export default function RegisterPage() {
       </form>
 
       <p className="mt-6 text-center text-sm text-muted-foreground">
-        Already have an account?{" "}
+        {t("auth.haveAccount")}{" "}
         <Link href="/login" className="font-medium text-brand hover:underline">
-          Sign in
+          {t("auth.signIn")}
         </Link>
       </p>
     </div>

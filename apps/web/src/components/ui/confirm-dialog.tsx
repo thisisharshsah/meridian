@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { t } from "@/lib/i18n";
 
 /**
  * A yes/no gate for anything that cannot be undone. Deleting used to happen on
@@ -48,11 +49,11 @@ export function ConfirmDialog({
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         <DialogBody>
-          <p className="text-sm text-muted-foreground">This cannot be undone.</p>
+          <p className="text-sm text-muted-foreground">{t("record.cannotUndo")}</p>
         </DialogBody>
         <DialogFooter>
           <Button type="button" variant="ghost" autoFocus onClick={() => onOpenChange(false)}>
-            Cancel
+            {t("action.cancel")}
           </Button>
           <Button type="button" variant="danger" loading={pending} onClick={onConfirm}>
             {confirmLabel}

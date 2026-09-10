@@ -10,6 +10,7 @@ import { ChipSelect } from "@/components/records/chip-select";
 import { SuggestInput } from "@/components/records/suggest-input";
 import { optionsOf, type FieldDef } from "@/lib/meta";
 import { moneyToInput, percentToInput, qtyToInput } from "@/lib/format";
+import { t } from "@/lib/i18n";
 
 export type FieldValueInput = string | number | boolean | null;
 
@@ -102,7 +103,7 @@ export function FieldInput({
         <Select value={(value as string) ?? ""} onValueChange={(v) => onChange(v)}>
           <SelectTrigger id={id} aria-invalid={invalid}
           aria-describedby={describedBy}>
-            <SelectValue placeholder="Select…" />
+            <SelectValue placeholder={t("record.select")} />
           </SelectTrigger>
           <SelectContent>
             {options.map((o) => (

@@ -98,7 +98,7 @@ export function NewWorkspaceDialog({
                 autoFocus
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Rivera Plumbing"
+                placeholder={t("auth.businessPlaceholder")}
               />
             </FieldRow>
             <FieldRow label={t("workspace.currency")} htmlFor="ws-currency" hint={t("workspace.currencyHint")}>

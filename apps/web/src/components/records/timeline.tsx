@@ -8,6 +8,7 @@ import { relativeTime } from "@/lib/format";
 import { useAuditTrail, type AuditEvent } from "@/lib/queries";
 import type { EntityMeta } from "@/lib/meta";
 import { LoadError } from "@/components/records/load-error";
+import { t } from "@/lib/i18n";
 
 const ICONS: Record<string, typeof PencilLine> = {
   create: FilePlus2,
@@ -37,7 +38,7 @@ export function Timeline({ meta, id }: { meta: EntityMeta; id: string }) {
 
   const events = data?.data ?? [];
   if (!events.length) {
-    return <EmptyState icon={PencilLine} title="Nothing yet" description="Changes to this record will appear here." />;
+    return <EmptyState icon={PencilLine} title={t("record.nothingYet")} description={t("record.nothingYetWhy")} />;
   }
 
   return (

@@ -15,6 +15,7 @@ import { formatMoney } from "@/lib/format";
 import type { ChildDef, EntityMeta, FieldDef } from "@/lib/meta";
 import { useCreate, useDelete, useEntityMeta, useList, useUpdate, type Record_ } from "@/lib/queries";
 import { LoadError } from "@/components/records/load-error";
+import { t } from "@/lib/i18n";
 
 const EDITABLE = ["description", "quantity", "unit_price", "discount_percent", "tax_rate"];
 
@@ -91,7 +92,7 @@ export function LineItems({
         {canEdit && (
           <Button variant="secondary" size="sm" onClick={addRow} loading={create.isPending}>
             <Plus />
-            Add line
+            {t("action.addLine")}
           </Button>
         )}
       </CardHeader>
@@ -99,13 +100,13 @@ export function LineItems({
       <CardContent className="p-0">
         {rows.length === 0 ? (
           <EmptyState
-            title="No lines yet"
-            description="Add the products or services this document covers."
+            title={t("record.noLines")}
+            description={t("record.noLinesWhy")}
             action={
               canEdit ? (
                 <Button variant="primary" size="sm" onClick={addRow}>
                   <Plus />
-                  Add line
+                  {t("action.addLine")}
                 </Button>
               ) : undefined
             }
@@ -114,13 +115,13 @@ export function LineItems({
           <Table>
             <THead>
               <TR className="hover:bg-transparent">
-                {itemField && <TH className="w-44">Item</TH>}
+                {itemField && <TH className="w-44">{t("record.item")}</TH>}
                 {columns.map((f) => (
                   <TH key={f.name} className={numericHeader(f)}>
                     {f.label}
                   </TH>
                 ))}
-                <TH className="w-28 text-right">Amount</TH>
+                <TH className="w-28 text-right">{t("record.amount")}</TH>
                 {canEdit && <TH className="w-9" />}
               </TR>
             </THead>
@@ -160,7 +161,7 @@ export function LineItems({
                       <Button
                         variant="ghost"
                         size="icon-sm"
-                        aria-label="Remove line"
+                        aria-label={t("record.removeLine")}
                         onClick={() => remove.mutate(row.id)}
                       >
                         <Trash2 />

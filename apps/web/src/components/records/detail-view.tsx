@@ -24,6 +24,7 @@ import { formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { LoadError } from "@/components/records/load-error";
 import { ApiError } from "@/lib/api";
+import { t } from "@/lib/i18n";
 
 /**
  * Record page: a header with the identifying fields, the full field list, the
@@ -68,7 +69,7 @@ export function DetailView({ meta, id }: { meta: EntityMeta; id: string }) {
         <EmptyState
           icon={iconFor(meta.icon)}
           title={`${meta.label} not found`}
-          description="It may have been deleted, or you may not have access to it."
+          description={t("record.gone")}
           action={
             <Button variant="secondary" asChild>
               <Link href={entityPath(meta.key)}>Back to {meta.label_plural.toLowerCase()}</Link>
@@ -91,7 +92,7 @@ export function DetailView({ meta, id }: { meta: EntityMeta; id: string }) {
       router.push(entityPath(meta.key));
     } catch {
       setConfirming(false);
-      toast.error("Could not delete this record");
+      toast.error(t("record.deleteFailed"));
     }
   };
 
@@ -132,7 +133,7 @@ export function DetailView({ meta, id }: { meta: EntityMeta; id: string }) {
           {meta.permissions.edit && (
             <Button variant="secondary" onClick={() => setEditing(true)}>
               <Pencil />
-              Edit
+              {t("action.edit")}
             </Button>
           )}
           {meta.permissions.delete && (
@@ -171,7 +172,7 @@ export function DetailView({ meta, id }: { meta: EntityMeta; id: string }) {
 
           <Card>
             <CardHeader>
-              <CardTitle>Details</CardTitle>
+              <CardTitle>{t("record.details")}</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               <dl className="divide-y divide-border">
@@ -192,7 +193,7 @@ export function DetailView({ meta, id }: { meta: EntityMeta; id: string }) {
           <TotalsCard meta={meta} record={record} currency={currency} />
           <Card>
             <CardHeader>
-              <CardTitle>History</CardTitle>
+              <CardTitle>{t("record.history")}</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               <Timeline meta={meta} id={id} />
@@ -247,7 +248,7 @@ function TotalsCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Totals</CardTitle>
+        <CardTitle>{t("record.totals")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-1.5 p-4">
         {rows.map((f) => {

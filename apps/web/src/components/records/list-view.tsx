@@ -26,6 +26,7 @@ import { ApiError } from "@/lib/api";
 import { entityPath, optionsOf, type EntityMeta, type FieldDef } from "@/lib/meta";
 import { useDelete, useList, useSession, type ListParams, type Record_ } from "@/lib/queries";
 import { cn } from "@/lib/utils";
+import { t } from "@/lib/i18n";
 
 const PER_PAGE = 25;
 
@@ -116,15 +117,15 @@ export function ListView({ meta, fixedFilters, embedded }: {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem onSelect={() => router.push(`${entityPath(meta.key)}/${r.id}`)}>
-          Open
+          {t("action.open")}
         </DropdownMenuItem>
         {meta.permissions.edit && (
-          <DropdownMenuItem onSelect={() => setEditing(r)}>Edit</DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setEditing(r)}>{t("action.edit")}</DropdownMenuItem>
         )}
         {meta.permissions.delete && (
           <DropdownMenuItem destructive onSelect={() => onDelete(r)}>
             <Trash2 />
-            Delete
+            {t("action.delete")}
           </DropdownMenuItem>
         )}
       </DropdownMenuContent>
@@ -201,7 +202,7 @@ export function ListView({ meta, fixedFilters, embedded }: {
                   )}
                 >
                   <Rows3 className="size-3.5" />
-                  Table
+                  {t("action.viewTable")}
                 </button>
                 <button
                   type="button"
@@ -213,7 +214,7 @@ export function ListView({ meta, fixedFilters, embedded }: {
                   )}
                 >
                   <Columns3 className="size-3.5" />
-                  Board
+                  {t("action.viewBoard")}
                 </button>
               </div>
             )}
@@ -257,7 +258,7 @@ export function ListView({ meta, fixedFilters, embedded }: {
                 nothing saying what it filtered. */}
             <SelectTrigger className="w-auto min-w-[9rem]" aria-label={`Filter by ${f.label}`}>
               <span className="mr-1 text-muted-foreground">{f.label}:</span>
-              <SelectValue placeholder="All" />
+              <SelectValue placeholder={t("record.all")} />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="__all">All {f.label.toLowerCase()}</SelectItem>
@@ -280,14 +281,14 @@ export function ListView({ meta, fixedFilters, embedded }: {
             }}
           >
             <X />
-            Clear
+            {t("action.clear")}
           </Button>
         )}
 
         {embedded && meta.permissions.create && (
           <Button variant="secondary" size="sm" className="ml-auto" onClick={() => setCreating(true)}>
             <Plus />
-            Add
+            {t("action.add")}
           </Button>
         )}
       </div>
@@ -428,7 +429,7 @@ export function ListView({ meta, fixedFilters, embedded }: {
           <div className="flex gap-1">
             <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
               <ChevronLeft />
-              Previous
+              {t("action.previous")}
             </Button>
             <Button
               variant="secondary"
@@ -436,7 +437,7 @@ export function ListView({ meta, fixedFilters, embedded }: {
               disabled={page >= data.total_pages}
               onClick={() => setPage((p) => p + 1)}
             >
-              Next
+              {t("action.next")}
               <ChevronRight />
             </Button>
           </div>

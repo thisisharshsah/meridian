@@ -5,6 +5,7 @@ import { AlertTriangle, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/misc";
 import { ApiError } from "@/lib/api";
+import { t } from "@/lib/i18n";
 
 /**
  * What a screen shows when the data did not arrive.
@@ -42,7 +43,7 @@ export function LoadError({
         onRetry && !signedOut ? (
           <Button variant="secondary" onClick={onRetry}>
             <RotateCw />
-            Try again
+            {t("action.tryAgain")}
           </Button>
         ) : undefined
       }

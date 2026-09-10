@@ -13,6 +13,7 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { Skeleton } from "@/components/ui/misc";
 import { FieldRow, FormError } from "@/components/form/field";
 import { ApiError, get } from "@/lib/api";
+import { t } from "@/lib/i18n";
 
 type Preview = {
   email: string;
@@ -60,13 +61,13 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
         <div className="mx-auto mb-3 w-fit rounded-full bg-warning-subtle p-3">
           <MailWarning className="size-5 text-warning" />
         </div>
-        <h2 className="text-lg font-semibold tracking-tight">Invitation unavailable</h2>
+        <h2 className="text-lg font-semibold tracking-tight">{t("auth.inviteUnavailable")}</h2>
         <p className="mt-1 text-sm text-muted-foreground">{message}</p>
         <p className="mt-1 text-xs text-subtle-foreground">
-          Ask whoever invited you to send a fresh link.
+          {t("auth.linkStale")}
         </p>
         <Button variant="secondary" className="mt-5" asChild>
-          <Link href="/login">Go to sign in</Link>
+          <Link href="/login">{t("auth.goToSignIn")}</Link>
         </Button>
       </div>
     );
@@ -118,7 +119,7 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
     <div>
       <h2 className="text-xl font-semibold tracking-tight">Join {data.organization}</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        You have been invited as <span className="font-medium text-foreground">{data.role_name}</span>.
+        {t("auth.invitedAs", undefined, { role: data.role_name })}
       </p>
 
       <div className="mt-5 rounded-md border border-border bg-surface-muted px-3 py-2 text-sm">
@@ -129,11 +130,11 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
         <FormError message={formError} />
 
         {!data.has_account && (
-          <FieldRow label="Your name" htmlFor="invite-name" error={errors.name}>
+          <FieldRow label={t("auth.yourName")} htmlFor="invite-name" error={errors.name}>
             <Input
               id="invite-name"
               autoFocus
-              placeholder="Ada Lovelace"
+              placeholder={t("auth.namePlaceholder")}
               value={name}
               onChange={(e) => setName(e.target.value)}
             />

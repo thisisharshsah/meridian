@@ -20,7 +20,7 @@ import { ApiError, del, get, patch, post } from "@/lib/api";
 import { relativeTime } from "@/lib/format";
 import { optionsOf, type FieldDef } from "@/lib/meta";
 import { useEntityMeta } from "@/lib/queries";
-import { t } from "@/lib/i18n";
+import { plural, t } from "@/lib/i18n";
 
 type Condition = { field: string; op: string; value: string };
 type ActionSpec = {
@@ -50,27 +50,25 @@ type Automation = {
 
 type EntityOption = { key: string; label: string; label_plural: string; icon: string };
 
-const TRIGGERS = [
-  { value: "on_create", label: "a record is created" },
-  { value: "on_update", label: "a record is updated" },
-  { value: "on_create_or_update", label: "a record is created or updated" },
-];
+// Values the API knows; the words beside them come from the catalogue, so a
+// trigger reads in the reader's language without the API learning about it.
+const TRIGGERS = ["on_create", "on_update", "on_create_or_update"];
 
 const OPS = [
-  { value: "eq", label: "is" },
-  { value: "ne", label: "is not" },
-  { value: "gt", label: "is greater than" },
-  { value: "gte", label: "is at least" },
-  { value: "lt", label: "is less than" },
-  { value: "lte", label: "is at most" },
-  { value: "contains", label: "contains" },
-  { value: "is_empty", label: "is empty" },
-  { value: "is_not_empty", label: "is not empty" },
-  { value: "changed", label: "changed" },
-  { value: "changed_to", label: "changed to" },
+  "eq", "ne", "gt", "gte", "lt", "lte",
+  "contains", "is_empty", "is_not_empty", "changed", "changed_to",
 ];
 
 const NO_VALUE_OPS = ["is_empty", "is_not_empty", "changed"];
+
+/** How often a rule has run, as a sentence the catalogue owns end to end. */
+function firedLabel(a: Automation): string {
+  if (a.run_count === 0) return t("auto.neverFired");
+  const fired = plural("auto.firedCount", a.run_count);
+  return a.last_run_at
+    ? t("auto.firedLast", undefined, { fired, when: relativeTime(a.last_run_at) })
+    : fired;
+}
 
 /**
  * Rule list and builder. Every dropdown here is populated from the API's own
@@ -92,24 +90,24 @@ export function AutomationsTab({ canManage }: { canManage: boolean }) {
     mutationFn: ({ id, is_active }: { id: string; is_active: boolean }) =>
       patch(`settings/automations/${id}`, { is_active }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["settings", "automations"] }),
-    onError: () => toast.error("Could not change that rule"),
+    onError: () => toast.error(t("auto.toggleFailed")),
   });
 
   const remove = useMutation({
     mutationFn: (id: string) => del(`settings/automations/${id}`),
     onSuccess: () => {
-      toast.success("Rule deleted");
+      toast.success(t("auto.deleted"));
       qc.invalidateQueries({ queryKey: ["settings", "automations"] });
     },
-    onError: () => toast.error("Could not delete that rule"),
+    onError: () => toast.error(t("auto.deleteFailed")),
   });
 
   if (!canManage) {
     return (
       <EmptyState
         icon={Workflow}
-        title="Only an owner can manage automation"
-        description="Ask an owner of this workspace to set up rules."
+        title={t("auto.deniedTitle")}
+        description={t("auto.deniedBody")}
       />
     );
   }
@@ -124,22 +122,22 @@ export function AutomationsTab({ canManage }: { canManage: boolean }) {
     <div className="max-w-4xl space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle>Automation rules</CardTitle>
+          <CardTitle>{t("auto.title")}</CardTitle>
           <Button variant="primary" size="sm" onClick={() => setCreating(true)}>
             <Plus />
-            New rule
+            {t("auto.new")}
           </Button>
         </CardHeader>
         <CardContent className="p-0">
           {data.data.length === 0 ? (
             <EmptyState
               icon={Zap}
-              title="No rules yet"
-              description="Set a field, or open a task, whenever a record meets conditions you choose."
+              title={t("auto.emptyTitle")}
+              description={t("auto.emptyBody")}
               action={
                 <Button variant="primary" onClick={() => setCreating(true)}>
                   <Plus />
-                  New rule
+                  {t("auto.new")}
                 </Button>
               }
             />
@@ -160,22 +158,22 @@ export function AutomationsTab({ canManage }: { canManage: boolean }) {
                       {a.name}
                     </button>
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      On {entityLabel(a.entity)} · when{" "}
-                      {TRIGGERS.find((t) => t.value === a.trigger)?.label ?? a.trigger} ·{" "}
-                      {a.actions.length} action{a.actions.length === 1 ? "" : "s"}
+                      {t("auto.summary", undefined, {
+                        entity: entityLabel(a.entity),
+                        trigger: t(`auto.trigger.${a.trigger}`, a.trigger),
+                      })}
+                      {" · "}
+                      {plural("auto.actionCount", a.actions.length)}
                       {a.actions.some((x) => (x.delay_days ?? 0) > 0) && (
                         <span className="ml-1 text-brand">
-                          · {Math.max(...a.actions.map((x) => x.delay_days ?? 0))}-day follow-up
+                          {" · "}
+                          {t("auto.followUp", undefined, {
+                            days: Math.max(...a.actions.map((x) => x.delay_days ?? 0)),
+                          })}
                         </span>
                       )}
                     </p>
-                    <p className="mt-1 text-xs text-subtle-foreground">
-                      {a.run_count === 0
-                        ? "Not fired yet"
-                        : `Fired ${a.run_count} time${a.run_count === 1 ? "" : "s"}${
-                            a.last_run_at ? `, last ${relativeTime(a.last_run_at)}` : ""
-                          }`}
-                    </p>
+                    <p className="mt-1 text-xs text-subtle-foreground">{firedLabel(a)}</p>
                     {a.last_error && (
                       <p className="mt-1 flex items-start gap-1 text-xs text-danger">
                         <AlertTriangle className="mt-px size-3 shrink-0" />
@@ -186,17 +184,19 @@ export function AutomationsTab({ canManage }: { canManage: boolean }) {
 
                   <div className="flex items-center gap-2">
                     <Badge tone={a.is_active ? "success" : "neutral"} dot>
-                      {a.is_active ? "On" : "Off"}
+                      {t(a.is_active ? "auto.on" : "auto.off")}
                     </Badge>
                     <Switch
                       checked={a.is_active}
                       onCheckedChange={(v) => toggle.mutate({ id: a.id, is_active: v })}
-                      aria-label={`Turn ${a.name} ${a.is_active ? "off" : "on"}`}
+                      aria-label={t(a.is_active ? "auto.toggleOff" : "auto.toggleOn", undefined, {
+                        name: a.name,
+                      })}
                     />
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      aria-label="Delete rule"
+                      aria-label={t("auto.deleteRule")}
                       onClick={() => remove.mutate(a.id)}
                     >
                       <Trash2 />
@@ -211,10 +211,7 @@ export function AutomationsTab({ canManage }: { canManage: boolean }) {
 
       <ScheduledWork />
 
-      <p className="text-xs text-muted-foreground">
-        Rules run once, on the write that triggered them. A field a rule sets does not fire further
-        rules, which is what keeps two rules from triggering each other forever.
-      </p>
+      <p className="text-xs text-muted-foreground">{t("auto.note")}</p>
 
       <AutomationDialog
         open={creating || !!editing}
@@ -255,10 +252,10 @@ function ScheduledWork() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Scheduled work</CardTitle>
+        <CardTitle>{t("jobs.title")}</CardTitle>
         <span className="text-xs text-muted-foreground">
-          {pending} waiting · {done} completed
-          {failed > 0 ? ` · ${failed} failed` : ""}
+          {t("jobs.counts", undefined, { waiting: pending, done })}
+          {failed > 0 && t("jobs.failed", undefined, { n: failed })}
         </span>
       </CardHeader>
       {data.upcoming.length > 0 && (
@@ -267,10 +264,14 @@ function ScheduledWork() {
             {data.upcoming.map((j) => (
               <li key={j.id} className="flex items-center gap-3 px-4 py-2 text-xs">
                 <Clock className="size-3.5 shrink-0 text-subtle-foreground" />
-                <span className="flex-1">Follow-up action</span>
-                <span className="text-muted-foreground">runs {relativeTime(j.run_at)}</span>
+                <span className="flex-1">{t("jobs.followUp")}</span>
+                <span className="text-muted-foreground">
+                  {t("jobs.runs", undefined, { when: relativeTime(j.run_at) })}
+                </span>
                 {j.attempts > 1 && (
-                  <span className="text-warning-strong">attempt {j.attempts}</span>
+                  <span className="text-warning-strong">
+                    {t("jobs.attempt", undefined, { n: j.attempts })}
+                  </span>
                 )}
               </li>
             ))}
@@ -333,7 +334,7 @@ function AutomationDialog({
         ? patch(`settings/automations/${existing.id}`, body)
         : post("settings/automations", body),
     onSuccess: () => {
-      toast.success(existing ? "Rule updated" : "Rule created");
+      toast.success(t(existing ? "auto.updated" : "auto.created"));
       qc.invalidateQueries({ queryKey: ["settings", "automations"] });
       onOpenChange(false);
     },
@@ -342,7 +343,7 @@ function AutomationDialog({
         setErrors(e.fieldMap);
         if (!Object.keys(e.fieldMap).length) setFormError(e.message);
       } else {
-        setFormError("Could not save that rule");
+        setFormError(t("auto.saveFailed"));
       }
     },
   });
@@ -368,20 +369,18 @@ function AutomationDialog({
       <DialogContent size="lg">
         <form onSubmit={submit} className="flex min-h-0 flex-col">
           <DialogHeader>
-            <DialogTitle>{existing ? "Edit rule" : "New automation rule"}</DialogTitle>
-            <DialogDescription>
-              When something happens to a record and your conditions hold, run these actions.
-            </DialogDescription>
+            <DialogTitle>{t(existing ? "auto.dialogEdit" : "auto.dialogNew")}</DialogTitle>
+<DialogDescription>{t("auto.dialogLede")}</DialogDescription>
           </DialogHeader>
 
           <DialogBody className="space-y-5">
             <FormError message={formError} />
 
-            <FieldRow label="Rule name" htmlFor="rule-name" error={errors.name} required>
+            <FieldRow label={t("auto.name")} htmlFor="rule-name" error={errors.name} required>
               <Input
                 id="rule-name"
                 autoFocus
-                placeholder="Won deal handover"
+                placeholder={t("auto.namePlaceholder")}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 aria-invalid={!!errors.name}
@@ -389,7 +388,7 @@ function AutomationDialog({
             </FieldRow>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <FieldRow label="Record type" htmlFor="rule-entity" error={errors.entity} required>
+              <FieldRow label={t("auto.entity")} htmlFor="rule-entity" error={errors.entity} required>
                 <Select
                   value={entity}
                   onValueChange={(v) => {
@@ -400,7 +399,7 @@ function AutomationDialog({
                   }}
                 >
                   <SelectTrigger id="rule-entity">
-                    <SelectValue placeholder="Choose" />
+                    <SelectValue placeholder={t("auto.choose")} />
                   </SelectTrigger>
                   <SelectContent>
                     {entities.map((e) => (
@@ -412,15 +411,15 @@ function AutomationDialog({
                 </Select>
               </FieldRow>
 
-              <FieldRow label="Run when" htmlFor="rule-trigger" error={errors.trigger} required>
+              <FieldRow label={t("auto.trigger")} htmlFor="rule-trigger" error={errors.trigger} required>
                 <Select value={trigger} onValueChange={setTrigger}>
                   <SelectTrigger id="rule-trigger">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {TRIGGERS.map((t) => (
-                      <SelectItem key={t.value} value={t.value}>
-                        {t.label}
+                    {TRIGGERS.map((v) => (
+                      <SelectItem key={v} value={v}>
+                        {t(`auto.trigger.${v}`)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -432,7 +431,7 @@ function AutomationDialog({
             <section>
               <div className="mb-2 flex items-center gap-2">
                 <h4 className="text-xs font-semibold uppercase tracking-wide text-subtle-foreground">
-                  Conditions
+                  {t("auto.conditions")}
                 </h4>
                 {conditions.length > 1 && (
                   <Select value={match} onValueChange={setMatch}>
@@ -440,17 +439,15 @@ function AutomationDialog({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">match all</SelectItem>
-                      <SelectItem value="any">match any</SelectItem>
+                      <SelectItem value="all">{t("auto.matchAll")}</SelectItem>
+                      <SelectItem value="any">{t("auto.matchAny")}</SelectItem>
                     </SelectContent>
                   </Select>
                 )}
               </div>
 
               {conditions.length === 0 && (
-                <p className="mb-2 text-xs text-muted-foreground">
-                  No conditions — the rule runs on every matching write.
-                </p>
+                <p className="mb-2 text-xs text-muted-foreground">{t("auto.noConditions")}</p>
               )}
 
               <div className="space-y-2">
@@ -466,7 +463,7 @@ function AutomationDialog({
                         }
                       >
                         <SelectTrigger className="flex-1">
-                          <SelectValue placeholder="Field" />
+                          <SelectValue placeholder={t("auto.field")} />
                         </SelectTrigger>
                         <SelectContent>
                           {(meta?.fields ?? []).map((f) => (
@@ -484,12 +481,12 @@ function AutomationDialog({
                         }
                       >
                         <SelectTrigger className="w-36 shrink-0">
-                          <SelectValue placeholder="is" />
+                          <SelectValue placeholder={t("auto.op.eq")} />
                         </SelectTrigger>
                         <SelectContent>
                           {OPS.map((o) => (
-                            <SelectItem key={o.value} value={o.value}>
-                              {o.label}
+                            <SelectItem key={o} value={o}>
+                              {t(`auto.op.${o}`)}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -511,7 +508,7 @@ function AutomationDialog({
                         type="button"
                         variant="ghost"
                         size="icon"
-                        aria-label="Remove condition"
+                        aria-label={t("auto.removeCondition")}
                         onClick={() => setConditions((s) => s.filter((_, j) => j !== i))}
                       >
                         <Trash2 />
@@ -535,14 +532,14 @@ function AutomationDialog({
                 }
               >
                 <Plus />
-                Add condition
+                {t("auto.addCondition")}
               </Button>
             </section>
 
             {/* --------------------------------- actions -------------------------------- */}
             <section>
               <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-subtle-foreground">
-                Then
+                {t("auto.then")}
               </h4>
               {errors.actions && <p className="mb-2 text-xs text-danger">{errors.actions}</p>}
 
@@ -568,8 +565,8 @@ function AutomationDialog({
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="set_field">Set a field</SelectItem>
-                          <SelectItem value="create_task">Create a task</SelectItem>
+                          <SelectItem value="set_field">{t("auto.act.set_field")}</SelectItem>
+                          <SelectItem value="create_task">{t("auto.act.create_task")}</SelectItem>
                         </SelectContent>
                       </Select>
 
@@ -578,7 +575,7 @@ function AutomationDialog({
                         variant="ghost"
                         size="icon-sm"
                         className="ml-auto"
-                        aria-label="Remove action"
+                        aria-label={t("auto.removeAction")}
                         onClick={() => setActions((s) => s.filter((_, j) => j !== i))}
                       >
                         <Trash2 />
@@ -594,7 +591,7 @@ function AutomationDialog({
                           }
                         >
                           <SelectTrigger>
-                            <SelectValue placeholder="Field" />
+                            <SelectValue placeholder={t("auto.field")} />
                           </SelectTrigger>
                           <SelectContent>
                             {writable.map((f) => (
@@ -616,18 +613,23 @@ function AutomationDialog({
                     ) : (
                       <div className="space-y-2">
                         <Input
-                          placeholder="Task subject — use {{name}} to include the record"
+                          placeholder={t("auto.subjectPlaceholder")}
                           value={a.subject ?? ""}
                           onChange={(e) =>
                             setActions((s) => s.map((x, j) => (j === i ? { ...x, subject: e.target.value } : x)))
                           }
                         />
                         <div className="grid gap-2 sm:grid-cols-4">
+                          {/* Labelled, not just placeheld: three of these four
+                              arrive pre-filled, so the placeholder is gone
+                              exactly when someone needs to know what the
+                              number means. */}
+                          <SmallField label={t("auto.waitDays")} htmlFor={`delay-${i}`}>
                           <Input
+                            id={`delay-${i}`}
                             type="number"
                             min={0}
-                            placeholder="Wait days"
-                            title="Wait this many days before creating the task. The rule's conditions are re-checked then."
+                            title={t("auto.waitDaysHelp")}
                             value={a.delay_days ?? ""}
                             onChange={(e) =>
                               setActions((s) =>
@@ -637,10 +639,12 @@ function AutomationDialog({
                               )
                             }
                           />
+                          </SmallField>
+                          <SmallField label={t("auto.dueInDays")} htmlFor={`due-${i}`}>
                           <Input
+                            id={`due-${i}`}
                             type="number"
                             min={0}
-                            placeholder="Due in days"
                             value={a.due_in_days ?? ""}
                             onChange={(e) =>
                               setActions((s) =>
@@ -650,6 +654,8 @@ function AutomationDialog({
                               )
                             }
                           />
+                          </SmallField>
+                          <SmallField label={t("auto.assignTo")}>
                           <Select
                             value={a.assign_to ?? "owner"}
                             onValueChange={(v) =>
@@ -660,10 +666,12 @@ function AutomationDialog({
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="owner">The record owner</SelectItem>
-                              <SelectItem value="actor">Whoever made the change</SelectItem>
+                              <SelectItem value="owner">{t("auto.assignOwner")}</SelectItem>
+                              <SelectItem value="actor">{t("auto.assignActor")}</SelectItem>
                             </SelectContent>
                           </Select>
+                          </SmallField>
+                          <SmallField label={t("auto.priority")}>
                           <Select
                             value={a.priority ?? "normal"}
                             onValueChange={(v) =>
@@ -674,11 +682,12 @@ function AutomationDialog({
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="low">Low</SelectItem>
-                              <SelectItem value="normal">Normal</SelectItem>
-                              <SelectItem value="high">High</SelectItem>
+                              <SelectItem value="low">{t("auto.priority.low")}</SelectItem>
+                              <SelectItem value="normal">{t("auto.priority.normal")}</SelectItem>
+                              <SelectItem value="high">{t("auto.priority.high")}</SelectItem>
                             </SelectContent>
                           </Select>
+                          </SmallField>
                         </div>
                       </div>
                     )}
@@ -696,7 +705,7 @@ function AutomationDialog({
                 }
               >
                 <Plus />
-                Add action
+                {t("auto.addAction")}
               </Button>
             </section>
           </DialogBody>
@@ -706,12 +715,30 @@ function AutomationDialog({
               {t("action.cancel")}
             </Button>
             <Button type="submit" variant="primary" loading={save.isPending}>
-              {existing ? "Save rule" : "Create rule"}
+              {t(existing ? "auto.saveRule" : "auto.create")}
             </Button>
           </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** A label above a control, for a row too tight to spend a FieldRow on. */
+function SmallField({
+  label, htmlFor, children,
+}: {
+  label: string;
+  htmlFor?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1">
+      <label htmlFor={htmlFor} className="block text-xs text-muted-foreground">
+        {label}
+      </label>
+      {children}
+    </div>
   );
 }
 
@@ -727,7 +754,7 @@ function ConditionValue({
     return (
       <Select value={value} onValueChange={onChange}>
         <SelectTrigger>
-          <SelectValue placeholder="Value" />
+          <SelectValue placeholder={t("auto.value")} />
         </SelectTrigger>
         <SelectContent>
           {optionsOf(field).map((o) => (
@@ -744,11 +771,11 @@ function ConditionValue({
     return (
       <Select value={value} onValueChange={onChange}>
         <SelectTrigger>
-          <SelectValue placeholder="Value" />
+          <SelectValue placeholder={t("auto.value")} />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="true">Yes</SelectItem>
-          <SelectItem value="false">No</SelectItem>
+          <SelectItem value="true">{t("value.yes")}</SelectItem>
+          <SelectItem value="false">{t("value.no")}</SelectItem>
         </SelectContent>
       </Select>
     );
@@ -758,7 +785,7 @@ function ConditionValue({
   return (
     <Input
       inputMode={numeric ? "decimal" : undefined}
-      placeholder={numeric ? "0" : "Value"}
+      placeholder={numeric ? "0" : t("auto.value")}
       value={value}
       onChange={(e) => onChange(e.target.value)}
     />

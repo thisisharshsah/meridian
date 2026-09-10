@@ -9,6 +9,7 @@ import { useLookup } from "@/lib/queries";
 import { get } from "@/lib/api";
 import { entityPath } from "@/lib/meta";
 import { cn } from "@/lib/utils";
+import { t } from "@/lib/i18n";
 
 /**
  * Searchable picker for a reference field. It fetches `{id, label}` pairs from
@@ -115,12 +116,12 @@ export function RefPicker({
           autoFocus
           value={term}
           onChange={(e) => setTerm(e.target.value)}
-          placeholder="Search…"
+          placeholder={t("record.searchPlaceholder")}
           className="h-9 w-full border-b border-border bg-transparent px-2.5 text-sm outline-none placeholder:text-subtle-foreground"
         />
         <div className="max-h-56 overflow-y-auto p-1 scrollbar-thin">
           {isFetching && !data && (
-            <p className="px-2 py-3 text-center text-xs text-muted-foreground">Searching…</p>
+            <p className="px-2 py-3 text-center text-xs text-muted-foreground">{t("record.searching")}</p>
           )}
           {data?.data.length === 0 && (
             // On a fresh workspace this list is empty for every required
