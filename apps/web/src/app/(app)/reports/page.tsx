@@ -4,7 +4,7 @@ import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { BarChart3, Download } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
+import { Badge, type BadgeTone } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,7 +12,7 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { EmptyState, Skeleton } from "@/components/ui/misc";
 import { Icon } from "@/components/icon";
 import { get, qs } from "@/lib/api";
-import { formatMoney, formatPercent, formatQuantity } from "@/lib/format";
+import { formatDate, formatMoney, formatPercent, formatQuantity } from "@/lib/format";
 import { useSession } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
@@ -27,6 +27,36 @@ type ReportInfo = {
 };
 
 type Column = { key: string; label: string; type: string };
+
+/**
+ * Status words a report emits, and how each should read at a glance.
+ *
+ * A report returns a plain word so its CSV stays readable; here is where the
+ * word becomes something the eye finds before the reader has read the row.
+ * Keyed by the server's word, translated on the way out.
+ */
+const STATUS_BADGES: Record<string, { tone: BadgeTone; key: string }> = {
+  Reorder: { tone: "warning", key: "reports.reorder" },
+  "Out of stock": { tone: "danger", key: "reports.outOfStock" },
+  Expired: { tone: "danger", key: "reports.expired" },
+  Expiring: { tone: "warning", key: "reports.expiring" },
+  Occupied: { tone: "info", key: "reports.occupied" },
+  Booked: { tone: "brand", key: "reports.booked" },
+  Free: { tone: "success", key: "reports.free" },
+  "Being cleaned": { tone: "warning", key: "reports.cleaning" },
+  "Out of service": { tone: "danger", key: "reports.outOfService" },
+};
+
+function statusBadge(column: Column, value: unknown) {
+  if (column.type !== "text" || typeof value !== "string") return null;
+  const badge = STATUS_BADGES[value];
+  if (!badge) return null;
+  return (
+    <Badge tone={badge.tone} dot>
+      {t(badge.key)}
+    </Badge>
+  );
+}
 
 type ReportResult = {
   key: string;
@@ -174,6 +204,8 @@ function ReportTable({
         return formatQuantity(value as number);
       case "int":
         return new Intl.NumberFormat().format(value as number);
+      case "date":
+        return formatDate(value as string);
       default:
         return String(value);
     }
@@ -317,13 +349,7 @@ function ReportTable({
                             />
                           )}
                           <span className="relative">
-                            {c.type === "text" && value === "Reorder" ? (
-                              <Badge tone="warning" dot>{t("reports.reorder")}</Badge>
-                            ) : c.type === "text" && value === "Out of stock" ? (
-                              <Badge tone="danger" dot>{t("reports.outOfStock")}</Badge>
-                            ) : (
-                              format(value, c.type)
-                            )}
+                            {statusBadge(c, value) ?? format(value, c.type)}
                           </span>
                         </TD>
                       );

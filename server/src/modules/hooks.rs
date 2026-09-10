@@ -12,7 +12,7 @@ use sqlx::{Row, SqliteConnection, SqlitePool};
 use crate::auth::ctx::Ctx;
 use crate::common::money::{apply_percent, line_subtotal};
 use crate::common::sequences::next_number;
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult, FieldError};
 
 /// (entity key, sequence key, prefix) for entities whose `number` is allocated
 /// by the server rather than supplied by the client.
@@ -27,6 +27,7 @@ const NUMBERED: &[(&str, &str)] = &[
     ("sales.counter_sales", "sales.counter_sales"),
     ("desk.tickets", "desk.tickets"),
     ("recruit.candidates", "recruit.candidates"),
+    ("hospitality.reservations", "hospitality.reservations"),
 ];
 
 /// Fill server-owned columns that a create cannot leave empty.
@@ -155,6 +156,7 @@ pub async fn after_write(pool: &SqlitePool, ctx: &Ctx, entity: &str, id: &str) -
         "crm.leads" => recompose_name(pool, ctx, RECOMPOSE_LEAD_NAME, id).await,
         "crm.contacts" => recompose_name(pool, ctx, RECOMPOSE_CONTACT_NAME, id).await,
         "hr.attendance" => recalc_attendance(pool, ctx, id).await,
+        "hospitality.reservations" => recalc_reservation(pool, ctx, id).await,
         "sales.counter_sales" => settle_counter_sale(pool, ctx, id).await,
         "hr.payslips" => recalc_payslip(pool, ctx, id).await,
         "hr.pay_runs" => recalc_pay_run(pool, ctx, id).await,
@@ -168,10 +170,19 @@ pub async fn after_write(pool: &SqlitePool, ctx: &Ctx, entity: &str, id: &str) -
         }
         "books.invoices" => recalc_invoice_balance(pool, ctx, id).await,
         "books.bills" => recalc_bill_balance(pool, ctx, id).await,
+        "inventory.item_batches" => sync_batch(pool, ctx, id).await,
         "inventory.stock_moves" => {
-            let item_id: Option<String> =
-                scalar(pool, "SELECT item_id FROM stock_moves WHERE org_id = ? AND id = ?", &ctx.org_id, id).await?;
-            if let Some(item) = item_id {
+            let row: Option<(String, Option<String>)> = sqlx::query_as(
+                "SELECT item_id, batch_id FROM stock_moves WHERE org_id = ? AND id = ?",
+            )
+            .bind(&ctx.org_id)
+            .bind(id)
+            .fetch_optional(pool)
+            .await?;
+            if let Some((item, batch)) = row {
+                if let Some(batch_id) = batch {
+                    recalc_batch_left(pool, ctx, &batch_id).await?;
+                }
                 recalc_item_stock(pool, ctx, &item).await?;
             }
             Ok(())
@@ -206,6 +217,7 @@ pub fn parent_key(entity: &str) -> Option<&'static str> {
     match entity {
         "books.payments" => Some("invoice_id"),
         "inventory.stock_moves" => Some("item_id"),
+        "inventory.item_batches" => Some("item_id"),
         "projects.timesheets" => Some("task_id"),
         "projects.tasks" => Some("project_id"),
         "hr.payslips" => Some("pay_run_id"),
@@ -227,6 +239,24 @@ pub async fn after_child_delete(
     match entity {
         "books.payments" => recalc_invoice_balance(pool, ctx, parent_id).await,
         "inventory.stock_moves" => recalc_item_stock(pool, ctx, parent_id).await,
+        // A deleted batch takes its receipt with it. Leaving the movement
+        // behind would keep the item claiming stock that no batch holds.
+        "inventory.item_batches" => {
+            sqlx::query(
+                "UPDATE stock_moves SET deleted_at = ?
+                  WHERE org_id = ? AND item_id = ? AND deleted_at IS NULL
+                    AND batch_id IN (SELECT id FROM item_batches
+                                      WHERE org_id = ? AND item_id = ? AND deleted_at IS NOT NULL)",
+            )
+            .bind(now())
+            .bind(&ctx.org_id)
+            .bind(parent_id)
+            .bind(&ctx.org_id)
+            .bind(parent_id)
+            .execute(pool)
+            .await?;
+            recalc_item_stock(pool, ctx, parent_id).await
+        }
         "projects.timesheets" => recalc_task_hours(pool, ctx, parent_id).await,
         "projects.tasks" => recalc_project_progress(pool, ctx, parent_id).await,
         "hr.payslips" => recalc_pay_run(pool, ctx, parent_id).await,
@@ -725,8 +755,8 @@ async fn settle_counter_sale(pool: &SqlitePool, ctx: &Ctx, sale_id: &str) -> App
     if completed && !already {
         // Goods only. A service has no shelf, and an hour of labour sold four
         // times should not leave the catalogue claiming minus four of it.
-        let lines: Vec<(String, i64)> = sqlx::query_as(
-            "SELECT l.item_id, l.quantity
+        let lines: Vec<(String, i64, i64)> = sqlx::query_as(
+            "SELECT l.item_id, l.quantity, i.track_batches
                FROM counter_sale_items l
                JOIN items i ON i.id = l.item_id AND i.org_id = l.org_id
               WHERE l.org_id = ? AND l.counter_sale_id = ? AND l.deleted_at IS NULL
@@ -739,25 +769,47 @@ async fn settle_counter_sale(pool: &SqlitePool, ctx: &Ctx, sale_id: &str) -> App
 
         let stamp = now();
         let moved_on = sold_at.get(..10).unwrap_or("").to_string();
-        for (item_id, quantity) in &lines {
-            sqlx::query(
-                "INSERT INTO stock_moves
-                   (id, org_id, item_id, move_type, quantity, moved_on,
-                    reference_entity, reference_id, created_at, updated_at, created_by, updated_by)
-                 VALUES (?, ?, ?, 'sale', ?, ?, 'sales.counter_sales', ?, ?, ?, ?, ?)",
-            )
-            .bind(crate::common::ids::new_id())
-            .bind(&ctx.org_id)
-            .bind(item_id)
-            .bind(-quantity)
-            .bind(&moved_on)
-            .bind(sale_id)
-            .bind(&stamp)
-            .bind(&stamp)
-            .bind(&ctx.user_id)
-            .bind(&ctx.user_id)
-            .execute(pool)
-            .await?;
+        let mut touched_batches: Vec<String> = Vec::new();
+        for (item_id, quantity, batched) in &lines {
+            // One movement per line normally; for dated stock, one per batch
+            // the line is drawn from, oldest expiry first.
+            let parts = if *batched != 0 {
+                allocate_fefo(pool, ctx, item_id, *quantity, &moved_on).await?
+            } else {
+                vec![(None, *quantity)]
+            };
+
+            for (batch_id, taken) in parts {
+                if taken == 0 {
+                    continue;
+                }
+                if let Some(b) = &batch_id {
+                    touched_batches.push(b.clone());
+                }
+                sqlx::query(
+                    "INSERT INTO stock_moves
+                       (id, org_id, item_id, batch_id, move_type, quantity, moved_on,
+                        reference_entity, reference_id, created_at, updated_at, created_by, updated_by)
+                     VALUES (?, ?, ?, ?, 'sale', ?, ?, 'sales.counter_sales', ?, ?, ?, ?, ?)",
+                )
+                .bind(crate::common::ids::new_id())
+                .bind(&ctx.org_id)
+                .bind(item_id)
+                .bind(&batch_id)
+                .bind(-taken)
+                .bind(&moved_on)
+                .bind(sale_id)
+                .bind(&stamp)
+                .bind(&stamp)
+                .bind(&ctx.user_id)
+                .bind(&ctx.user_id)
+                .execute(pool)
+                .await?;
+            }
+        }
+
+        for batch_id in &touched_batches {
+            recalc_batch_left(pool, ctx, batch_id).await?;
         }
 
         sqlx::query("UPDATE counter_sales SET stocked_at = ? WHERE org_id = ? AND id = ?")
@@ -767,7 +819,7 @@ async fn settle_counter_sale(pool: &SqlitePool, ctx: &Ctx, sale_id: &str) -> App
             .execute(pool)
             .await?;
 
-        for (item_id, _) in &lines {
+        for (item_id, _, _) in &lines {
             recalc_item_stock(pool, ctx, item_id).await?;
         }
         return Ok(());
@@ -778,6 +830,18 @@ async fn settle_counter_sale(pool: &SqlitePool, ctx: &Ctx, sale_id: &str) -> App
             "SELECT DISTINCT item_id FROM stock_moves
               WHERE org_id = ? AND reference_entity = 'sales.counter_sales'
                 AND reference_id = ? AND deleted_at IS NULL",
+        )
+        .bind(&ctx.org_id)
+        .bind(sale_id)
+        .fetch_all(pool)
+        .await?;
+
+        // Captured before the reversal: afterwards the movements are gone and
+        // there is nothing left to say which batches to put stock back into.
+        let batches: Vec<(String,)> = sqlx::query_as(
+            "SELECT DISTINCT batch_id FROM stock_moves
+              WHERE org_id = ? AND reference_entity = 'sales.counter_sales'
+                AND reference_id = ? AND deleted_at IS NULL AND batch_id IS NOT NULL",
         )
         .bind(&ctx.org_id)
         .bind(sale_id)
@@ -802,10 +866,298 @@ async fn settle_counter_sale(pool: &SqlitePool, ctx: &Ctx, sale_id: &str) -> App
             .execute(pool)
             .await?;
 
+        for (batch_id,) in &batches {
+            recalc_batch_left(pool, ctx, batch_id).await?;
+        }
         for (item_id,) in &items {
             recalc_item_stock(pool, ctx, item_id).await?;
         }
     }
+    Ok(())
+}
+
+/// A batch and the stock ledger, kept as one fact.
+///
+/// The quantity typed onto a batch is a receipt, and a receipt is a movement.
+/// Writing it into `stock_moves` rather than carrying it separately means the
+/// item's level, the batch's remainder and the movement history are three
+/// readings of one table and can never disagree. Correcting a miscounted
+/// delivery moves the receipt rather than adding a second one.
+async fn sync_batch(pool: &SqlitePool, ctx: &Ctx, batch_id: &str) -> AppResult<()> {
+    let batch: Option<(String, i64, String, i64)> = sqlx::query_as(
+        "SELECT item_id, quantity_received, received_on, unit_cost
+           FROM item_batches WHERE org_id = ? AND id = ?",
+    )
+    .bind(&ctx.org_id)
+    .bind(batch_id)
+    .fetch_optional(pool)
+    .await?;
+    let Some((item_id, received, received_on, unit_cost)) = batch else {
+        return Ok(());
+    };
+
+    let receipt: Option<String> = scalar(
+        pool,
+        "SELECT id FROM stock_moves
+          WHERE org_id = ? AND batch_id = ? AND move_type = 'purchase' AND deleted_at IS NULL
+          ORDER BY created_at LIMIT 1",
+        &ctx.org_id,
+        batch_id,
+    )
+    .await?;
+
+    let stamp = now();
+    match receipt {
+        Some(move_id) => {
+            sqlx::query(
+                "UPDATE stock_moves SET quantity = ?, moved_on = ?, unit_cost = ?, updated_at = ?, updated_by = ?
+                  WHERE org_id = ? AND id = ?",
+            )
+            .bind(received)
+            .bind(&received_on)
+            .bind(unit_cost)
+            .bind(&stamp)
+            .bind(&ctx.user_id)
+            .bind(&ctx.org_id)
+            .bind(&move_id)
+            .execute(pool)
+            .await?;
+        }
+        None => {
+            sqlx::query(
+                "INSERT INTO stock_moves
+                   (id, org_id, item_id, batch_id, move_type, quantity, unit_cost, moved_on,
+                    reference_entity, reference_id, created_at, updated_at, created_by, updated_by)
+                 VALUES (?, ?, ?, ?, 'purchase', ?, ?, ?, 'inventory.item_batches', ?, ?, ?, ?, ?)",
+            )
+            .bind(crate::common::ids::new_id())
+            .bind(&ctx.org_id)
+            .bind(&item_id)
+            .bind(batch_id)
+            .bind(received)
+            .bind(unit_cost)
+            .bind(&received_on)
+            .bind(batch_id)
+            .bind(&stamp)
+            .bind(&stamp)
+            .bind(&ctx.user_id)
+            .bind(&ctx.user_id)
+            .execute(pool)
+            .await?;
+        }
+    }
+
+    recalc_batch_left(pool, ctx, batch_id).await?;
+    recalc_item_stock(pool, ctx, &item_id).await
+}
+
+/// What a batch still holds: its receipt less everything taken out of it.
+pub async fn recalc_batch_left(pool: &SqlitePool, ctx: &Ctx, batch_id: &str) -> AppResult<()> {
+    sqlx::query(
+        "UPDATE item_batches SET quantity_left = (
+             SELECT COALESCE(SUM(quantity), 0) FROM stock_moves
+              WHERE org_id = ? AND batch_id = ? AND deleted_at IS NULL
+         ) WHERE org_id = ? AND id = ?",
+    )
+    .bind(&ctx.org_id)
+    .bind(batch_id)
+    .bind(&ctx.org_id)
+    .bind(batch_id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// Which batches a sale of `wanted` should come out of, earliest expiry first.
+///
+/// First-expired-first-out, and expired stock is never among the candidates:
+/// selling it is the mistake batches exist to prevent. A sale larger than the
+/// batched stock takes what the batches hold and leaves the rest untagged, so
+/// the item level stays honest and the shortfall is visible as a batchless
+/// movement rather than swallowed.
+async fn allocate_fefo(
+    pool: &SqlitePool,
+    ctx: &Ctx,
+    item_id: &str,
+    wanted: i64,
+    on: &str,
+) -> AppResult<Vec<(Option<String>, i64)>> {
+    let batches: Vec<(String, i64)> = sqlx::query_as(
+        "SELECT id, quantity_left FROM item_batches
+          WHERE org_id = ? AND item_id = ? AND deleted_at IS NULL AND quantity_left > 0
+            AND (expiry_date IS NULL OR expiry_date >= ?)
+          ORDER BY expiry_date IS NULL, expiry_date, received_on",
+    )
+    .bind(&ctx.org_id)
+    .bind(item_id)
+    .bind(on)
+    .fetch_all(pool)
+    .await?;
+
+    let mut left = wanted;
+    let mut out = Vec::new();
+    for (batch_id, available) in batches {
+        if left <= 0 {
+            break;
+        }
+        let take = left.min(available);
+        out.push((Some(batch_id), take));
+        left -= take;
+    }
+    if left > 0 {
+        out.push((None, left));
+    }
+    Ok(out)
+}
+
+/// Checks that need the database, run before a write lands.
+///
+/// `before_create` can only reshape what the client sent; a rule about the
+/// rest of the table needs to look at the table. Everything here rejects with
+/// a field error, so the form marks the control that is wrong rather than
+/// showing a banner the reader has to map back onto a date picker themselves.
+///
+/// `editing` carries the row's own id on an update, so a booking does not
+/// collide with itself.
+pub async fn validate(
+    pool: &SqlitePool,
+    ctx: &Ctx,
+    entity: &str,
+    editing: Option<&str>,
+    body: &Map<String, Value>,
+) -> AppResult<()> {
+    if entity == "hospitality.reservations" {
+        return validate_reservation(pool, ctx, editing, body).await;
+    }
+    Ok(())
+}
+
+/// No room promised to two people on the same night.
+///
+/// This is the one rule a hotel cannot run without, and it has to hold on the
+/// write rather than in a nightly report: by the time a clash is noticed on a
+/// list, both guests have been told they have a room. Nights are half-open —
+/// a stay leaving on the 4th does not clash with one arriving on the 4th,
+/// because the room is cleaned and let again the same day.
+async fn validate_reservation(
+    pool: &SqlitePool,
+    ctx: &Ctx,
+    editing: Option<&str>,
+    body: &Map<String, Value>,
+) -> AppResult<()> {
+    let field = |k: &str| body.get(k).and_then(|v| v.as_str()).map(|s| s.to_string());
+
+    // On an update the client may send only what changed, so anything absent
+    // is read back from the row being edited rather than assumed.
+    let stored: Option<(String, String, String, String)> = match editing {
+        Some(id) => {
+            sqlx::query_as(
+                "SELECT room_id, check_in, check_out, status FROM reservations
+                  WHERE org_id = ? AND id = ?",
+            )
+            .bind(&ctx.org_id)
+            .bind(id)
+            .fetch_optional(pool)
+            .await?
+        }
+        None => None,
+    };
+
+    let room_id = field("room_id").or_else(|| stored.as_ref().map(|s| s.0.clone()));
+    let check_in = field("check_in").or_else(|| stored.as_ref().map(|s| s.1.clone()));
+    let check_out = field("check_out").or_else(|| stored.as_ref().map(|s| s.2.clone()));
+    let status = field("status")
+        .or_else(|| stored.as_ref().map(|s| s.3.clone()))
+        .unwrap_or_else(|| "booked".into());
+
+    let (Some(room_id), Some(check_in), Some(check_out)) = (room_id, check_in, check_out) else {
+        return Ok(());
+    };
+
+    if check_out <= check_in {
+        return Err(AppError::Validation(vec![FieldError::new(
+            "check_out",
+            "A stay has to end after it starts. For a day let, use the next morning.",
+        )]));
+    }
+
+    // A cancelled booking or one already departed holds nothing.
+    if matches!(status.as_str(), "cancelled" | "no_show" | "checked_out") {
+        return Ok(());
+    }
+
+    let room: Option<(String, String)> =
+        sqlx::query_as("SELECT number, status FROM rooms WHERE org_id = ? AND id = ? AND deleted_at IS NULL")
+            .bind(&ctx.org_id)
+            .bind(&room_id)
+            .fetch_optional(pool)
+            .await?;
+    if let Some((_, room_status)) = &room {
+        if room_status == "out_of_service" {
+            return Err(AppError::Validation(vec![FieldError::new(
+                "room_id",
+                "That room is out of service. Put it back in service first, or pick another.",
+            )]));
+        }
+    }
+
+    let clash: Option<(String, String, String)> = sqlx::query_as(
+        "SELECT guest_name, check_in, check_out FROM reservations
+          WHERE org_id = ? AND room_id = ? AND deleted_at IS NULL
+            AND status IN ('booked', 'checked_in')
+            AND id <> ?
+            AND check_in < ? AND check_out > ?
+          ORDER BY check_in LIMIT 1",
+    )
+    .bind(&ctx.org_id)
+    .bind(&room_id)
+    .bind(editing.unwrap_or(""))
+    .bind(&check_out)
+    .bind(&check_in)
+    .fetch_optional(pool)
+    .await?;
+
+    if let Some((guest, from, to)) = clash {
+        let number = room.map(|(n, _)| n).unwrap_or_else(|| "that room".into());
+        return Err(AppError::Validation(vec![FieldError::new(
+            "room_id",
+            format!("Room {number} is already {guest}’s from {from} to {to}."),
+        )]));
+    }
+
+    Ok(())
+}
+
+/// Nights and total, from the dates and the rate.
+///
+/// The rate falls back to the room's own, so the common booking is three
+/// fields: who, which room, and when.
+async fn recalc_reservation(pool: &SqlitePool, ctx: &Ctx, id: &str) -> AppResult<()> {
+    sqlx::query(
+        "UPDATE reservations SET
+             nightly_rate = CASE
+                 WHEN nightly_rate > 0 THEN nightly_rate
+                 ELSE COALESCE((SELECT nightly_rate FROM rooms
+                                 WHERE rooms.id = reservations.room_id
+                                   AND rooms.org_id = reservations.org_id), 0)
+             END
+         WHERE org_id = ? AND id = ?",
+    )
+    .bind(&ctx.org_id)
+    .bind(id)
+    .execute(pool)
+    .await?;
+
+    sqlx::query(
+        "UPDATE reservations SET
+             nights = MAX(CAST(julianday(check_out) - julianday(check_in) AS INTEGER), 0),
+             total = MAX(CAST(julianday(check_out) - julianday(check_in) AS INTEGER), 0) * nightly_rate
+         WHERE org_id = ? AND id = ?",
+    )
+    .bind(&ctx.org_id)
+    .bind(id)
+    .execute(pool)
+    .await?;
     Ok(())
 }
 

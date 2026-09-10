@@ -19,11 +19,19 @@ export function FieldValue({
   record,
   currency,
   compact,
+  linkless,
 }: {
   field: FieldDef;
   record: Record<string, unknown>;
   currency: string;
   compact?: boolean;
+  /**
+   * Render links as plain text, for the callers that have already wrapped the
+   * whole cell or card in one. An anchor inside an anchor is invalid HTML: the
+   * browser closes the outer one where the inner begins, so the markup React
+   * hydrates is not the markup it rendered and the subtree is thrown away.
+   */
+  linkless?: boolean;
 }) {
   const value = record[field.name];
 
@@ -89,6 +97,7 @@ export function FieldValue({
           </span>
         );
       }
+      if (linkless) return <span className="truncate">{label}</span>;
       return (
         <Link
           href={href}
@@ -101,6 +110,7 @@ export function FieldValue({
     }
 
     case "email":
+      if (linkless) return <span className="truncate">{String(value)}</span>;
       return (
         <a
           href={`mailto:${value}`}
@@ -112,6 +122,7 @@ export function FieldValue({
       );
 
     case "phone":
+      if (linkless) return <span className="tnum">{String(value)}</span>;
       return (
         <a href={`tel:${value}`} className="tnum hover:underline" onClick={(e) => e.stopPropagation()}>
           {String(value)}
@@ -119,6 +130,9 @@ export function FieldValue({
       );
 
     case "url":
+      if (linkless) {
+        return <span className="truncate">{String(value).replace(/^https?:\/\//, "")}</span>;
+      }
       return (
         <a
           href={String(value)}

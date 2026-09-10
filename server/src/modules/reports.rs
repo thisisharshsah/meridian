@@ -34,6 +34,9 @@ const MONEY: &str = "money";
 const INT: &str = "int";
 const PERCENT: &str = "percent";
 const QUANTITY: &str = "quantity";
+/// A stored date. Rendered in the reader's own format rather than as the ISO
+/// string the database holds, the same as every date elsewhere in the product.
+const DATE: &str = "date";
 
 /// A row flagged with this is the report's conclusion rather than one more
 /// line of data: the web app sets it off, and no total folds it back in.
@@ -136,6 +139,15 @@ const REPORTS: &[ReportDef] = &[
         requires: "projects.timesheets",
     },
     ReportDef {
+        key: "batch_expiry",
+        name: "Expiring stock",
+        description: "Batches by how soon they run out of date, and what is still on the shelf.",
+        module: "inventory",
+        icon: "CalendarClock",
+        totals: true,
+        requires: "inventory.items",
+    },
+    ReportDef {
         key: "stock_on_hand",
         name: "Stock on hand",
         description: "Inventory value, and what has fallen below its reorder point.",
@@ -143,6 +155,17 @@ const REPORTS: &[ReportDef] = &[
         icon: "Package",
         totals: true,
         requires: "inventory.items",
+    },
+    ReportDef {
+        key: "room_board",
+        name: "Room board",
+        description: "Every room and what is happening to it over the period: who is in, who is coming, what is free.",
+        module: "hospitality",
+        icon: "BedDouble",
+        // Room-nights sold and what they took are exactly the two figures a
+        // hotel closes the month on.
+        totals: true,
+        requires: "hospitality.rooms",
     },
     ReportDef {
         key: "ticket_load",
@@ -188,6 +211,12 @@ fn col(key: &str, label: &str, kind: &str) -> Value {
     json!({ "key": key, "label": label, "type": kind })
 }
 
+/// A numeric column no footer should add up: a countdown, an age, a rate.
+/// Days remaining is a number in every row and gibberish once summed.
+fn col_each(key: &str, label: &str, kind: &str) -> Value {
+    json!({ "key": key, "label": label, "type": kind, "no_total": true })
+}
+
 /// Read every column of a row into JSON, using the report's own column types.
 fn row_to_json(row: &SqliteRow, columns: &[Value]) -> Value {
     let mut out = Map::new();
@@ -226,7 +255,7 @@ fn total_numeric(rows: &[Value], columns: &[Value]) -> Value {
     for c in columns {
         let key = c["key"].as_str().unwrap_or_default();
         let kind = c["type"].as_str().unwrap_or(TEXT);
-        if !matches!(kind, MONEY | INT | QUANTITY) {
+        if !matches!(kind, MONEY | INT | QUANTITY) || c["no_total"] == Value::Bool(true) {
             continue;
         }
         // `sum()` panics on overflow in a debug build and wraps in release.
@@ -272,6 +301,8 @@ async fn run(
         "lead_conversion" => lead_conversion(&state, &ctx).await?,
         "project_time" => project_time(&state, &ctx, &from, &to).await?,
         "stock_on_hand" => stock_on_hand(&state, &ctx).await?,
+        "batch_expiry" => batch_expiry(&state, &ctx, &to).await?,
+        "room_board" => room_board(&state, &ctx, &from, &to).await?,
         "ticket_load" => ticket_load(&state, &ctx).await?,
         other => return Err(AppError::not_found(format!("Report `{other}`"))),
     };
@@ -660,6 +691,52 @@ async fn project_time(
     Ok((columns.clone(), rows.iter().map(|r| row_to_json(r, &columns)).collect()))
 }
 
+/// What is about to go out of date, soonest first.
+///
+/// Read on a Monday morning to decide what to discount, move to the front, or
+/// pull off the shelf. The period's end says how far ahead to look; today is
+/// what "expired" and "days left" are counted from, because a batch is not
+/// out of date on the strength of the date box someone typed in a filter.
+/// Batches with nothing left are not shown: an empty batch that expired last
+/// year is history, not a problem.
+async fn batch_expiry(state: &AppState, ctx: &Ctx, to: &str) -> AppResult<(Vec<Value>, Vec<Value>)> {
+    let columns = vec![
+        col("item", "Item", TEXT),
+        col("batch", "Batch", TEXT),
+        col("expires", "Expires", DATE),
+        col_each("days_left", "Days left", INT),
+        col("quantity_left", "Left", QUANTITY),
+        col("value", "Value at cost", MONEY),
+        col("status", "Status", TEXT),
+    ];
+
+    let rows = sqlx::query(
+        "SELECT i.name AS item,
+                b.batch_no AS batch,
+                b.expiry_date AS expires,
+                CAST(julianday(b.expiry_date) - julianday(date('now')) AS INTEGER) AS days_left,
+                b.quantity_left,
+                CAST((b.quantity_left * b.unit_cost) / 1000 AS INTEGER) AS value,
+                CASE
+                  WHEN b.expiry_date < date('now') THEN 'Expired'
+                  WHEN julianday(b.expiry_date) - julianday(date('now')) <= 30 THEN 'Expiring'
+                  ELSE 'OK'
+                END AS status
+           FROM item_batches b
+           JOIN items i ON i.id = b.item_id AND i.org_id = b.org_id
+          WHERE b.org_id = ? AND b.deleted_at IS NULL AND i.deleted_at IS NULL
+            AND b.quantity_left > 0 AND b.expiry_date IS NOT NULL
+            AND b.expiry_date <= ?
+          ORDER BY b.expiry_date, i.name",
+    )
+    .bind(&ctx.org_id)
+    .bind(to)
+    .fetch_all(&state.pool)
+    .await?;
+
+    Ok((columns.clone(), rows.iter().map(|r| row_to_json(r, &columns)).collect()))
+}
+
 async fn stock_on_hand(state: &AppState, ctx: &Ctx) -> AppResult<(Vec<Value>, Vec<Value>)> {
     let columns = vec![
         col("item", "Item", TEXT),
@@ -693,6 +770,100 @@ async fn stock_on_hand(state: &AppState, ctx: &Ctx) -> AppResult<(Vec<Value>, Ve
             END,
             name",
     )
+    .bind(&ctx.org_id)
+    .fetch_all(&state.pool)
+    .await?;
+
+    Ok((columns.clone(), rows.iter().map(|r| row_to_json(r, &columns)).collect()))
+}
+
+/// The board a front desk works from.
+///
+/// One row per room, because that is how the question is asked: not "list the
+/// bookings" but "what is room 204 doing". Rooms with nothing on them are
+/// still listed — a free room is the most useful row on the page when someone
+/// is standing at the desk asking for one.
+async fn room_board(
+    state: &AppState,
+    ctx: &Ctx,
+    from: &str,
+    to: &str,
+) -> AppResult<(Vec<Value>, Vec<Value>)> {
+    let columns = vec![
+        col("room", "Room", TEXT),
+        col("room_type", "Type", TEXT),
+        col("state", "Right now", TEXT),
+        col("guest", "Guest", TEXT),
+        col("arrives", "Arrives", DATE),
+        col("leaves", "Leaves", DATE),
+        col("nights_booked", "Nights booked", INT),
+        col("taking", "Taking", MONEY),
+    ];
+
+    // A booking counts against the period if it overlaps it at all, and the
+    // nights counted are only those inside it: a stay running past the end of
+    // the month belongs to next month for the nights it spends there.
+    let rows = sqlx::query(
+        "SELECT r.number AS room,
+                CASE r.room_type
+                  WHEN 'single' THEN 'Single' WHEN 'double' THEN 'Double'
+                  WHEN 'twin' THEN 'Twin' WHEN 'suite' THEN 'Suite'
+                  WHEN 'family' THEN 'Family' ELSE r.room_type END AS room_type,
+                CASE
+                  WHEN r.status = 'out_of_service' THEN 'Out of service'
+                  WHEN r.status = 'maintenance' THEN 'Being cleaned'
+                  -- Whether the room is free is a question about today, not
+                  -- about the reporting period: someone is at the desk asking.
+                  WHEN EXISTS (SELECT 1 FROM reservations v
+                                WHERE v.org_id = r.org_id AND v.room_id = r.id
+                                  AND v.deleted_at IS NULL AND v.status = 'checked_in'
+                                  AND v.check_in <= date('now') AND v.check_out > date('now'))
+                    THEN 'Occupied'
+                  WHEN EXISTS (SELECT 1 FROM reservations v
+                                WHERE v.org_id = r.org_id AND v.room_id = r.id
+                                  AND v.deleted_at IS NULL AND v.status IN ('booked', 'checked_in')
+                                  AND v.check_out > date('now') AND v.check_in < ?)
+                    THEN 'Booked'
+                  ELSE 'Free'
+                END AS state,
+                (SELECT v.guest_name FROM reservations v
+                  WHERE v.org_id = r.org_id AND v.room_id = r.id AND v.deleted_at IS NULL
+                    AND v.status IN ('booked', 'checked_in')
+                    AND v.check_in < ? AND v.check_out > ?
+                  ORDER BY v.check_in LIMIT 1) AS guest,
+                (SELECT v.check_in FROM reservations v
+                  WHERE v.org_id = r.org_id AND v.room_id = r.id AND v.deleted_at IS NULL
+                    AND v.status IN ('booked', 'checked_in')
+                    AND v.check_in < ? AND v.check_out > ?
+                  ORDER BY v.check_in LIMIT 1) AS arrives,
+                (SELECT v.check_out FROM reservations v
+                  WHERE v.org_id = r.org_id AND v.room_id = r.id AND v.deleted_at IS NULL
+                    AND v.status IN ('booked', 'checked_in')
+                    AND v.check_in < ? AND v.check_out > ?
+                  ORDER BY v.check_in LIMIT 1) AS leaves,
+                COALESCE((SELECT SUM(MAX(
+                            CAST(julianday(MIN(v.check_out, ?)) - julianday(MAX(v.check_in, ?)) AS INTEGER), 0))
+                            FROM reservations v
+                           WHERE v.org_id = r.org_id AND v.room_id = r.id AND v.deleted_at IS NULL
+                             AND v.status IN ('booked', 'checked_in', 'checked_out')
+                             AND v.check_in < ? AND v.check_out > ?), 0) AS nights_booked,
+                COALESCE((SELECT SUM(MAX(
+                            CAST(julianday(MIN(v.check_out, ?)) - julianday(MAX(v.check_in, ?)) AS INTEGER), 0)
+                            * v.nightly_rate)
+                            FROM reservations v
+                           WHERE v.org_id = r.org_id AND v.room_id = r.id AND v.deleted_at IS NULL
+                             AND v.status IN ('booked', 'checked_in', 'checked_out')
+                             AND v.check_in < ? AND v.check_out > ?), 0) AS taking
+           FROM rooms r
+          WHERE r.org_id = ? AND r.deleted_at IS NULL
+          ORDER BY CAST(r.number AS INTEGER), r.number",
+    )
+    .bind(to)
+    .bind(to).bind(from)
+    .bind(to).bind(from)
+    .bind(to).bind(from)
+    .bind(to).bind(from).bind(to).bind(from)
+    .bind(to).bind(from).bind(to).bind(from)
     .bind(&ctx.org_id)
     .fetch_all(&state.pool)
     .await?;

@@ -306,6 +306,8 @@ pub async fn run(state: &AppState) -> anyhow::Result<()> {
         ("Sensor Array SA-40", "SA-40", "goods", "Hardware", "320.00", "184.00", "120"),
         ("Industrial Cable 10m", "CBL-10", "goods", "Components", "48.00", "19.50", "400"),
         ("Mounting Kit MK-3", "MK-3", "goods", "Components", "75.00", "31.00", "150"),
+        ("Calibration Fluid 1L", "CAL-1L", "goods", "Consumables", "62.00", "24.00", "60"),
+        ("Backup Battery Pack", "BAT-12", "goods", "Components", "138.00", "71.00", "40"),
         ("Installation Service", "SVC-INST", "service", "Services", "1200.00", "0", "0"),
         ("Annual Support Plan", "SVC-SUP", "service", "Services", "4800.00", "0", "0"),
     ].iter().enumerate() {
@@ -315,10 +317,34 @@ pub async fn run(state: &AppState) -> anyhow::Result<()> {
             "reorder_level": reorder, "unit": if *kind == "service" { "hour" } else { "unit" },
             "vendor_id": vendors[i % vendors.len()],
             "track_inventory": *kind == "goods",
+            // Consumables and cells have a date on them; a mounting kit does not.
+            "track_batches": matches!(*sku, "CAL-1L" | "BAT-12"),
             "is_active": true,
         })).await?;
         items.push(id);
         bump("items");
+    }
+
+    // Dated stock arrives in batches: one already out of date, one close to
+    // it, one with a year to run. Enough for the expiry report to have
+    // something to say and for a sale to prove it takes the oldest first.
+    for (sku, batch_no, expires, received, qty, cost) in [
+        ("CAL-1L", "CF-2409", -14i64, -160i64, "18", "24.00"),
+        ("CAL-1L", "CF-2501", 24, -70, "90", "24.00"),
+        ("CAL-1L", "CF-2508", 300, -20, "120", "25.50"),
+        ("BAT-12", "BP-771", 45, -95, "60", "71.00"),
+        ("BAT-12", "BP-802", 420, -30, "140", "69.00"),
+    ] {
+        let idx = match sku {
+            "CAL-1L" => 4,
+            _ => 5,
+        };
+        make(state, &ctx, "inventory.item_batches", json!({
+            "item_id": items[idx], "batch_no": batch_no, "expiry_date": day(expires),
+            "received_on": day(received), "quantity_received": qty, "unit_cost": cost,
+            "vendor_id": vendors[0], "warehouse_id": warehouse,
+        })).await?;
+        bump("batches");
     }
 
     // Stock arrives, then sells — the ledger explains every level on the item.
@@ -638,6 +664,40 @@ pub async fn run(state: &AppState) -> anyhow::Result<()> {
             "phone": format!("+1 555 05{:02}", i + 10),
         })).await?;
         bump("candidates");
+    }
+
+    // A handful of rooms and stays. Northwind lets its two guest flats and a
+    // meeting suite to visiting engineers, which is a real enough reason for a
+    // supplier to hold a room list — and it gives the board something to show.
+    let mut rooms = Vec::new();
+    for (number, kind, floor, sleeps, rate, state_) in [
+        ("101", "double", 1, 2, "145.00", "available"),
+        ("102", "twin", 1, 2, "145.00", "available"),
+        ("201", "suite", 2, 4, "295.00", "available"),
+        ("202", "family", 2, 5, "225.00", "maintenance"),
+    ] {
+        let id = make(state, &ctx, "hospitality.rooms", json!({
+            "number": number, "room_type": kind, "floor": floor, "capacity": sleeps,
+            "nightly_rate": rate, "status": state_,
+        })).await?;
+        rooms.push(id);
+        bump("rooms");
+    }
+
+    // One guest in now, one arriving, one already left. Dates are relative, so
+    // the board is never a museum piece.
+    for (room, guest, from, to, status, source) in [
+        (0usize, "Priya Raman", -2i64, 3i64, "checked_in", "Direct"),
+        (1, "Tomas Weber", 5, 9, "booked", "Phone"),
+        (2, "Ines Duarte", -12, -8, "checked_out", "Direct"),
+        (0, "Adaeze Nwosu", 14, 17, "booked", "Website"),
+    ] {
+        make(state, &ctx, "hospitality.reservations", json!({
+            "room_id": rooms[room], "guest_name": guest,
+            "check_in": day(from), "check_out": day(to),
+            "status": status, "adults": 2, "source": source,
+        })).await?;
+        bump("bookings");
     }
 
     // The seeder writes through the repository rather than the HTTP layer, so

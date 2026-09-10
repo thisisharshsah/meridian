@@ -167,6 +167,13 @@ const en: Messages = {
   "reports.thisYear": "This financial year",
   "reports.lastYear": "Last financial year",
   "reports.reorder": "Reorder",
+  "reports.expired": "Expired",
+  "reports.expiring": "Expiring",
+  "reports.occupied": "Occupied",
+  "reports.booked": "Booked",
+  "reports.free": "Free",
+  "reports.cleaning": "Being cleaned",
+  "reports.outOfService": "Out of service",
   "reports.outOfStock": "Out of stock",
   "reports.noneTitle": "No reports available",
   "reports.noneBody": "Reports appear here once your role can view the underlying records.",
@@ -243,6 +250,14 @@ const en: Messages = {
   "entity.recruit.candidates.many": "Applicants",
   "entity.recruit.openings.one": "Job opening",
   "entity.recruit.openings.many": "Job openings",
+
+  "entity.inventory.item_batches.one": "Batch",
+  "entity.inventory.item_batches.many": "Batches",
+  "entity.hospitality.rooms.one": "Room",
+  "entity.hospitality.rooms.many": "Rooms",
+  "entity.hospitality.reservations.one": "Booking",
+  "entity.hospitality.reservations.many": "Bookings",
+  "module.hospitality": "Rooms",
 
   // ---- fields ----
   "field.crm.accounts.name": "Company name",

@@ -3496,3 +3496,336 @@ async fn the_demo_workspace_seeds_and_can_be_signed_into() {
         "the demo shows tax paid on expenses, not an empty row"
     );
 }
+
+/// Batches exist to answer one question correctly: which of these do I sell
+/// first? Getting it wrong is not a rounding error — it is a customer handed
+/// something out of date.
+#[tokio::test]
+async fn a_sale_takes_the_batch_that_expires_first_and_never_an_expired_one() {
+    let (app, _state) = test_app().await;
+    let owner = new_org(&app, "batches").await;
+
+    let (_, item) = call(
+        &app,
+        send("POST", "/api/e/inventory.items", &owner, json!({
+            "name": "Amoxicillin 500mg", "sku": "AMX-500",
+            "item_type": "goods", "track_inventory": true, "track_batches": true
+        })),
+    )
+    .await;
+    let item_id = item["id"].as_str().unwrap().to_string();
+
+    // Three deliveries: one already out of date, then the nearest expiry, then
+    // the furthest. Deliberately created out of order, so passing cannot be an
+    // accident of insertion order.
+    let batch = |no: &str, expiry: &str, qty: &str| {
+        send("POST", "/api/e/inventory.item_batches", &owner, json!({
+            "item_id": item_id, "batch_no": no, "expiry_date": expiry,
+            "received_on": "2026-01-05", "quantity_received": qty, "unit_cost": "2.00"
+        }))
+    };
+    let (_, far) = call(&app, batch("B-FAR", "2027-06-30", "50")).await;
+    let (_, gone) = call(&app, batch("B-GONE", "2026-02-01", "40")).await;
+    let (_, near) = call(&app, batch("B-NEAR", "2026-05-31", "30")).await;
+    let (far, gone, near) = (
+        far["id"].as_str().unwrap().to_string(),
+        gone["id"].as_str().unwrap().to_string(),
+        near["id"].as_str().unwrap().to_string(),
+    );
+
+    // Receiving a batch is a stock movement, so the item level follows without
+    // anyone recording it twice.
+    let (_, it) = call(&app, get(&format!("/api/e/inventory.items/{item_id}"), &owner)).await;
+    assert_eq!(it["stock_on_hand"], json!(120_000), "50 + 40 + 30 arrived");
+
+    // Sell 45 on a day the first batch is already out of date.
+    let (_, sale) = call(
+        &app,
+        send("POST", "/api/e/sales.counter_sales", &owner, json!({
+            "sold_at": "2026-03-10T09:00:00Z", "payment_method": "cash", "amount_tendered": "200"
+        })),
+    )
+    .await;
+    let sale_id = sale["id"].as_str().unwrap().to_string();
+    call(
+        &app,
+        send("POST", "/api/e/sales.counter_sale_items", &owner, json!({
+            "counter_sale_id": sale_id, "item_id": item_id,
+            "description": "Amoxicillin 500mg", "quantity": "45", "unit_price": "4.00"
+        })),
+    )
+    .await;
+    call(
+        &app,
+        send("PATCH", &format!("/api/e/sales.counter_sales/{sale_id}"), &owner, json!({ "status": "completed" })),
+    )
+    .await;
+
+    async fn left(app: &Router, owner: &str, id: &str) -> i64 {
+        let (_, b) = call(app, get(&format!("/api/e/inventory.item_batches/{id}"), owner)).await;
+        b["quantity_left"].as_i64().unwrap_or(-1)
+    }
+    assert_eq!(left(&app, &owner, &gone).await, 40_000, "an expired batch is not stock to sell");
+    assert_eq!(left(&app, &owner, &near).await, 0, "the soonest-expiring batch goes first, all 30 of it");
+    assert_eq!(left(&app, &owner, &far).await, 35_000, "the remaining 15 come from the next batch out");
+
+    let (_, it) = call(&app, get(&format!("/api/e/inventory.items/{item_id}"), &owner)).await;
+    assert_eq!(it["stock_on_hand"], json!(75_000), "120 less the 45 sold");
+
+    // Voiding puts the stock back where it came from, batch by batch.
+    call(
+        &app,
+        send("PATCH", &format!("/api/e/sales.counter_sales/{sale_id}"), &owner, json!({ "status": "voided" })),
+    )
+    .await;
+    assert_eq!(left(&app, &owner, &near).await, 30_000, "a void restores the batch it drew from");
+    assert_eq!(left(&app, &owner, &far).await, 50_000, "and the other one too");
+    let (_, it) = call(&app, get(&format!("/api/e/inventory.items/{item_id}"), &owner)).await;
+    assert_eq!(it["stock_on_hand"], json!(120_000), "nothing left the shelf after all");
+}
+
+/// A miscounted delivery is corrected on the batch, not by adding a second
+/// movement to cancel the first.
+#[tokio::test]
+async fn correcting_a_batch_moves_its_receipt_rather_than_adding_another() {
+    let (app, state) = test_app().await;
+    let owner = new_org(&app, "recount").await;
+
+    let (_, item) = call(
+        &app,
+        send("POST", "/api/e/inventory.items", &owner, json!({
+            "name": "Insulin pens", "item_type": "goods", "track_batches": true
+        })),
+    )
+    .await;
+    let item_id = item["id"].as_str().unwrap().to_string();
+
+    let (_, b) = call(
+        &app,
+        send("POST", "/api/e/inventory.item_batches", &owner, json!({
+            "item_id": item_id, "batch_no": "IP-9", "expiry_date": "2027-01-31",
+            "received_on": "2026-02-02", "quantity_received": "100", "unit_cost": "12.00"
+        })),
+    )
+    .await;
+    let batch_id = b["id"].as_str().unwrap().to_string();
+
+    call(
+        &app,
+        send("PATCH", &format!("/api/e/inventory.item_batches/{batch_id}"), &owner, json!({
+            "quantity_received": "90"
+        })),
+    )
+    .await;
+
+    let moves: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM stock_moves WHERE batch_id IS NOT NULL AND deleted_at IS NULL",
+    )
+    .fetch_one(&state.pool)
+    .await
+    .unwrap();
+    assert_eq!(moves, 1, "one delivery is one movement, however often it is corrected");
+
+    let (_, b) = call(&app, get(&format!("/api/e/inventory.item_batches/{batch_id}"), &owner)).await;
+    assert_eq!(b["quantity_left"], json!(90_000), "the batch holds what actually arrived");
+    let (_, it) = call(&app, get(&format!("/api/e/inventory.items/{item_id}"), &owner)).await;
+    assert_eq!(it["stock_on_hand"], json!(90_000), "and so does the item");
+
+    // The expiry report is what a Monday morning is spent reading.
+    let (status, rep) = call(
+        &app,
+        get("/api/reports/batch_expiry?from=2026-01-01&to=2027-12-31", &owner),
+    )
+    .await;
+    assert!(status.is_success(), "the report runs: {rep:?}");
+    let rows = rep["rows"].as_array().expect("rows");
+    let row = rows.iter().find(|r| r["batch"] == json!("IP-9")).expect("the batch is listed");
+    assert_eq!(row["value"], json!(108_000), "90 pens at 12.00 is 1,080.00 at risk");
+    assert!(
+        rep["totals"].get("days_left").is_none(),
+        "days remaining is a number per row and gibberish once added up"
+    );
+}
+
+/// The one thing a hotel system must never do is promise a room twice.
+#[tokio::test]
+async fn a_room_cannot_be_promised_to_two_guests_on_the_same_night() {
+    let (app, _state) = test_app().await;
+    let owner = new_org(&app, "hotel").await;
+
+    let (_, room) = call(
+        &app,
+        send("POST", "/api/e/hospitality.rooms", &owner, json!({
+            "number": "204", "room_type": "double", "nightly_rate": "120.00"
+        })),
+    )
+    .await;
+    let room_id = room["id"].as_str().unwrap().to_string();
+
+    let book = |guest: &str, from: &str, to: &str| {
+        send("POST", "/api/e/hospitality.reservations", &owner, json!({
+            "room_id": room_id, "guest_name": guest, "check_in": from, "check_out": to
+        }))
+    };
+
+    let (status, first) = call(&app, book("Priya Raman", "2026-06-10", "2026-06-14")).await;
+    assert!(status.is_success(), "the first booking is fine: {first:?}");
+    assert!(
+        first["number"].as_str().unwrap_or("").starts_with("RES-"),
+        "a booking numbers itself"
+    );
+    assert_eq!(first["nights"], json!(4), "the tenth to the fourteenth is four nights");
+    assert_eq!(first["nightly_rate"], json!(12_000), "the rate comes from the room");
+    assert_eq!(first["total"], json!(48_000), "four nights at 120.00");
+
+    // Overlapping at the front, the back, and swallowing it whole.
+    for (from, to, how) in [
+        ("2026-06-12", "2026-06-16", "starting inside it"),
+        ("2026-06-08", "2026-06-11", "ending inside it"),
+        ("2026-06-09", "2026-06-20", "covering it entirely"),
+        ("2026-06-11", "2026-06-12", "sitting inside it"),
+    ] {
+        let (status, body) = call(&app, book("Tomas Weber", from, to)).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "a clash {how} is refused");
+        let msg = body["error"]["fields"][0]["message"].as_str().unwrap_or("");
+        assert!(msg.contains("Priya Raman"), "and says who has it: {msg}");
+        assert_eq!(
+            body["error"]["fields"][0]["field"], json!("room_id"),
+            "the error lands on the control that is wrong"
+        );
+    }
+
+    // Butting up against it is not a clash: the room is turned round same day.
+    let (status, _) = call(&app, book("Tomas Weber", "2026-06-14", "2026-06-17")).await;
+    assert!(status.is_success(), "arriving on the day the last guest leaves is allowed");
+    let (status, _) = call(&app, book("Ines Duarte", "2026-06-06", "2026-06-10")).await;
+    assert!(status.is_success(), "and leaving on the day the next guest arrives");
+
+    // A cancelled stay releases the room.
+    let first_id = first["id"].as_str().unwrap().to_string();
+    call(
+        &app,
+        send("PATCH", &format!("/api/e/hospitality.reservations/{first_id}"), &owner, json!({
+            "status": "cancelled"
+        })),
+    )
+    .await;
+    let (status, _) = call(&app, book("Adaeze Nwosu", "2026-06-10", "2026-06-14")).await;
+    assert!(status.is_success(), "a cancelled booking is not holding the room");
+
+    // Backwards dates are caught before anything else looks at them.
+    let (status, body) = call(&app, book("Nobody", "2026-07-10", "2026-07-08")).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "a stay cannot end before it starts");
+    assert_eq!(body["error"]["fields"][0]["field"], json!("check_out"));
+}
+
+/// Editing a booking must not find itself in the way.
+#[tokio::test]
+async fn a_booking_does_not_clash_with_itself_when_edited() {
+    let (app, _state) = test_app().await;
+    let owner = new_org(&app, "extend").await;
+
+    let (_, room) = call(
+        &app,
+        send("POST", "/api/e/hospitality.rooms", &owner, json!({ "number": "7", "nightly_rate": "90.00" })),
+    )
+    .await;
+    let room_id = room["id"].as_str().unwrap().to_string();
+
+    let (_, stay) = call(
+        &app,
+        send("POST", "/api/e/hospitality.reservations", &owner, json!({
+            "room_id": room_id, "guest_name": "Priya Raman",
+            "check_in": "2026-06-10", "check_out": "2026-06-12"
+        })),
+    )
+    .await;
+    let id = stay["id"].as_str().unwrap().to_string();
+
+    let (status, after) = call(
+        &app,
+        send("PATCH", &format!("/api/e/hospitality.reservations/{id}"), &owner, json!({
+            "check_out": "2026-06-15"
+        })),
+    )
+    .await;
+    assert!(status.is_success(), "a guest can stay on: {after:?}");
+    assert_eq!(after["nights"], json!(5), "the extra nights are counted");
+    assert_eq!(after["total"], json!(45_000), "and charged");
+
+    // The board is what the front desk reads.
+    let (status, rep) = call(
+        &app,
+        get("/api/reports/room_board?from=2026-06-01&to=2026-06-30", &owner),
+    )
+    .await;
+    assert!(status.is_success(), "the board runs: {rep:?}");
+    let rows = rep["rows"].as_array().expect("rows");
+    let row = rows.iter().find(|r| r["room"] == json!("7")).expect("room 7 is on the board");
+    assert_eq!(row["guest"], json!("Priya Raman"), "with the guest who has it");
+    assert_eq!(row["nights_booked"], json!(5), "and the nights it is sold for");
+    assert_eq!(rep["totals"]["taking"], json!(45_000), "the month's takings add up");
+
+    // "Right now" has to mean now, not "somewhere in the period". Dates are
+    // relative, so this keeps saying something true next year.
+    let day = |n: i64| {
+        (chrono::Utc::now().date_naive() + chrono::Duration::days(n)).format("%Y-%m-%d").to_string()
+    };
+    let (_, busy) = call(
+        &app,
+        send("POST", "/api/e/hospitality.rooms", &owner, json!({ "number": "9", "nightly_rate": "80.00" })),
+    )
+    .await;
+    let busy_id = busy["id"].as_str().unwrap().to_string();
+    call(
+        &app,
+        send("POST", "/api/e/hospitality.reservations", &owner, json!({
+            "room_id": busy_id, "guest_name": "Ines Duarte",
+            "check_in": day(-1), "check_out": day(2), "status": "checked_in"
+        })),
+    )
+    .await;
+    let (_, now) = call(
+        &app,
+        get(&format!("/api/reports/room_board?from={}&to={}", day(-30), day(30)), &owner),
+    )
+    .await;
+    let row = now["rows"].as_array().unwrap().iter().find(|r| r["room"] == json!("9")).unwrap();
+    assert_eq!(row["state"], json!("Occupied"), "a guest who is here reads as here");
+
+    // Whereas one arriving later is booked, not in.
+    let (_, later) = call(
+        &app,
+        send("POST", "/api/e/hospitality.rooms", &owner, json!({ "number": "10", "nightly_rate": "80.00" })),
+    )
+    .await;
+    call(
+        &app,
+        send("POST", "/api/e/hospitality.reservations", &owner, json!({
+            "room_id": later["id"].as_str().unwrap(), "guest_name": "Adaeze Nwosu",
+            "check_in": day(4), "check_out": day(6)
+        })),
+    )
+    .await;
+    let (_, now) = call(
+        &app,
+        get(&format!("/api/reports/room_board?from={}&to={}", day(-30), day(30)), &owner),
+    )
+    .await;
+    let row = now["rows"].as_array().unwrap().iter().find(|r| r["room"] == json!("10")).unwrap();
+    assert_eq!(row["state"], json!("Booked"), "a room spoken for is not free to give away");
+
+    // A room nobody has booked still appears — it is the row the desk needs.
+    call(
+        &app,
+        send("POST", "/api/e/hospitality.rooms", &owner, json!({ "number": "8", "nightly_rate": "90.00" })),
+    )
+    .await;
+    let (_, rep) = call(
+        &app,
+        get("/api/reports/room_board?from=2026-06-01&to=2026-06-30", &owner),
+    )
+    .await;
+    let free = rep["rows"].as_array().unwrap().iter().find(|r| r["room"] == json!("8")).unwrap();
+    assert_eq!(free["state"], json!("Free"), "an empty room says so rather than being left out");
+}

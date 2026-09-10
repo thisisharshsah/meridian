@@ -379,7 +379,7 @@ export function ListView({ meta, fixedFilters, embedded }: {
                           className="block truncate hover:text-brand"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <FieldValue field={f} record={r} currency={currency} compact />
+                          <FieldValue field={f} record={r} currency={currency} compact linkless />
                         </Link>
                       ) : (
                         <div className="truncate">
@@ -402,13 +402,13 @@ export function ListView({ meta, fixedFilters, embedded }: {
               <li key={r.id} className="flex items-start gap-2 p-3">
                 <Link href={`${entityPath(meta.key)}/${r.id}`} className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium">
-                    <FieldValue field={columns[0]} record={r} currency={currency} compact />
+                    <FieldValue field={columns[0]} record={r} currency={currency} compact linkless />
                   </span>
                   <span className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
                     {columns.slice(1, 4).map((f) => (
                       <span key={f.name} className="text-xs text-muted-foreground">
                         <span className="text-subtle-foreground">{f.label}: </span>
-                        <FieldValue field={f} record={r} currency={currency} compact />
+                        <FieldValue field={f} record={r} currency={currency} compact linkless />
                       </span>
                     ))}
                   </span>

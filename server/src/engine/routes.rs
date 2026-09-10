@@ -172,6 +172,9 @@ async fn create(
     // Anything the server owns but the column requires is filled in here,
     // after the client's read-only fields have been discarded.
     hooks::before_create(def.key, &mut body);
+    // Rules that need to see the rest of the table. Before the insert, so a
+    // rejected write leaves nothing behind to clean up.
+    hooks::validate(&state.pool, &ctx, def.key, None, &body).await?;
 
     // Documents that carry a number allocate it in the same transaction as the
     // insert, so a failed insert does not burn an invoice number.
@@ -228,6 +231,7 @@ async fn update(
     strip_readonly(def, &mut body);
 
     let before = repo::get(&state.pool, &state.registry, def, &ctx, &id).await?;
+    hooks::validate(&state.pool, &ctx, def.key, Some(&id), &body).await?;
     repo::update(&state.pool, &state.registry, def, &ctx, &id, &body).await?;
     hooks::after_write(&state.pool, &ctx, def.key, &id).await?;
     // Re-read after the hooks, so the response carries the derived values

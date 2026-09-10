@@ -6,6 +6,7 @@ pub mod core;
 pub mod crm;
 pub mod desk;
 pub mod hooks;
+pub mod hospitality;
 pub mod hr;
 pub mod inventory;
 pub mod invitations;
@@ -33,6 +34,7 @@ pub const SEQUENCE_SEEDS: &[(&str, &str)] = &[
     ("inventory.purchase_orders", "PO-"),
     ("sales.counter_sales", "RC-"),
     ("desk.tickets", "TKT-"),
+    ("hospitality.reservations", "RES-"),
     ("recruit.candidates", "CND-"),
 ];
 
@@ -51,6 +53,7 @@ pub fn registry() -> Registry {
     projects::register(&mut r);
     hr::register(&mut r);
     desk::register(&mut r);
+    hospitality::register(&mut r);
     marketing::register(&mut r);
     recruit::register(&mut r);
     r

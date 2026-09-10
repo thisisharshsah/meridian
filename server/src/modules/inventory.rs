@@ -35,16 +35,26 @@ pub fn register(r: &mut Registry) {
             quantity("reorder_level", "Reorder at"),
             reference("vendor_id", "Preferred vendor", "inventory.vendors"),
             boolean("track_inventory", "Track stock"),
+            boolean("track_batches", "Track batches and expiry")
+                .help("For anything with a date on it. Sales take the batch that expires first."),
             boolean("is_active", "Active").in_list(),
             long_text("description", "Description"),
         ],
         default_sort: ("name", SortDir::Asc),
-        children: vec![ChildDef {
-            entity: "inventory.stock_moves",
-            foreign_key: "item_id",
-            label: "Stock movements",
-            inline: false,
-        }],
+        children: vec![
+            ChildDef {
+                entity: "inventory.item_batches",
+                foreign_key: "item_id",
+                label: "Batches",
+                inline: false,
+            },
+            ChildDef {
+                entity: "inventory.stock_moves",
+                foreign_key: "item_id",
+                label: "Stock movements",
+                inline: false,
+            },
+        ],
         has_activities: false,
         has_notes: true,
         global_search: true,
@@ -114,6 +124,40 @@ pub fn register(r: &mut Registry) {
     });
 
     r.add(EntityDef {
+        key: "inventory.item_batches",
+        table: "item_batches",
+        module: "inventory",
+        label: "Batch",
+        label_plural: "Batches",
+        icon: "Layers",
+        title_field: "batch_no",
+        fields: vec![
+            reference("item_id", "Item", "inventory.items").required().in_list(),
+            text("batch_no", "Batch number").required().in_list(),
+            date("expiry_date", "Expires")
+                .in_list()
+                .help("Leave blank for stock that does not expire."),
+            date("received_on", "Received").required().in_list(),
+            quantity("quantity_received", "Received quantity")
+                .required()
+                .help("What arrived. Change it and the stock movement follows."),
+            // Received less everything sold or written off against this batch.
+            quantity("quantity_left", "Left").readonly().in_list(),
+            money("unit_cost", "Unit cost"),
+            reference("vendor_id", "Supplier", "inventory.vendors").in_list(),
+            reference("warehouse_id", "Warehouse", "inventory.warehouses"),
+            long_text("notes", "Notes"),
+        ],
+        default_sort: ("expiry_date", SortDir::Asc),
+        children: vec![],
+        has_activities: false,
+        has_notes: false,
+        global_search: true,
+        embedded: false,
+        read_only: false,
+    });
+
+    r.add(EntityDef {
         key: "inventory.stock_moves",
         table: "stock_moves",
         module: "inventory",
@@ -135,6 +179,7 @@ pub fn register(r: &mut Registry) {
             quantity("quantity", "Quantity").required().in_list(),
             money("unit_cost", "Unit cost"),
             date("moved_on", "Date").required().in_list(),
+            reference("batch_id", "Batch", "inventory.item_batches").in_list(),
             text("reference_entity", "Source"),
             text("reference_id", "Source id").not_searchable(),
             long_text("notes", "Notes"),
