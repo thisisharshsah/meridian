@@ -73,7 +73,11 @@ pub const EDITIONS: &[Edition] = &[
         key: "services",
         name: "Aurovie Practice",
         description: "Billing for time and work: an agency, a practice, a firm.",
-        modules: &["crm", "sales", "books", "projects", "hr", "desk"],
+        // Inventory is here for its suppliers, not its shelves: a bill has to
+        // name who it is from, and that record lives in this module. A
+        // practice that does not want a stock menu switches the section off
+        // — which hides it without taking the supplier away from the bill.
+        modules: &["crm", "sales", "books", "inventory", "projects", "hr", "desk"],
     },
     Edition {
         key: "trades",
@@ -139,6 +143,89 @@ mod tests {
                 );
             }
             assert!(e.carries("core"), "`{}` must carry the workspace itself", e.key);
+        }
+    }
+
+    /// Every package this repository can ship has to be a coherent product.
+    ///
+    /// Cutting the registry down can strand a reference — an entity in one
+    /// module pointing at one in another, a child collection, a title field
+    /// on a pruned column — and the symptom is a customer's server refusing
+    /// to boot. Nothing else in the suite runs a narrow registry, so without
+    /// this the first thing to notice would be the customer.
+    #[test]
+    fn every_edition_is_a_registry_that_holds_together() {
+        for e in EDITIONS {
+            let mut r = crate::modules::registry();
+            r.retain_edition(e);
+            r.validate().unwrap_or_else(|err| panic!("edition `{}` does not hold together: {err}", e.key));
+
+            assert!(r.modules().len() >= 2, "`{}` is not a product anybody could use", e.key);
+            assert!(
+                r.get_module("core").is_some(),
+                "`{}` has no workspace to sign in to",
+                e.key
+            );
+            for entity in r.entities() {
+                assert!(
+                    entity.fields.iter().any(|f| f.in_list),
+                    "`{}` leaves {} with no columns to list",
+                    e.key,
+                    entity.key
+                );
+            }
+        }
+    }
+
+    /// Pruning a reference is safe; pruning a *required* one is not.
+    ///
+    /// `retain_edition` drops fields pointing at entities the edition does
+    /// not carry, which keeps the registry consistent — but a required column
+    /// is usually NOT NULL in the database, and a form that no longer asks
+    /// for it produces an insert that fails at the moment a customer first
+    /// tries to save something. The fix for a failure here is not to loosen
+    /// this test: it is that the two modules belong in the same edition.
+    #[test]
+    fn no_edition_prunes_a_field_a_record_cannot_be_saved_without() {
+        let full = crate::modules::registry();
+        for e in EDITIONS {
+            let mut narrow = crate::modules::registry();
+            narrow.retain_edition(e);
+            for entity in narrow.entities() {
+                let before = full.get(entity.key).expect("every entity survives in full");
+                for f in before.fields.iter().filter(|f| f.required) {
+                    assert!(
+                        entity.field(f.name).is_some(),
+                        "edition `{}` keeps {} but drops its required `{}` — \
+                         the modules it links belong in the same package",
+                        e.key,
+                        entity.key,
+                        f.name
+                    );
+                }
+            }
+        }
+    }
+
+    /// A report names the entity it reads. Cut the entity out and the report
+    /// is left pointing at nothing — which the catalogue has to notice, since
+    /// the tables themselves exist in every build.
+    #[test]
+    fn no_edition_leaves_a_report_pointing_at_nothing() {
+        for e in EDITIONS {
+            let mut r = crate::modules::registry();
+            r.retain_edition(e);
+            for report in crate::modules::reports::REPORTS {
+                if r.get_module(report.module).is_some() {
+                    assert!(
+                        r.get(report.requires).is_some(),
+                        "edition `{}` keeps the `{}` report but not `{}`",
+                        e.key,
+                        report.key,
+                        report.requires
+                    );
+                }
+            }
         }
     }
 

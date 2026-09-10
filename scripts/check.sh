@@ -39,6 +39,7 @@ printf '   entities : %s\n' "$(grep -rc 'r.add(EntityDef' server/src/modules/*.r
 printf '   tests    : %s\n' "$(cargo test --manifest-path server/Cargo.toml 2>/dev/null | grep -oE '[0-9]+ passed' | head -1)"
 printf '   migrations: %s\n' "$(ls server/migrations/*.sql | wc -l | tr -d ' ')"
 printf '   phrases  : %s\n' "$(grep -c '": "' apps/web/src/lib/i18n.ts | tr -d ' ')"
+printf '   editions : %s\n' "$(grep -c '^        key: "' server/src/editions.rs | tr -d ' ')"
 
 if [[ $fail -ne 0 ]]; then
   printf '\n✗ something above failed\n' >&2

@@ -4075,3 +4075,104 @@ async fn a_licence_naming_an_unknown_package_grants_nothing_extra() {
         "an unreadable licence falls back to the installation, which is already the ceiling"
     );
 }
+
+/// The failure the edition tests predict, demonstrated once end to end.
+///
+/// A package that keeps invoicing but drops the module suppliers live in
+/// leaves `bills.vendor_id` — NOT NULL in the schema — with no field to fill
+/// it from. The static test catches that arrangement before it ships; this is
+/// what it would have felt like to the customer who found it instead.
+#[tokio::test]
+async fn a_package_missing_a_required_reference_cannot_save_the_record() {
+    let (app, state) = test_app_as("full").await;
+    let owner = new_org(&app, "practice").await;
+
+    // Every package that carries books carries inventory, and this is why.
+    for e in crate::editions::EDITIONS.iter().filter(|e| e.carries("books")) {
+        assert!(
+            e.carries("inventory"),
+            "`{}` bills people but has nowhere to record who a bill is from",
+            e.key
+        );
+    }
+
+    let (_, vendor) = call(
+        &app,
+        send("POST", "/api/e/inventory.vendors", &owner, json!({ "name": "Bramley Paper" })),
+    )
+    .await;
+    let (status, bill) = call(
+        &app,
+        send("POST", "/api/e/books.bills", &owner, json!({
+            "vendor_id": vendor["id"], "bill_date": "2026-05-01", "due_date": "2026-05-31"
+        })),
+    )
+    .await;
+    assert!(status.is_success(), "with a supplier, a bill saves: {bill:?}");
+
+    // Without one it does not, which is the whole point: the column is NOT
+    // NULL, so a form that cannot ask for a supplier cannot save a bill.
+    let without_a_supplier = sqlx::query(
+        "INSERT INTO bills (id, org_id, number, bill_date, due_date, created_at, updated_at)
+         SELECT 'no-vendor', id, 'BILL-9999', '2026-05-01', '2026-05-31', '2026-05-01', '2026-05-01'
+           FROM organizations LIMIT 1",
+    )
+    .execute(&state.pool)
+    .await;
+    let err = without_a_supplier.expect_err("a bill with no supplier must not be storable");
+    assert!(
+        err.to_string().contains("NOT NULL"),
+        "and the reason is the column, not something else: {err}"
+    );
+}
+
+/// Every package has to be demonstrable.
+///
+/// The demo seeder was written against the whole registry and died on the
+/// first narrow build it met. It is also the first thing anyone runs when
+/// showing a customer their product, so a package whose demo will not start
+/// is a package that cannot be sold.
+#[tokio::test]
+async fn every_package_can_seed_its_own_demo() {
+    for edition in crate::editions::EDITIONS {
+        let (app, state) = test_app_as(edition.key).await;
+
+        crate::seed::run(&state)
+            .await
+            .unwrap_or_else(|e| panic!("the `{}` demo will not seed: {e}", edition.key));
+
+        let (status, session) = call(
+            &app,
+            anon("POST", "/api/auth/login", json!({
+                "email": crate::seed::DEMO_EMAIL, "password": crate::seed::DEMO_PASSWORD
+            })),
+        )
+        .await;
+        assert!(status.is_success(), "and cannot be signed into: {session:?}");
+        let token = session["access_token"].as_str().expect("a token").to_string();
+
+        // Something to look at in every module the package carries, or the
+        // demo is a set of empty screens.
+        let (_, meta) = call(&app, get("/api/meta", &token)).await;
+        let shown = meta["modules"].as_array().map(|m| m.len()).unwrap_or(0);
+        assert!(shown >= 2, "`{}` has {shown} modules to show", edition.key);
+
+        // And nothing seeded outside the package: the guards in the seeder
+        // are what keep a hotel demo from filling in a projects table it has
+        // no screens for.
+        if !edition.carries("hospitality") {
+            let rooms: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM rooms")
+                .fetch_one(&state.pool)
+                .await
+                .unwrap();
+            assert_eq!(rooms, 0, "`{}` seeded rooms it cannot show", edition.key);
+        }
+        if !edition.carries("projects") {
+            let projects: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM projects")
+                .fetch_one(&state.pool)
+                .await
+                .unwrap();
+            assert_eq!(projects, 0, "`{}` seeded projects it cannot show", edition.key);
+        }
+    }
+}

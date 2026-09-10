@@ -42,21 +42,21 @@ const DATE: &str = "date";
 /// line of data: the web app sets it off, and no total folds it back in.
 const SUMMARY_ROW: &str = "_summary";
 
-struct ReportDef {
-    key: &'static str,
-    name: &'static str,
-    description: &'static str,
-    module: &'static str,
-    icon: &'static str,
+pub struct ReportDef {
+    pub key: &'static str,
+    pub name: &'static str,
+    pub description: &'static str,
+    pub module: &'static str,
+    pub icon: &'static str,
     /// Entity whose view permission gates this report.
-    requires: &'static str,
+    pub requires: &'static str,
     /// Whether a footer summing the numeric columns means anything. It does
     /// for a list of customers; it does not where the rows are of different
     /// kinds, or where one row is already the sum of the others.
-    totals: bool,
+    pub totals: bool,
 }
 
-const REPORTS: &[ReportDef] = &[
+pub const REPORTS: &[ReportDef] = &[
     ReportDef {
         key: "ar_aging",
         name: "Receivables ageing",
