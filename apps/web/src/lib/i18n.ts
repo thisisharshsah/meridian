@@ -180,6 +180,7 @@ const en: Messages = {
   "approvals.comment": "Comment (optional)",
   "reports.title": "Reports",
   "reports.lede": "Read-only views across the whole workspace.",
+  "reports.pick": "Report",
   "reports.from": "From",
   "reports.to": "To",
   "reports.thisYear": "This financial year",

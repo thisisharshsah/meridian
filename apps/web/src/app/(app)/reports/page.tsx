@@ -121,8 +121,31 @@ export default function ReportsPage() {
         </p>
       </header>
 
+      {/* On a phone the picker came first and the report itself sat below
+          twelve report names, off screen, with nothing to say it was there.
+          A native select hands the job to the OS picker, which is better at
+          it than a list, and puts the report where the reader is looking. */}
+      <label className="mb-3 block lg:hidden">
+        <span className="mb-1 block text-xs text-muted-foreground">{t("reports.pick")}</span>
+        <select
+          value={active ?? ""}
+          onChange={(e) => setSelected(e.target.value)}
+          className="min-h-10 w-full rounded-md border border-border bg-surface px-2.5 text-sm"
+        >
+          {Object.entries(grouped).map(([module, reports]) => (
+            <optgroup key={module} label={module}>
+              {reports.map((r) => (
+                <option key={r.key} value={r.key}>
+                  {r.name}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+      </label>
+
       <div className="grid gap-4 lg:grid-cols-[15rem_minmax(0,1fr)]">
-        <nav className="space-y-4">
+        <nav className="hidden space-y-4 lg:block">
           {catalog.isLoading &&
             Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24 w-full" />)}
 

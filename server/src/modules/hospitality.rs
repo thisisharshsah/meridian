@@ -69,8 +69,12 @@ pub fn register(r: &mut Registry) {
         icon: "CalendarCheck",
         title_field: "guest_name",
         fields: vec![
-            text("number", "Booking #").readonly().in_list(),
+            // Guest first, and not only for the table: on a phone the list
+            // becomes cards titled by the leading column, and a booking is
+            // "Priya Raman, room 101" to everyone who works here — never
+            // "RES-00001".
             text("guest_name", "Guest").required().in_list(),
+            text("number", "Booking #").readonly().in_list(),
             reference("room_id", "Room", "hospitality.rooms").required().in_list(),
             date("check_in", "Arrives").required().in_list(),
             date("check_out", "Leaves").required().in_list(),
