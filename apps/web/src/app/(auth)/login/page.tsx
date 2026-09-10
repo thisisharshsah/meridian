@@ -18,8 +18,8 @@ import { submitSession } from "@/lib/auth-client";
 import { t } from "@/lib/i18n";
 
 const schema = z.object({
-  email: z.string().min(1, "Email is required").email("Enter a valid email address"),
-  password: z.string().min(1, "Password is required"),
+  email: z.string().min(1, t("auth.emailRequired")).email(t("auth.emailInvalid")),
+  password: z.string().min(1, t("auth.passwordRequired")),
 });
 
 type Values = z.infer<typeof schema>;

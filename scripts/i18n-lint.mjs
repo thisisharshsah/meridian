@@ -95,6 +95,21 @@ for (const file of files.sort()) {
     found.push(`${relative(ROOT, file)}:${line}  expression  ${JSON.stringify(text)}`);
   }
 
+  // Prose handed to a function: a validation message, an error set on a form.
+  // Narrow on purpose -- a sentence starts with a capital and has a space in
+  // it, which no route, key, class or enum value does.
+  for (const m of src.matchAll(/[(,]\s*"([A-Z][^"\\\n]*\s[^"\\\n]*)"/g)) {
+    const text = m[1];
+    if (ALLOWED.has(text) || !prose(text)) continue;
+    // `"Out of stock": {...}` is a key looking up a value, not a word on a
+    // screen. The comma that ended the entry above it is what matched here.
+    if (src[m.index + m[0].length] === ":") continue;
+    const line = src.slice(0, m.index).split("\n").length;
+    const source = lines[line - 1] ?? "";
+    if (/\bt\(|plural\(|className|\bcn\(/.test(source)) continue;
+    found.push(`${relative(ROOT, file)}:${line}  argument  ${JSON.stringify(text)}`);
+  }
+
   for (const { re, what } of PATTERNS) {
     for (const m of src.matchAll(re)) {
       const text = m[1].trim();

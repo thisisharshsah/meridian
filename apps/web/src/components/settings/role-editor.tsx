@@ -320,7 +320,7 @@ function RoleDialog({
         setErrors(e.fieldMap);
         if (!Object.keys(e.fieldMap).length) setFormError(e.message);
       } else {
-        setFormError("Could not save that role");
+        setFormError(t("role.saveFailed"));
       }
     },
   });

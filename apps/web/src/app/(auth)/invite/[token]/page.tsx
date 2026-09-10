@@ -109,7 +109,7 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
         router.replace("/login");
       }
     } catch {
-      setFormError("Cannot reach the server. Is it running?");
+      setFormError(t("auth.noServer"));
     } finally {
       setSaving(false);
     }

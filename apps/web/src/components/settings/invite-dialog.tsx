@@ -146,7 +146,7 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
         setErrors(e.fieldMap);
         if (!Object.keys(e.fieldMap).length) setFormError(e.message);
       } else {
-        setFormError("Could not create that invitation");
+        setFormError(t("invite.createFailed"));
       }
     },
   });

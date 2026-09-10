@@ -140,7 +140,7 @@ export function RecordForm({
           });
         }
       } else {
-        setFormError("Something went wrong. Please try again.");
+        setFormError(t("record.somethingWrong"));
       }
     }
   };

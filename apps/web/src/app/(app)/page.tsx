@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import {
-  AlertTriangle, ArrowUpRight, Banknote, Building2, CircleDollarSign, Package, Receipt, Target, Ticket,
-  TrendingUp, UserPlus,
+  AlertTriangle, ArrowUpRight, Banknote, Building2, CalendarCheck, CircleDollarSign, DoorOpen,
+  FolderKanban, Layers, Package, Receipt, ShoppingCart, Target, Ticket, TrendingUp, UserPlus,
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,44 +12,84 @@ import { Button } from "@/components/ui/button";
 import { EmptyState, Skeleton } from "@/components/ui/misc";
 import { PipelineChart, StatusBars } from "@/components/dashboard/charts";
 import { SetupGuide, type SetupStep } from "@/components/dashboard/setup-guide";
-import { BusinessShapePrompt } from "@/components/settings/business-shape";
+import { BusinessShapePrompt, useBusinessShape } from "@/components/settings/business-shape";
 import { ClockCard } from "@/components/dashboard/clock-card";
 import { ModuleLauncher } from "@/components/dashboard/module-launcher";
 import { useAppMeta, useList, useSession, useStats } from "@/lib/queries";
 import { formatMoney, formatDate, daysUntil } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { t } from "@/lib/i18n";
+import { plural, t } from "@/lib/i18n";
+
+/**
+ * What to do first, per kind of business.
+ *
+ * Ordered as the work actually happens: a hotel lists rooms before it can
+ * take a booking, a pharmacy books in a delivery before it can sell from it.
+ * Four or five steps — a checklist longer than that stops being a checklist
+ * and starts being a chore.
+ */
+const SETUP_PLANS: Record<string, string[]> = {
+  general: ["customer", "product", "deal", "invoice", "team"],
+  shop: ["product", "sale", "customer", "invoice", "team"],
+  pharmacy: ["product", "batch", "sale", "invoice", "team"],
+  hospitality: ["room", "booking", "invoice", "team"],
+  services: ["customer", "project", "invoice", "team"],
+  trades: ["customer", "product", "invoice", "team"],
+};
 
 export default function DashboardPage() {
   const { data: session } = useSession();
   const currency = session?.organization?.currency ?? "USD";
   const today = new Date().toISOString().slice(0, 10);
 
-  const openPipeline = useStats("crm.deals", {
-    group_by: "stage",
-    measure: "amount",
-    agg: "sum",
-  });
-  const invoiceTotals = useStats("books.invoices", { group_by: "status", measure: "total", agg: "sum" });
-  const ticketCounts = useStats("desk.tickets", { group_by: "status" });
-  const receivable = useStats("books.invoices", {
-    measure: "balance_due",
-    agg: "sum",
-    filters: { status__ne: "paid" },
-  });
-  const wonThisPeriod = useStats("crm.deals", {
-    measure: "amount",
-    agg: "sum",
-    filters: { stage: "closed_won" },
-  });
+  // The home page is the one screen everybody lands on, so it has to be about
+  // their business too. A hotel with Support switched off should not be shown
+  // an open-ticket count, and nothing here should ask a shop to add a deal.
+  // Until the answer arrives, assume everything: a card appearing late reads
+  // better than one that flickers away.
+  const shape = useBusinessShape();
+  const uses = (key: string) =>
+    !shape.data || shape.data.modules.find((m) => m.key === key)?.in_use !== false;
+  const [sells, bills, supports] = [uses("crm"), uses("books"), uses("desk")];
+  // Rendering assumes everything while the answer is in flight; fetching waits
+  // for it. Otherwise the first render fires a request for figures it is about
+  // to stop showing, and React Query will not take it back. Settled either
+  // way, because a failed lookup should show the whole dashboard, not none of
+  // it.
+  const asked = !shape.isPending;
 
-  const overdue = useList("books.invoices", {
+  const openPipeline = useStats(
+    "crm.deals",
+    { group_by: "stage", measure: "amount", agg: "sum" },
+    asked && sells,
+  );
+  const invoiceTotals = useStats(
+    "books.invoices",
+    { group_by: "status", measure: "total", agg: "sum" },
+    asked && bills,
+  );
+  const ticketCounts = useStats("desk.tickets", { group_by: "status" }, asked && supports);
+  const receivable = useStats(
+    "books.invoices",
+    { measure: "balance_due", agg: "sum", filters: { status__ne: "paid" } },
+    asked && bills,
+  );
+  const wonThisPeriod = useStats(
+    "crm.deals",
+    { measure: "amount", agg: "sum", filters: { stage: "closed_won" } },
+    asked && sells,
+  );
+
+  const overdue = useList(asked && bills ? "books.invoices" : undefined, {
     status__ne: "paid",
     due_date__lt: today,
     sort: "due_date",
     per_page: 5,
   });
-  const recentDeals = useList("crm.deals", { sort: "-created_at", per_page: 5 });
+  const recentDeals = useList(
+    asked && sells ? "crm.deals" : undefined,
+    { sort: "-created_at", per_page: 5 },
+  );
 
   const pipelineRows = (openPipeline.data?.data ?? []).filter(
     (r) => typeof r.bucket === "string" && !String(r.bucket).startsWith("closed_"),
@@ -79,8 +119,27 @@ export default function DashboardPage() {
   const hasInvoices = (invoiceTotals.data?.data.length ?? 0) > 0;
   const hasTeam = (members.data?.data.length ?? 0) > 1;
 
-  const setupSteps: SetupStep[] = [
-    {
+  // A hotel does not open by chasing a deal, and a shop does not open by
+  // raising an invoice. The menu already follows the kind of business; the
+  // list of what to do first has to follow it too, or the product spends
+  // someone's first morning pointing at the wrong screen.
+  const plan = SETUP_PLANS[shape.data?.business_type ?? "general"] ?? SETUP_PLANS.general;
+  const planned = (key: string) => plan.includes(key);
+
+  // Only asked for when the plan calls for it: `useList(undefined)` makes no
+  // request, so a shop never pays for a query about rooms.
+  const rooms = useList(planned("room") ? "hospitality.rooms" : undefined, { per_page: 1 });
+  const bookings = useList(
+    planned("booking") ? "hospitality.reservations" : undefined,
+    { per_page: 1 },
+  );
+  const batches = useList(planned("batch") ? "inventory.item_batches" : undefined, { per_page: 1 });
+  const projects = useList(planned("project") ? "projects.projects" : undefined, { per_page: 1 });
+  const tillSales = useList(planned("sale") ? "sales.counter_sales" : undefined, { per_page: 1 });
+  const any = (q: { data?: { data: unknown[] } }) => (q.data?.data.length ?? 0) > 0;
+
+  const ALL_STEPS: Record<string, SetupStep> = {
+    customer: {
       icon: Building2,
       title: t("setup.customer.title"),
       why: t("setup.customer.why"),
@@ -88,7 +147,7 @@ export default function DashboardPage() {
       cta: t("setup.customer.title"),
       done: hasCustomers,
     },
-    {
+    product: {
       icon: Package,
       title: t("setup.product.title"),
       why: t("setup.product.why"),
@@ -96,7 +155,47 @@ export default function DashboardPage() {
       cta: t("setup.product.cta"),
       done: hasProducts,
     },
-    {
+    batch: {
+      icon: Layers,
+      title: t("setup.batch.title"),
+      why: t("setup.batch.why"),
+      href: "/inventory/item_batches",
+      cta: t("setup.batch.cta"),
+      done: any(batches),
+    },
+    room: {
+      icon: DoorOpen,
+      title: t("setup.room.title"),
+      why: t("setup.room.why"),
+      href: "/hospitality/rooms",
+      cta: t("setup.room.cta"),
+      done: any(rooms),
+    },
+    booking: {
+      icon: CalendarCheck,
+      title: t("setup.booking.title"),
+      why: t("setup.booking.why"),
+      href: "/hospitality/reservations",
+      cta: t("setup.booking.cta"),
+      done: any(bookings),
+    },
+    sale: {
+      icon: ShoppingCart,
+      title: t("setup.sale.title"),
+      why: t("setup.sale.why"),
+      href: "/till",
+      cta: t("setup.sale.cta"),
+      done: any(tillSales),
+    },
+    project: {
+      icon: FolderKanban,
+      title: t("setup.project.title"),
+      why: t("setup.project.why"),
+      href: "/projects/projects",
+      cta: t("setup.project.cta"),
+      done: any(projects),
+    },
+    deal: {
       icon: Target,
       title: t("setup.deal.title"),
       why: t("setup.deal.why"),
@@ -104,7 +203,7 @@ export default function DashboardPage() {
       cta: t("dash.addDeal"),
       done: hasDeals,
     },
-    {
+    invoice: {
       icon: Receipt,
       title: t("setup.invoice.title"),
       why: t("setup.invoice.why"),
@@ -112,7 +211,7 @@ export default function DashboardPage() {
       cta: t("dash.createInvoice"),
       done: hasInvoices,
     },
-    {
+    team: {
       icon: UserPlus,
       title: t("setup.team.title"),
       why: t("setup.team.why"),
@@ -120,7 +219,9 @@ export default function DashboardPage() {
       cta: t("dash.inviteSomeone"),
       done: hasTeam,
     },
-  ];
+  };
+
+  const setupSteps: SetupStep[] = plan.map((key) => ALL_STEPS[key]).filter(Boolean);
 
   // A grid of zeroes tells a first-time owner nothing. Once anything at all
   // exists the figures start meaning something, so they come back immediately.
@@ -174,46 +275,55 @@ export default function DashboardPage() {
 
       {!nothingYet && (
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat
-          label={t("dash.openPipeline")}
-          value={formatMoney(openPipelineValue, currency)}
-          sub={`${openDealCount} open deal${openDealCount === 1 ? "" : "s"}`}
-          icon={Target}
-          tone="brand"
-          loading={loading}
-          href="/crm/deals"
-        />
-        <Stat
-          label={t("dash.won")}
-          value={formatMoney(wonValue, currency)}
-          sub={t("dash.wonWhy")}
-          icon={TrendingUp}
-          tone="success"
-          loading={loading}
-          href="/crm/deals?stage=closed_won"
-        />
-        <Stat
-          label={t("dash.receivable")}
-          value={formatMoney(receivableValue, currency)}
-          sub={t("dash.receivableWhy")}
-          icon={CircleDollarSign}
-          tone="warning"
-          loading={loading}
-          href="/books/invoices"
-        />
-        <Stat
-          label={t("dash.openTickets")}
-          value={String(openTickets)}
-          sub={t("dash.ticketsWhy")}
-          icon={Ticket}
-          tone="danger"
-          loading={ticketCounts.isLoading}
-          href="/desk/tickets"
-        />
+        {sells && (
+          <Stat
+            label={t("dash.openPipeline")}
+            value={formatMoney(openPipelineValue, currency)}
+            sub={plural("dash.openDealCount", openDealCount)}
+            icon={Target}
+            tone="brand"
+            loading={loading}
+            href="/crm/deals"
+          />
+        )}
+        {sells && (
+          <Stat
+            label={t("dash.won")}
+            value={formatMoney(wonValue, currency)}
+            sub={t("dash.wonWhy")}
+            icon={TrendingUp}
+            tone="success"
+            loading={loading}
+            href="/crm/deals?stage=closed_won"
+          />
+        )}
+        {bills && (
+          <Stat
+            label={t("dash.receivable")}
+            value={formatMoney(receivableValue, currency)}
+            sub={t("dash.receivableWhy")}
+            icon={CircleDollarSign}
+            tone="warning"
+            loading={loading}
+            href="/books/invoices"
+          />
+        )}
+        {supports && (
+          <Stat
+            label={t("dash.openTickets")}
+            value={String(openTickets)}
+            sub={t("dash.ticketsWhy")}
+            icon={Ticket}
+            tone="danger"
+            loading={ticketCounts.isLoading}
+            href="/desk/tickets"
+          />
+        )}
       </div>
       )}
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        {sells && (
         <Card>
           <CardHeader>
             <CardTitle>{t("dash.pipelineByStage")}</CardTitle>
@@ -233,7 +343,9 @@ export default function DashboardPage() {
             )}
           </CardContent>
         </Card>
+        )}
 
+        {bills && (
         <Card>
           <CardHeader>
             <CardTitle>{t("dash.invoicesByStatus")}</CardTitle>
@@ -253,9 +365,11 @@ export default function DashboardPage() {
             )}
           </CardContent>
         </Card>
+        )}
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        {bills && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-1.5">
@@ -287,7 +401,11 @@ export default function DashboardPage() {
                             {String(inv.number)} · {String(inv.account_id__label ?? "—")}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            Due {formatDate(inv.due_date as string)} · {Math.abs(late)} days late
+                            {t("dash.dueOn", undefined, {
+                              date: formatDate(inv.due_date as string),
+                            })}
+                            {" · "}
+                            {plural("dash.daysLate", Math.abs(late))}
                           </p>
                         </div>
                         <span className="tnum text-sm font-medium">
@@ -301,7 +419,9 @@ export default function DashboardPage() {
             )}
           </CardContent>
         </Card>
+        )}
 
+        {sells && (
         <Card>
           <CardHeader>
             <CardTitle>{t("dash.latestDeals")}</CardTitle>
@@ -342,6 +462,7 @@ export default function DashboardPage() {
             )}
           </CardContent>
         </Card>
+        )}
       </div>
     </div>
   );

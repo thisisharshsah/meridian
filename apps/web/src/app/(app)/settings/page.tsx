@@ -129,7 +129,7 @@ function OrganizationTab() {
         setErrors(e.fieldMap);
         if (!Object.keys(e.fieldMap).length) setFormError(e.message);
       } else {
-        setFormError("Could not save those settings");
+        setFormError(t("settings.saveFailed"));
       }
     },
   });
