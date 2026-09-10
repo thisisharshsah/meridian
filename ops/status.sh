@@ -6,6 +6,18 @@ set -uo pipefail
 DOMAIN="gui/$(id -u)"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
+# What this installation is. Read from the running server rather than from
+# the file, because the file can have been edited since the last restart.
+printf '── edition ────────────────────────────────────\n'
+running="$(curl -s -m 5 http://127.0.0.1:7011/api/health 2>/dev/null | sed -n 's/.*"edition":"\([^"]*\)".*/\1/p')"
+configured="$(grep -E '^EDITION=' server/.env.production 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '"' || true)"
+printf '  serving    : %s\n' "${running:-unknown (api not answering)}"
+printf '  configured : %s\n' "${configured:-full (unset)}"
+if [ -n "$running" ] && [ -n "$configured" ] && [ "$running" != "$configured" ]; then
+  printf '  ⚠ the file says %s and the process is serving %s — restart to apply\n' \
+    "$configured" "$running"
+fi
+
 echo "── launchd agents ─────────────────────────────"
 for label in com.meridian.api com.meridian.web com.meridian.tunnel; do
   line="$(launchctl print "$DOMAIN/$label" 2>/dev/null | grep -E '^\s*(pid|state|last exit code) =' | tr -d '\t')"

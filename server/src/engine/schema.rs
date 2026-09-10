@@ -270,12 +270,42 @@ impl Registry {
         self
     }
 
+    /// Drop everything outside the edition this installation was built to be.
+    ///
+    /// Done once, at startup, rather than checked per request: an edition is a
+    /// property of the whole process, and removing the entity removes the
+    /// route, the metadata, the report, the search index and the child link
+    /// with it. What is not sold does not answer, and there is no per-request
+    /// cost and no code path where a check could be forgotten.
+    ///
+    /// Child links pointing at removed entities are pruned too, or
+    /// `validate()` would fail on a reference to something that is no longer
+    /// there — which is exactly the check catching this working correctly.
+    pub fn retain_edition(&mut self, edition: &crate::editions::Edition) {
+        self.modules.retain(|m| edition.carries(m.key));
+        self.entities.retain(|key, _| edition.carries_entity(key));
+        self.order.retain(|key| edition.carries_entity(key));
+        for entity in self.entities.values_mut() {
+            entity.children.retain(|c| edition.carries_entity(c.entity));
+            entity.fields.retain(|f| match &f.kind {
+                FieldKind::Ref { entity } => edition.carries_entity(entity),
+                _ => true,
+            });
+        }
+    }
+
     pub fn get(&self, key: &str) -> Option<&EntityDef> {
         self.entities.get(key)
     }
 
     pub fn entities(&self) -> impl Iterator<Item = &EntityDef> {
         self.order.iter().filter_map(move |k| self.entities.get(k))
+    }
+
+    /// Is this module part of the build? Answers the question the edition
+    /// leaves behind: "does this installation have such a thing at all".
+    pub fn get_module(&self, key: &str) -> Option<&ModuleDef> {
+        self.modules.iter().find(|m| m.key == key)
     }
 
     pub fn modules(&self) -> &[ModuleDef] {

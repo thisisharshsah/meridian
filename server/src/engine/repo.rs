@@ -683,6 +683,7 @@ mod tests {
             role_key: "admin".into(),
             is_owner: true,
             permissions: Default::default(),
+            edition: None,
         }
     }
 

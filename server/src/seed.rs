@@ -161,6 +161,9 @@ pub async fn run(state: &AppState) -> anyhow::Result<()> {
         role_key: "admin".into(),
         is_owner: true,
         permissions: Default::default(),
+        // The seeder runs as the installation, which is already bounded by
+        // its own edition.
+        edition: None,
     };
 
     let owner = |i: usize| teammates[i % teammates.len()].clone();
@@ -472,63 +475,67 @@ pub async fn run(state: &AppState) -> anyhow::Result<()> {
         bump("expenses");
     }
 
-    // ----------------------------------------------------------- Delivery ---
-    let mut projects = Vec::new();
-    for (i, (name, code, acct, status, billing, budget, rate, start, end)) in [
-        ("Telemetry rollout — phase 1", "TEL-1", 0usize, "active", "fixed", "180000.00", "0", -30i64, 45i64),
-        ("Supply portal integration", "SPI-2", 1, "active", "hourly", "0", "185.00", -12, 60),
-        ("Plant automation study", "PAS-3", 2, "planning", "fixed", "95000.00", "0", 7, 90),
-    ].iter().enumerate() {
-        let id = make(state, &ctx, "projects.projects", json!({
-            "name": name, "code": code, "account_id": accounts[*acct],
-            "status": status, "billing_type": billing,
-            "budget": budget, "hourly_rate": rate,
-            "start_date": day(*start), "end_date": day(*end),
-            "owner_id": owner(i),
-            "description": "Delivery engagement tracked end to end in Meridian.",
-        })).await?;
-        projects.push(id);
-        bump("projects");
-    }
+    // Skipped by a build that does not carry it: a narrower edition has no
+    // such screens, and a demo of one should still run.
+    if state.registry.get_module("projects").is_some() {
+        // ----------------------------------------------------------- Delivery ---
+        let mut projects = Vec::new();
+        for (i, (name, code, acct, status, billing, budget, rate, start, end)) in [
+            ("Telemetry rollout — phase 1", "TEL-1", 0usize, "active", "fixed", "180000.00", "0", -30i64, 45i64),
+            ("Supply portal integration", "SPI-2", 1, "active", "hourly", "0", "185.00", -12, 60),
+            ("Plant automation study", "PAS-3", 2, "planning", "fixed", "95000.00", "0", 7, 90),
+        ].iter().enumerate() {
+            let id = make(state, &ctx, "projects.projects", json!({
+                "name": name, "code": code, "account_id": accounts[*acct],
+                "status": status, "billing_type": billing,
+                "budget": budget, "hourly_rate": rate,
+                "start_date": day(*start), "end_date": day(*end),
+                "owner_id": owner(i),
+                "description": "Delivery engagement tracked end to end in Meridian.",
+            })).await?;
+            projects.push(id);
+            bump("projects");
+        }
 
-    let milestone = make(state, &ctx, "projects.milestones", json!({
-        "project_id": projects[0], "name": "Pilot fleet live", "status": "open",
-        "due_date": day(18), "owner_id": owner(0),
-    })).await?;
-    bump("milestones");
-
-    let mut tasks = Vec::new();
-    for (i, (name, project, status, prio, due, est)) in [
-        ("Site survey and asset list", 0usize, "done", "high", -18i64, "24"),
-        ("Gateway provisioning", 0, "in_progress", "high", 5, "40"),
-        ("Driver training material", 0, "todo", "normal", 16, "16"),
-        ("Dashboard acceptance testing", 0, "review", "normal", 12, "20"),
-        ("API contract sign-off", 1, "in_progress", "urgent", 3, "12"),
-        ("Data migration dry run", 1, "todo", "high", 20, "32"),
-        ("Feasibility report", 2, "todo", "normal", 40, "60"),
-    ].iter().enumerate() {
-        let id = make(state, &ctx, "projects.tasks", json!({
-            "name": name, "project_id": projects[*project],
-            "milestone_id": if *project == 0 { json!(milestone) } else { Value::Null },
-            "status": status, "priority": prio,
-            "assignee_id": owner(i), "due_date": day(*due),
-            "estimated_hours": est, "sort_order": i as i64,
+        let milestone = make(state, &ctx, "projects.milestones", json!({
+            "project_id": projects[0], "name": "Pilot fleet live", "status": "open",
+            "due_date": day(18), "owner_id": owner(0),
         })).await?;
-        tasks.push(id);
-        bump("tasks");
-    }
+        bump("milestones");
 
-    for (i, (task, hours, when, billable)) in [
-        (0usize, "7.5", -18i64, true), (0, "6", -17, true), (1, "8", -3, true),
-        (1, "5.5", -2, true), (3, "4", -1, true), (4, "6.5", -4, true), (4, "3", -1, false),
-    ].iter().enumerate() {
-        make(state, &ctx, "projects.timesheets", json!({
-            "project_id": projects[if *task >= 4 { 1 } else { 0 }],
-            "task_id": tasks[*task], "user_id": owner(i),
-            "work_date": day(*when), "hours": hours, "billable": billable,
-            "notes": "Logged from the delivery board",
-        })).await?;
-        bump("time logs");
+        let mut tasks = Vec::new();
+        for (i, (name, project, status, prio, due, est)) in [
+            ("Site survey and asset list", 0usize, "done", "high", -18i64, "24"),
+            ("Gateway provisioning", 0, "in_progress", "high", 5, "40"),
+            ("Driver training material", 0, "todo", "normal", 16, "16"),
+            ("Dashboard acceptance testing", 0, "review", "normal", 12, "20"),
+            ("API contract sign-off", 1, "in_progress", "urgent", 3, "12"),
+            ("Data migration dry run", 1, "todo", "high", 20, "32"),
+            ("Feasibility report", 2, "todo", "normal", 40, "60"),
+        ].iter().enumerate() {
+            let id = make(state, &ctx, "projects.tasks", json!({
+                "name": name, "project_id": projects[*project],
+                "milestone_id": if *project == 0 { json!(milestone) } else { Value::Null },
+                "status": status, "priority": prio,
+                "assignee_id": owner(i), "due_date": day(*due),
+                "estimated_hours": est, "sort_order": i as i64,
+            })).await?;
+            tasks.push(id);
+            bump("tasks");
+        }
+
+        for (i, (task, hours, when, billable)) in [
+            (0usize, "7.5", -18i64, true), (0, "6", -17, true), (1, "8", -3, true),
+            (1, "5.5", -2, true), (3, "4", -1, true), (4, "6.5", -4, true), (4, "3", -1, false),
+        ].iter().enumerate() {
+            make(state, &ctx, "projects.timesheets", json!({
+                "project_id": projects[if *task >= 4 { 1 } else { 0 }],
+                "task_id": tasks[*task], "user_id": owner(i),
+                "work_date": day(*when), "hours": hours, "billable": billable,
+                "notes": "Logged from the delivery board",
+            })).await?;
+            bump("time logs");
+        }
     }
 
     // -------------------------------------------------------------- People ---
@@ -578,126 +585,143 @@ pub async fn run(state: &AppState) -> anyhow::Result<()> {
         bump("leave requests");
     }
 
-    // ------------------------------------------------------------ Support ---
-    for (i, (subject, acct, contact, status, prio, channel, cat, due)) in [
-        ("Gateway dropping offline overnight", 0usize, 0usize, "in_progress", "urgent", "email", "Hardware", 0i64),
-        ("Invoice does not match order", 1, 2, "open", "high", "email", "Billing", 1),
-        ("Request: bulk export of readings", 0, 1, "open", "normal", "web", "Feature request", 6),
-        ("Sensor calibration guidance", 2, 4, "resolved", "normal", "phone", "How-to", -3),
-        ("Portal login fails after reset", 4, 6, "on_hold", "high", "chat", "Access", 2),
-        ("Shipment arrived damaged", 1, 3, "closed", "high", "email", "Logistics", -9),
-    ].iter().enumerate() {
-        let t = make(state, &ctx, "desk.tickets", json!({
-            "subject": subject, "account_id": accounts[*acct], "contact_id": contacts[*contact],
-            "status": status, "priority": prio, "channel": channel, "category": cat,
-            "assignee_id": owner(i), "due_at": format!("{}T17:00:00Z", day(*due)),
-            "description": "Reported by the customer and triaged by the support desk.",
-        })).await?;
-        bump("tickets");
-        make(state, &ctx, "desk.comments", json!({
-            "ticket_id": t, "body": "Thanks for the report — we are looking into this now.",
-            "is_public": true, "author_id": owner(i),
-        })).await?;
+    // Skipped by a build that does not carry it: a narrower edition has no
+    // such screens, and a demo of one should still run.
+    if state.registry.get_module("desk").is_some() {
+        // ------------------------------------------------------------ Support ---
+        for (i, (subject, acct, contact, status, prio, channel, cat, due)) in [
+            ("Gateway dropping offline overnight", 0usize, 0usize, "in_progress", "urgent", "email", "Hardware", 0i64),
+            ("Invoice does not match order", 1, 2, "open", "high", "email", "Billing", 1),
+            ("Request: bulk export of readings", 0, 1, "open", "normal", "web", "Feature request", 6),
+            ("Sensor calibration guidance", 2, 4, "resolved", "normal", "phone", "How-to", -3),
+            ("Portal login fails after reset", 4, 6, "on_hold", "high", "chat", "Access", 2),
+            ("Shipment arrived damaged", 1, 3, "closed", "high", "email", "Logistics", -9),
+        ].iter().enumerate() {
+            let t = make(state, &ctx, "desk.tickets", json!({
+                "subject": subject, "account_id": accounts[*acct], "contact_id": contacts[*contact],
+                "status": status, "priority": prio, "channel": channel, "category": cat,
+                "assignee_id": owner(i), "due_at": format!("{}T17:00:00Z", day(*due)),
+                "description": "Reported by the customer and triaged by the support desk.",
+            })).await?;
+            bump("tickets");
+            make(state, &ctx, "desk.comments", json!({
+                "ticket_id": t, "body": "Thanks for the report — we are looking into this now.",
+                "is_public": true, "author_id": owner(i),
+            })).await?;
+        }
+
+        for (title, cat, status) in [
+            ("Setting up your first telemetry gateway", "Getting started", "published"),
+            ("Understanding invoice statuses", "Billing", "published"),
+            ("Calibrating an SA-40 sensor array", "Hardware", "published"),
+            ("Bulk data export (beta)", "Data", "draft"),
+        ] {
+            make(state, &ctx, "desk.articles", json!({
+                "title": title, "category": cat, "status": status,
+                "body": "Step-by-step guidance maintained by the support team.",
+                "views": 120, "helpful_count": 18, "author_id": owner(3),
+                "published_at": if status == "published" { json!(now()) } else { Value::Null },
+            })).await?;
+            bump("kb articles");
+        }
     }
 
-    for (title, cat, status) in [
-        ("Setting up your first telemetry gateway", "Getting started", "published"),
-        ("Understanding invoice statuses", "Billing", "published"),
-        ("Calibrating an SA-40 sensor array", "Hardware", "published"),
-        ("Bulk data export (beta)", "Data", "draft"),
-    ] {
-        make(state, &ctx, "desk.articles", json!({
-            "title": title, "category": cat, "status": status,
-            "body": "Step-by-step guidance maintained by the support team.",
-            "views": 120, "helpful_count": 18, "author_id": owner(3),
-            "published_at": if status == "published" { json!(now()) } else { Value::Null },
-        })).await?;
-        bump("kb articles");
+    // Skipped by a build that does not carry it: a narrower edition has no
+    // such screens, and a demo of one should still run.
+    if state.registry.get_module("marketing").is_some() {
+        // ---------------------------------------------------- Marketing/Hiring ---
+        for (i, (name, kind, status, start, end, budget, cost, expected, responses)) in [
+            ("Q4 industrial telemetry webinar", "webinar", "active", -10i64, 20i64, "15000.00", "9200.00", "180000.00", 240),
+            ("Logistics trade show", "event", "completed", -70, -60, "42000.00", "44800.00", "320000.00", 610),
+            ("Retargeting — fleet managers", "ads", "active", -25, 15, "12000.00", "7350.00", "90000.00", 1450),
+            ("Partner referral push", "referral", "planning", 14, 90, "8000.00", "0", "140000.00", 0),
+        ].iter().enumerate() {
+            make(state, &ctx, "marketing.campaigns", json!({
+                "name": name, "campaign_type": kind, "status": status,
+                "start_date": day(*start), "end_date": day(*end),
+                "budget": budget, "actual_cost": cost, "expected_revenue": expected,
+                "target_size": 5000, "responses": responses, "owner_id": owner(i),
+            })).await?;
+            bump("campaigns");
+        }
     }
 
-    // ---------------------------------------------------- Marketing/Hiring ---
-    for (i, (name, kind, status, start, end, budget, cost, expected, responses)) in [
-        ("Q4 industrial telemetry webinar", "webinar", "active", -10i64, 20i64, "15000.00", "9200.00", "180000.00", 240),
-        ("Logistics trade show", "event", "completed", -70, -60, "42000.00", "44800.00", "320000.00", 610),
-        ("Retargeting — fleet managers", "ads", "active", -25, 15, "12000.00", "7350.00", "90000.00", 1450),
-        ("Partner referral push", "referral", "planning", 14, 90, "8000.00", "0", "140000.00", 0),
-    ].iter().enumerate() {
-        make(state, &ctx, "marketing.campaigns", json!({
-            "name": name, "campaign_type": kind, "status": status,
-            "start_date": day(*start), "end_date": day(*end),
-            "budget": budget, "actual_cost": cost, "expected_revenue": expected,
-            "target_size": 5000, "responses": responses, "owner_id": owner(i),
-        })).await?;
-        bump("campaigns");
+    // Skipped by a build that does not carry it: a narrower edition has no
+    // such screens, and a demo of one should still run.
+    if state.registry.get_module("recruit").is_some() {
+        let mut jobs = Vec::new();
+        for (i, (title, dept, status, kind, loc, openings, min, max)) in [
+            ("Senior Firmware Engineer", 0usize, "open", "full_time", "Columbus, OH", 2, "130000.00", "165000.00"),
+            ("Enterprise Account Executive", 1, "open", "full_time", "Remote — US", 1, "110000.00", "140000.00"),
+            ("Support Engineer (EMEA)", 0, "on_hold", "full_time", "Berlin", 1, "70000.00", "88000.00"),
+        ].iter().enumerate() {
+            let id = make(state, &ctx, "recruit.job_openings", json!({
+                "title": title, "department_id": departments[*dept], "status": status,
+                "employment_type": kind, "location": loc, "openings": openings,
+                "salary_min": min, "salary_max": max,
+                "hiring_manager_id": owner(i), "target_date": day(45),
+                "description": "Join a team building industrial telemetry end to end.",
+            })).await?;
+            jobs.push(id);
+            bump("job openings");
+        }
+
+        for (i, (name, job, stage, source, company, years, expected, rating)) in [
+            ("Aiden Brooks", 0usize, "interview", "Referral", "Vector Devices", 8, "152000.00", 4),
+            ("Sana Iqbal", 0, "offer", "LinkedIn", "Helios Systems", 10, "160000.00", 5),
+            ("Diego Ramos", 0, "screening", "Careers page", "Northbeam", 6, "138000.00", 3),
+            ("Kate Mullen", 1, "applied", "LinkedIn", "Crestline", 12, "125000.00", 3),
+            ("Femi Adeyemi", 1, "interview", "Referral", "Orbit Sales", 9, "132000.00", 4),
+            ("Lars Nilsen", 2, "rejected", "Agency", "Baltic Support", 4, "76000.00", 2),
+        ].iter().enumerate() {
+            make(state, &ctx, "recruit.candidates", json!({
+                "full_name": name, "job_opening_id": jobs[*job], "stage": stage,
+                "source": source, "current_company": company, "experience_years": years,
+                "expected_salary": expected, "rating": rating, "owner_id": owner(i),
+                "email": format!("{}@example.com", name.to_lowercase().replace(' ', ".")),
+                "phone": format!("+1 555 05{:02}", i + 10),
+            })).await?;
+            bump("candidates");
+        }
     }
 
-    let mut jobs = Vec::new();
-    for (i, (title, dept, status, kind, loc, openings, min, max)) in [
-        ("Senior Firmware Engineer", 0usize, "open", "full_time", "Columbus, OH", 2, "130000.00", "165000.00"),
-        ("Enterprise Account Executive", 1, "open", "full_time", "Remote — US", 1, "110000.00", "140000.00"),
-        ("Support Engineer (EMEA)", 0, "on_hold", "full_time", "Berlin", 1, "70000.00", "88000.00"),
-    ].iter().enumerate() {
-        let id = make(state, &ctx, "recruit.job_openings", json!({
-            "title": title, "department_id": departments[*dept], "status": status,
-            "employment_type": kind, "location": loc, "openings": openings,
-            "salary_min": min, "salary_max": max,
-            "hiring_manager_id": owner(i), "target_date": day(45),
-            "description": "Join a team building industrial telemetry end to end.",
-        })).await?;
-        jobs.push(id);
-        bump("job openings");
-    }
+    // Skipped by a build that does not carry it: a narrower edition has no
+    // such screens, and a demo of one should still run.
+    if state.registry.get_module("hospitality").is_some() {
 
-    for (i, (name, job, stage, source, company, years, expected, rating)) in [
-        ("Aiden Brooks", 0usize, "interview", "Referral", "Vector Devices", 8, "152000.00", 4),
-        ("Sana Iqbal", 0, "offer", "LinkedIn", "Helios Systems", 10, "160000.00", 5),
-        ("Diego Ramos", 0, "screening", "Careers page", "Northbeam", 6, "138000.00", 3),
-        ("Kate Mullen", 1, "applied", "LinkedIn", "Crestline", 12, "125000.00", 3),
-        ("Femi Adeyemi", 1, "interview", "Referral", "Orbit Sales", 9, "132000.00", 4),
-        ("Lars Nilsen", 2, "rejected", "Agency", "Baltic Support", 4, "76000.00", 2),
-    ].iter().enumerate() {
-        make(state, &ctx, "recruit.candidates", json!({
-            "full_name": name, "job_opening_id": jobs[*job], "stage": stage,
-            "source": source, "current_company": company, "experience_years": years,
-            "expected_salary": expected, "rating": rating, "owner_id": owner(i),
-            "email": format!("{}@example.com", name.to_lowercase().replace(' ', ".")),
-            "phone": format!("+1 555 05{:02}", i + 10),
-        })).await?;
-        bump("candidates");
-    }
+        // A handful of rooms and stays. Northwind lets its two guest flats and a
+        // meeting suite to visiting engineers, which is a real enough reason for a
+        // supplier to hold a room list — and it gives the board something to show.
+        let mut rooms = Vec::new();
+        for (number, kind, floor, sleeps, rate, state_) in [
+            ("101", "double", 1, 2, "145.00", "available"),
+            ("102", "twin", 1, 2, "145.00", "available"),
+            ("201", "suite", 2, 4, "295.00", "available"),
+            ("202", "family", 2, 5, "225.00", "maintenance"),
+        ] {
+            let id = make(state, &ctx, "hospitality.rooms", json!({
+                "number": number, "room_type": kind, "floor": floor, "capacity": sleeps,
+                "nightly_rate": rate, "status": state_,
+            })).await?;
+            rooms.push(id);
+            bump("rooms");
+        }
 
-    // A handful of rooms and stays. Northwind lets its two guest flats and a
-    // meeting suite to visiting engineers, which is a real enough reason for a
-    // supplier to hold a room list — and it gives the board something to show.
-    let mut rooms = Vec::new();
-    for (number, kind, floor, sleeps, rate, state_) in [
-        ("101", "double", 1, 2, "145.00", "available"),
-        ("102", "twin", 1, 2, "145.00", "available"),
-        ("201", "suite", 2, 4, "295.00", "available"),
-        ("202", "family", 2, 5, "225.00", "maintenance"),
-    ] {
-        let id = make(state, &ctx, "hospitality.rooms", json!({
-            "number": number, "room_type": kind, "floor": floor, "capacity": sleeps,
-            "nightly_rate": rate, "status": state_,
-        })).await?;
-        rooms.push(id);
-        bump("rooms");
-    }
-
-    // One guest in now, one arriving, one already left. Dates are relative, so
-    // the board is never a museum piece.
-    for (room, guest, from, to, status, source) in [
-        (0usize, "Priya Raman", -2i64, 3i64, "checked_in", "Direct"),
-        (1, "Tomas Weber", 5, 9, "booked", "Phone"),
-        (2, "Ines Duarte", -12, -8, "checked_out", "Direct"),
-        (0, "Adaeze Nwosu", 14, 17, "booked", "Website"),
-    ] {
-        make(state, &ctx, "hospitality.reservations", json!({
-            "room_id": rooms[room], "guest_name": guest,
-            "check_in": day(from), "check_out": day(to),
-            "status": status, "adults": 2, "source": source,
-        })).await?;
-        bump("bookings");
+        // One guest in now, one arriving, one already left. Dates are relative, so
+        // the board is never a museum piece.
+        for (room, guest, from, to, status, source) in [
+            (0usize, "Priya Raman", -2i64, 3i64, "checked_in", "Direct"),
+            (1, "Tomas Weber", 5, 9, "booked", "Phone"),
+            (2, "Ines Duarte", -12, -8, "checked_out", "Direct"),
+            (0, "Adaeze Nwosu", 14, 17, "booked", "Website"),
+        ] {
+            make(state, &ctx, "hospitality.reservations", json!({
+                "room_id": rooms[room], "guest_name": guest,
+                "check_in": day(from), "check_out": day(to),
+                "status": status, "adults": 2, "source": source,
+            })).await?;
+            bump("bookings");
+        }
     }
 
     // The seeder writes through the repository rather than the HTTP layer, so

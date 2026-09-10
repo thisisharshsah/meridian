@@ -13,6 +13,11 @@ SRC="${CARGO_TARGET_DIR:-$HOME/.cargo/target}/release/suite-server"
 DST="server/target-release/suite-server"
 DOMAIN="gui/$(id -u)"
 
+# The package this box serves. Read from the same file the server will read,
+# so the line printed here is the line that takes effect rather than a guess.
+EDITION_LINE="$(grep -E '^EDITION=' server/.env.production 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '"' || true)"
+echo "→ deploying ${EDITION_LINE:-full}"
+
 echo "→ building the API"
 (cd server && cargo build --release --quiet)
 [[ -f "$SRC" ]] || { echo "no binary at $SRC" >&2; exit 1; }

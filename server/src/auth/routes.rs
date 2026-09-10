@@ -154,7 +154,8 @@ async fn register(
     let org_id = match body.organization.as_deref().map(str::trim).filter(|o| !o.is_empty()) {
         Some(name) => {
             let kind = body.business_type.as_deref().unwrap_or("general");
-            provision_organization(&mut tx, &user_id, name, &currency, kind, &ts).await?
+            provision_organization(&mut tx, &user_id, name, &currency, kind, &state.config.edition, &ts)
+                .await?
         }
         None => String::new(),
     };
@@ -389,6 +390,7 @@ async fn me(State(state): State<AppState>, ctx: UserCtx) -> AppResult<Json<serde
             // and read by nothing.
             "fiscal_year_start_month": o.try_get::<i64, _>("fiscal_year_start_month").unwrap_or(1),
         })),
+        "product": product_name(&state, ctx.org_id.as_deref()).await,
         "organizations": orgs.iter().map(|r| json!({
             "id": r.try_get::<String, _>("id").unwrap_or_default(),
             "name": r.try_get::<String, _>("name").unwrap_or_default(),
@@ -414,6 +416,7 @@ async fn provision_organization(
     name: &str,
     currency: &str,
     business_type: &str,
+    installation_edition: &str,
     ts: &str,
 ) -> AppResult<String> {
     let org_id = new_id();
@@ -451,8 +454,12 @@ async fn provision_organization(
     // A trade that uses only part of the suite says so once, here. Writing no
     // rows is what "all of it" looks like, so the general case costs nothing
     // and a module shipped next year appears for them without asking.
+    // Intersected with what the installation carries: a preset written for the
+    // full suite must not write rows for modules this build does not have.
+    let edition = crate::editions::find(installation_edition)
+        .expect("config rejects an unknown edition");
     if let Some(keys) = crate::modules::modules_for(business_type) {
-        for key in keys {
+        for key in keys.iter().filter(|k| edition.carries(k)) {
             sqlx::query("INSERT INTO org_modules (org_id, module_key, created_at) VALUES (?, ?, ?)")
                 .bind(&org_id)
                 .bind(key)
@@ -541,8 +548,16 @@ async fn create_workspace(
     let mut tx = state.pool.begin().await?;
     let kind = body.business_type.as_deref().unwrap_or("general");
     let org_id =
-        provision_organization(&mut tx, &ctx.user_id, body.organization.trim(), &currency, kind, &ts)
-            .await?;
+        provision_organization(
+            &mut tx,
+            &ctx.user_id,
+            body.organization.trim(),
+            &currency,
+            kind,
+            &state.config.edition,
+            &ts,
+        )
+        .await?;
     tx.commit().await?;
 
     issue_session(&state, &ctx.user_id, &org_id, &ctx.email, &ctx.name, None).await.map(Json)
@@ -684,4 +699,29 @@ mod tests {
         };
         assert!(validate_registration(&invited).is_ok());
     }
+}
+
+/// What this workspace's copy of the product is called: the package it was
+/// sold, or failing that the package this installation is. It is the name on
+/// the sidebar, so a hotel does not spend its day looking at somebody else's
+/// product name.
+async fn product_name(state: &AppState, org_id: Option<&str>) -> String {
+    // Someone between workspaces has no licence to read, so they get the
+    // installation's own name.
+    let sold: Option<String> = match org_id {
+        Some(id) => sqlx::query_scalar("SELECT edition FROM organizations WHERE id = ?")
+            .bind(id)
+            .fetch_optional(&state.pool)
+            .await
+            .ok()
+            .flatten()
+            .flatten(),
+        None => None,
+    };
+
+    sold.as_deref()
+        .and_then(crate::editions::find)
+        .or_else(|| crate::editions::find(&state.config.edition))
+        .map(|e| e.name.to_string())
+        .unwrap_or_else(|| "Aurovie Business".into())
 }

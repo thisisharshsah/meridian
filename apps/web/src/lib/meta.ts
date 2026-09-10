@@ -84,6 +84,8 @@ export type Session = {
     /** 1-12. The month the business's financial year starts in. */
     fiscal_year_start_month: number;
   } | null;
+  /** What this installation's copy of the product is called. */
+  product: string;
   role: string | null;
   organizations: { id: string; name: string; slug: string }[];
   is_owner: boolean;

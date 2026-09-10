@@ -90,7 +90,10 @@ async fn meta(State(state): State<AppState>, ctx: Ctx) -> AppResult<Json<Value>>
         .registry
         .modules()
         .iter()
-        .filter(|m| in_use(m.key))
+        // Sold, then chosen. The registry has already been cut to what this
+        // installation carries; this cuts it again to what this workspace
+        // bought, and again to what it asked to see.
+        .filter(|m| ctx.licensed_module(m.key) && in_use(m.key))
         .map(|m| {
             let entities: Vec<Value> = state
                 .registry

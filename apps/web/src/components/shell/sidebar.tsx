@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { entityPath, type ModuleMeta } from "@/lib/meta";
 import { Skeleton } from "@/components/ui/misc";
 import { t } from "@/lib/i18n";
+import { useProductName } from "@/lib/queries";
 
 const OPEN_KEY = "suite-open-modules";
 
@@ -47,6 +48,7 @@ export function Sidebar({
 }) {
   const pathname = usePathname();
   const activeModule = pathname.split("/")[1] ?? "";
+  const product = useProductName();
 
   const [open, setOpen] = React.useState<Record<string, boolean>>({});
   const [restored, setRestored] = React.useState(false);
@@ -102,9 +104,9 @@ export function Sidebar({
         <Link
           href="/"
           className="text-sidebar-foreground hover:text-foreground"
-          aria-label={t("nav.home.aria", undefined, { app: t("app.name") })}
+          aria-label={t("nav.home.aria", undefined, { app: product })}
         >
-          {collapsed ? <Logo size={24} /> : <Wordmark />}
+          {collapsed ? <Logo size={24} /> : <Wordmark name={product} />}
         </Link>
       </div>
 

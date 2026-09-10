@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Logo } from "@/components/brand/logo";
 import { BarChart3, Boxes, Receipt, Users } from "lucide-react";
 import { t } from "@/lib/i18n";
+import { productName } from "@/lib/session";
 
 const PILLARS = [
   { icon: Users, title: t("auth.pitch.sell"), body: t("auth.pitch.sellWhy") },
@@ -10,7 +11,8 @@ const PILLARS = [
   { icon: BarChart3, title: t("auth.pitch.understand"), body: t("auth.pitch.understandWhy") },
 ];
 
-export default function AuthLayout({ children }: { children: React.ReactNode }) {
+export default async function AuthLayout({ children }: { children: React.ReactNode }) {
+  const product = await productName(t("app.name"));
   return (
     <div className="grid min-h-dvh lg:grid-cols-[1.05fr_1fr]">
       {/* Story panel: hidden on small screens where the form is all that matters. */}
@@ -25,7 +27,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         />
         <Link href="/" className="relative flex items-center gap-2.5">
           <Logo size={30} className="[&>rect]:fill-white/15" />
-          <span className="text-lg font-semibold tracking-tight">{t("app.name")}</span>
+          <span className="text-lg font-semibold tracking-tight">{product}</span>
         </Link>
 
         <div className="relative max-w-md">

@@ -190,6 +190,13 @@ async fn catalog(State(state): State<AppState>, ctx: Ctx) -> AppResult<Json<Valu
 
     let data: Vec<Value> = REPORTS
         .iter()
+        // Reports are a list of their own rather than something derived from
+        // the registry, so the installation's edition has to be applied to
+        // them by hand. Every table exists in every build -- the schema does
+        // not vary, only what is served from it -- so a report left in this
+        // list would happily read a module the build does not carry.
+        .filter(|r| state.registry.get(r.requires).is_some())
+        .filter(|r| ctx.licensed_module(r.module))
         .filter(|r| {
             r.module == crate::modules::CORE
                 || chosen.is_empty()
@@ -294,6 +301,9 @@ async fn run(
     let def = REPORTS
         .iter()
         .find(|r| r.key == key)
+        // Not served by a build that does not carry it, whatever the tables
+        // in the database happen to say.
+        .filter(|r| state.registry.get(r.requires).is_some())
         .ok_or_else(|| AppError::not_found(format!("Report `{key}`")))?;
     ctx.require(def.requires, Action::View)?;
 

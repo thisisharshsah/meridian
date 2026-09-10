@@ -19,6 +19,12 @@ use crate::config::Config;
 use crate::state::AppState;
 
 async fn test_app() -> (Router, AppState) {
+    test_app_as("full").await
+}
+
+/// An installation running a particular package, built the way `main` builds
+/// one: the registry is cut to the edition before it is validated.
+async fn test_app_as(edition: &str) -> (Router, AppState) {
     // One shared in-memory connection: `sqlite::memory:` gives each connection
     // its own database, so the pool is pinned to a single connection.
     let pool = SqlitePoolOptions::new()
@@ -32,8 +38,10 @@ async fn test_app() -> (Router, AppState) {
 
     let mut config = Config::from_env();
     config.jwt_secret = "test-secret-for-isolation-tests".into();
+    config.edition = edition.to_string();
 
-    let registry = crate::modules::registry();
+    let mut registry = crate::modules::registry();
+    registry.retain_edition(crate::editions::find(edition).expect("a known edition"));
     registry.validate().expect("registry");
 
     let state = AppState {
@@ -3935,4 +3943,135 @@ async fn a_workspace_that_never_chose_sees_all_of_it() {
     let (_, meta) = call(&app, get("/api/meta", &owner)).await;
     let shown = meta["modules"].as_array().unwrap().len();
     assert!(shown >= 10, "and shows the whole suite, not none of it — got {shown}");
+}
+
+/// A package sold as its own product. The build carries what was bought and
+/// nothing else — not hidden, not forbidden, absent.
+#[tokio::test]
+async fn a_shop_installation_does_not_carry_what_a_shop_did_not_buy() {
+    let (app, state) = test_app_as("shop").await;
+    let owner = new_org(&app, "corner").await;
+
+    assert!(state.registry.get("inventory.items").is_some(), "a shop has stock");
+    assert!(state.registry.get("hospitality.rooms").is_none(), "and no rooms");
+    assert!(state.registry.get("projects.projects").is_none(), "and no projects");
+
+    // Absent, not refused: there is no route to refuse from.
+    for (path, code) in [
+        ("/api/e/inventory.items", StatusCode::OK),
+        ("/api/e/hospitality.rooms", StatusCode::NOT_FOUND),
+        ("/api/e/projects.projects", StatusCode::NOT_FOUND),
+    ] {
+        let (status, _) = call(&app, get(path, &owner)).await;
+        assert_eq!(status, code, "{path}");
+    }
+
+    let (_, meta) = call(&app, get("/api/meta", &owner)).await;
+    let modules: Vec<&str> =
+        meta["modules"].as_array().unwrap().iter().filter_map(|m| m["key"].as_str()).collect();
+    assert!(modules.contains(&"inventory"));
+    assert!(!modules.contains(&"hospitality"), "nothing in the menu points at what is not there");
+
+    // Reports are their own list, and every table exists in every build, so a
+    // report about an absent module would otherwise run perfectly happily.
+    let (_, reports) = call(&app, get("/api/reports", &owner)).await;
+    let keys: Vec<&str> =
+        reports["data"].as_array().unwrap().iter().filter_map(|r| r["key"].as_str()).collect();
+    assert!(keys.contains(&"stock_on_hand"));
+    assert!(!keys.contains(&"room_board"), "nor in the report list");
+    let (status, _) = call(&app, get("/api/reports/room_board", &owner)).await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "nor by asking for it directly");
+
+    // And the sections switch cannot offer it either.
+    let (_, shape) = call(&app, get("/api/settings/modules", &owner)).await;
+    assert_eq!(shape["edition"]["key"], json!("shop"));
+    let listed: Vec<&str> =
+        shape["modules"].as_array().unwrap().iter().filter_map(|m| m["key"].as_str()).collect();
+    assert!(!listed.contains(&"hospitality"), "a switch for a module that is not built in");
+
+    // Nor the setup presets: picking a hotel here would be an offer that fails.
+    let types: Vec<&str> = shape["business_types"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|b| b["key"].as_str())
+        .collect();
+    assert!(types.contains(&"shop"));
+    assert!(!types.contains(&"hospitality"), "and no offer to become a hotel");
+}
+
+/// One installation, workspaces on different packages. Here the module exists
+/// — so the answer is "you did not buy this", which is a different sentence
+/// from "that does not exist" and a different one again from "you may not".
+#[tokio::test]
+async fn a_workspace_is_held_to_the_package_it_was_sold() {
+    let (app, state) = test_app_as("full").await;
+    let owner = new_org(&app, "harbour").await;
+
+    // Sold the shop package, the way the operator's command does it.
+    sqlx::query("UPDATE organizations SET edition = 'shop'")
+        .execute(&state.pool)
+        .await
+        .unwrap();
+
+    let (status, body) = call(&app, get("/api/e/hospitality.rooms", &owner)).await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "the module is built, but not theirs");
+    let message = body["error"]["message"].as_str().unwrap_or("");
+    assert!(
+        message.contains("Aurovie Shop"),
+        "the message names the package they are on, not an entity key: {message}"
+    );
+
+    // Owners bypass permissions. They must not bypass a licence — this is the
+    // whole reason the two checks are separate.
+    let (_, me) = call(&app, get("/api/auth/me", &owner)).await;
+    assert_eq!(me["is_owner"], json!(true), "the caller really is an owner");
+    let (status, _) = call(
+        &app,
+        send("POST", "/api/e/hospitality.rooms", &owner, json!({ "number": "1" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "an owner cannot help themselves to it either");
+
+    // Nor by switching it on: the preference can only choose inside the licence.
+    let (status, err) = call(
+        &app,
+        send("PUT", "/api/settings/modules", &owner, json!({
+            "modules": ["crm", "sales", "books", "inventory", "hr", "hospitality"]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "refused, not quietly dropped: {err:?}");
+
+    // What they did buy still works.
+    let (status, _) = call(
+        &app,
+        send("POST", "/api/e/inventory.items", &owner, json!({ "name": "Tinned beans" })),
+    )
+    .await;
+    assert!(status.is_success(), "the shop package is a working shop");
+
+    // Clearing the licence puts them back on whatever the installation is.
+    sqlx::query("UPDATE organizations SET edition = NULL").execute(&state.pool).await.unwrap();
+    let (status, _) = call(&app, get("/api/e/hospitality.rooms", &owner)).await;
+    assert!(status.is_success(), "no licence recorded means the installation's own");
+}
+
+/// A licence that names something no longer real must fail closed to the
+/// installation rather than open to everything.
+#[tokio::test]
+async fn a_licence_naming_an_unknown_package_grants_nothing_extra() {
+    let (app, state) = test_app_as("full").await;
+    let owner = new_org(&app, "stale").await;
+
+    sqlx::query("UPDATE organizations SET edition = 'discontinued-2019'")
+        .execute(&state.pool)
+        .await
+        .unwrap();
+
+    let (status, _) = call(&app, get("/api/e/hospitality.rooms", &owner)).await;
+    assert!(
+        status.is_success(),
+        "an unreadable licence falls back to the installation, which is already the ceiling"
+    );
 }

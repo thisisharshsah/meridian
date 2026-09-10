@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { del, get, patch, post, qs, type Page } from "@/lib/api";
 import type { AppMeta, EntityMeta, Session } from "@/lib/meta";
-import { localizeAppMeta, localizeEntityMeta } from "@/lib/i18n";
+import { localizeAppMeta, localizeEntityMeta, t } from "@/lib/i18n";
 
 export type Record_ = Record<string, unknown> & { id: string };
 
@@ -52,6 +52,19 @@ export function usePendingInvitations() {
 }
 
 export type ListParams = Record<string, string | number | boolean | null | undefined>;
+
+/**
+ * What to call the product on this screen.
+ *
+ * An installation sold as Aurovie Rooms says so everywhere: it is the
+ * customer's software, not somebody else's with the interesting parts
+ * switched off. The catalogue name covers the moment before the session
+ * lands.
+ */
+export function useProductName(): string {
+  const { data } = useSession();
+  return data?.product || t("app.name");
+}
 
 export function useList(entity: string | undefined, params: ListParams = {}) {
   return useQuery({

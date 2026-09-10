@@ -290,6 +290,9 @@ pub async fn context_for(state: &AppState, job: &Job) -> AppResult<Ctx> {
         role_key: row.try_get("role_key").unwrap_or_default(),
         is_owner: row.try_get::<i64, _>("is_owner").unwrap_or(0) != 0,
         permissions,
+        // Background work runs as the installation, which is already
+        // bounded by its own edition.
+        edition: None,
     })
 }
 

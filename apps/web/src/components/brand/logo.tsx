@@ -18,11 +18,16 @@ export function Logo({ className, size = 28 }: { className?: string; size?: numb
   );
 }
 
-export function Wordmark({ className }: { className?: string }) {
+/**
+ * The mark and the product's name. `name` is passed in rather than read here:
+ * this renders on the sign-in page, which has no session, and inside the app,
+ * which does — and the two learn the name from different places.
+ */
+export function Wordmark({ className, name }: { className?: string; name?: string }) {
   return (
     <span className={cn("flex items-center gap-2", className)}>
       <Logo size={24} />
-      <span className="text-[15px] font-semibold tracking-tight">{t("app.name")}</span>
+      <span className="text-[15px] font-semibold tracking-tight">{name ?? t("app.name")}</span>
     </span>
   );
 }

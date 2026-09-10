@@ -1,0 +1,12 @@
+-- What this workspace was sold.
+--
+-- Distinct from `org_modules`, which is what the workspace chose to show
+-- itself. That is a preference an owner sets; this is a licence an operator
+-- sets, and the preference can only ever choose within it. Keeping them in
+-- separate columns is what stops an owner reaching a feature they have not
+-- bought by flipping their own switches.
+--
+-- NULL means "whatever this installation is" — the state every existing
+-- workspace is in, and the right answer for a single-customer deployment
+-- where the edition is already a fact about the machine.
+ALTER TABLE organizations ADD COLUMN edition TEXT;

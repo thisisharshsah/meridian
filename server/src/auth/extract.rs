@@ -27,9 +27,10 @@ impl FromRequestParts<AppState> for Ctx {
         let claims = verify_access_token(&state.config.jwt_secret, token)?;
 
         let row = sqlx::query(
-            "SELECT m.is_owner, m.status, r.key AS role_key, r.permissions
+            "SELECT m.is_owner, m.status, r.key AS role_key, r.permissions, o.edition
              FROM memberships m
              JOIN roles r ON r.id = m.role_id AND r.deleted_at IS NULL
+             JOIN organizations o ON o.id = m.org_id
              WHERE m.org_id = ? AND m.user_id = ? AND m.deleted_at IS NULL",
         )
         .bind(&claims.org)
@@ -62,6 +63,14 @@ impl FromRequestParts<AppState> for Ctx {
             role_key: row.try_get("role_key").unwrap_or_default(),
             is_owner: row.try_get::<i64, _>("is_owner").unwrap_or(0) != 0,
             permissions,
+            // A name that is no longer an edition licenses nothing extra: it
+            // falls back to the installation's own ceiling rather than being
+            // read as "everything".
+            edition: row
+                .try_get::<Option<String>, _>("edition")
+                .ok()
+                .flatten()
+                .and_then(|k| crate::editions::find(&k)),
         })
     }
 }

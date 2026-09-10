@@ -13,13 +13,23 @@ import { get, put } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
 
-type ModuleRow = { key: string; label: string; icon: string; description: string; in_use: boolean };
+type ModuleRow = {
+  key: string;
+  label: string;
+  icon: string;
+  description: string;
+  /** Part of the package this workspace was sold. */
+  licensed: boolean;
+  in_use: boolean;
+};
 type TypeRow = { key: string; label: string; description: string; icon: string; modules: string[] };
 
 export type Shape = {
   modules: ModuleRow[];
   business_types: TypeRow[];
   business_type: string;
+  /** The package this workspace is on. */
+  edition: { key: string; name: string; description: string };
   can_edit: boolean;
 };
 
@@ -136,6 +146,7 @@ export function BusinessShapeTab() {
   const dirty = picked !== null;
   const toggle = (key: string) =>
     setPicked(current.includes(key) ? current.filter((k) => k !== key) : [...current, key]);
+  const extras = data.modules.filter((m) => !m.licensed);
 
   return (
     <div className="max-w-3xl space-y-4">
@@ -143,10 +154,13 @@ export function BusinessShapeTab() {
         <CardHeader className="flex-col items-stretch gap-0">
           <CardTitle>{t("shape.title")}</CardTitle>
           <p className="mt-1 text-sm text-muted-foreground">{t("shape.lede")}</p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            {t("shape.onPackage", undefined, { product: data.edition.name })}
+          </p>
         </CardHeader>
         <CardContent className="p-0">
           <ul className="divide-y divide-border">
-            {data.modules.map((m) => (
+            {data.modules.filter((m) => m.licensed).map((m) => (
               <li key={m.key} className="flex items-start gap-3 px-4 py-3">
                 <span className="mt-0.5 rounded-md bg-surface-muted p-1.5">
                   <Icon name={m.icon} className="size-3.5 text-muted-foreground" />
@@ -171,6 +185,36 @@ export function BusinessShapeTab() {
           </ul>
         </CardContent>
       </Card>
+
+      {/* Shown, not hidden: someone deciding whether to buy more should be
+          able to see what more there is, and who to ask. */}
+      {extras.length > 0 && (
+        <Card>
+          <CardHeader className="flex-col items-stretch gap-0">
+            <CardTitle>{t("shape.notIncluded")}</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {t("shape.notIncludedWhy", undefined, { product: data.edition.name })}
+            </p>
+          </CardHeader>
+          <CardContent className="p-0">
+            <ul className="divide-y divide-border">
+              {extras.map((m) => (
+                <li key={m.key} className="flex items-start gap-3 px-4 py-3 opacity-60">
+                  <span className="mt-0.5 rounded-md bg-surface-muted p-1.5">
+                    <Icon name={m.icon} className="size-3.5 text-muted-foreground" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-medium">
+                      {t(`module.${m.key}`, m.label)}
+                    </span>
+                    <span className="block text-xs text-muted-foreground">{m.description}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="flex flex-wrap items-center gap-3">
         <Button

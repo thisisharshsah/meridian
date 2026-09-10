@@ -64,18 +64,33 @@ async fn list_modules(State(state): State<AppState>, ctx: Ctx) -> AppResult<Json
         // standing in.
         .filter(|m| m.key != CORE)
         .map(|m| {
+            let licensed = ctx.licensed_module(m.key);
             json!({
                 "key": m.key,
                 "label": m.label,
                 "icon": m.icon,
                 "description": m.description,
-                "in_use": all || chosen.iter().any(|c| c == m.key),
+                // Listed either way, and shown as unavailable rather than
+                // hidden: someone deciding whether to buy more should be able
+                // to see what more there is.
+                "licensed": licensed,
+                "in_use": licensed && (all || chosen.iter().any(|c| c == m.key)),
             })
         })
         .collect();
 
+    // A preset is only offered if everything it names was sold. Otherwise the
+    // card invites someone to pick "Hotel or guest house" on an installation
+    // with no rooms in it, and the save is refused for reasons the reader
+    // cannot see. A preset naming nothing means "all of mine", which always
+    // holds.
+    // Both bounds. `licensed_module` knows what this workspace was sold; only
+    // the registry knows what this build carries at all, and on a
+    // single-customer installation there is no workspace licence to consult.
+    let available = |m: &str| state.registry.get_module(m).is_some() && ctx.licensed_module(m);
     let types: Vec<Value> = crate::modules::BUSINESS_TYPES
         .iter()
+        .filter(|b| b.modules.iter().all(|m| available(m)))
         .map(|b| {
             json!({
                 "key": b.key,
@@ -87,10 +102,15 @@ async fn list_modules(State(state): State<AppState>, ctx: Ctx) -> AppResult<Json
         })
         .collect();
 
+    let edition = ctx.edition.unwrap_or_else(|| {
+        crate::editions::find(&state.config.edition).expect("config rejects an unknown edition")
+    });
+
     Ok(Json(json!({
         "modules": modules,
         "business_types": types,
         "business_type": business_type,
+        "edition": { "key": edition.key, "name": edition.name, "description": edition.description },
         "can_edit": ctx.is_owner,
     })))
 }
@@ -114,8 +134,13 @@ async fn set_modules(
 
     // Only keys the server actually has. A typo would otherwise hide a module
     // by silently failing to list it.
-    let known: Vec<&str> =
-        state.registry.modules().iter().map(|m| m.key).filter(|k| *k != CORE).collect();
+    let known: Vec<&str> = state
+        .registry
+        .modules()
+        .iter()
+        .map(|m| m.key)
+        .filter(|k| *k != CORE && ctx.licensed_module(k))
+        .collect();
     let mut wanted: Vec<String> = body
         .modules
         .iter()
@@ -129,6 +154,17 @@ async fn set_modules(
         return Err(AppError::Validation(vec![FieldError::new(
             "modules",
             "Keep at least one part of the business switched on.",
+        )]));
+    }
+
+    // Anything asked for that this workspace was not sold is refused outright
+    // rather than quietly dropped. Silently ignoring it would leave the owner
+    // looking at a switch they turned on that did nothing.
+    if let Some(extra) = body.modules.iter().find(|k| !ctx.licensed_module(k) && *k != CORE) {
+        let product = ctx.edition.map(|e| e.name).unwrap_or("this package");
+        return Err(AppError::Validation(vec![FieldError::new(
+            "modules",
+            format!("{extra} is not part of {product}."),
         )]));
     }
 

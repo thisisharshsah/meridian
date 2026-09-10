@@ -302,6 +302,58 @@ fails colour-blind separation when it has to carry identity alone — red and
 green sit at ΔE ≈ 4 for deuteranopia. So bars are single-hue and scaled by
 length, and status colour appears only as a badge *beside a word*.
 
+## Editions: shipping one product as several
+
+The same codebase ships as several products. An **edition** is a package of
+modules sold under its own name — Aurovie Rooms, Aurovie Shop — and three
+things narrow what a person can actually reach, in this order:
+
+```
+the installation's edition     what this build is allowed to run
+  ∩ the workspace's edition    what this customer was sold
+    ∩ the workspace's sections what they chose to show themselves
+```
+
+Each layer can only narrow the one before it, which is what stops an owner
+flipping their own switches until they reach something they have not paid
+for.
+
+**The installation's edition** is `EDITION` in the server's environment, and
+it is a fact about the whole process. It is applied once at startup by not
+registering the entities at all — so there is no route, no menu item, no
+report, no search index and nothing in the metadata. Not hidden; absent. An
+unknown name refuses to boot rather than quietly serving everything.
+
+```bash
+EDITION=hotel  ./ops/deploy.sh          # ships Aurovie Rooms
+suite-server editions                    # what this build carries and can sell
+```
+
+**The workspace's edition** matters when one installation serves several
+customers. It is nullable, and null means "whatever the installation is". It
+is checked on every request at the same place permissions are, and it answers
+differently: *"Rooms is not part of Aurovie Shop"* rather than *"you do not
+have permission"*, because for a module the business never bought, an
+administrator cannot help.
+
+```bash
+suite-server licence harbour-rooms hotel   # sell a package
+suite-server licence harbour-rooms clear   # back to the installation's own
+```
+
+Selling is done from the machine rather than from a screen inside the
+product: an owner who could grant their own licence would not have one.
+
+**The workspace's sections** are the existing Settings → Sections switches.
+They are a preference, not a permission, and they can only choose within what
+was sold.
+
+Editions are defined in one place, `server/src/editions.rs`. That table is
+also the manifest a build-time split would read: turning an edition into its
+own binary means gating the `register()` calls behind cargo features named
+for these keys. Nothing downstream changes, which is what makes compiling
+them apart a later decision rather than a prerequisite.
+
 ## Layout
 
 ```

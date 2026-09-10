@@ -48,8 +48,11 @@ export default function DashboardPage() {
   // Until the answer arrives, assume everything: a card appearing late reads
   // better than one that flickers away.
   const shape = useBusinessShape();
+  // Absent means absent. A build that does not carry Support has no `desk`
+  // row at all, and reading a missing row as "not switched off" put an
+  // open-ticket count on a product with no tickets in it.
   const uses = (key: string) =>
-    !shape.data || shape.data.modules.find((m) => m.key === key)?.in_use !== false;
+    !shape.data || shape.data.modules.some((m) => m.key === key && m.in_use);
   const [sells, bills, supports] = [uses("crm"), uses("books"), uses("desk")];
   // Rendering assumes everything while the answer is in flight; fetching waits
   // for it. Otherwise the first render fires a request for figures it is about
