@@ -26,7 +26,7 @@ export function ConfirmDialog({
   onOpenChange,
   title,
   description,
-  confirmLabel = "Delete",
+  confirmLabel = t("action.delete"),
   pending,
   onConfirm,
 }: {

@@ -71,10 +71,26 @@ fn resolve<'a>(state: &'a AppState, key: &str) -> AppResult<&'a EntityDef> {
 /// The whole application map in one call: the sidebar, the routes and every
 /// form in the UI are generated from this payload.
 async fn meta(State(state): State<AppState>, ctx: Ctx) -> AppResult<Json<Value>> {
+    // Which parts of the suite this business says it uses. No rows means it
+    // has never been asked, and everything shows — the state every workspace
+    // was in before the question existed.
+    let chosen: Vec<String> = sqlx::query_scalar(
+        "SELECT module_key FROM org_modules WHERE org_id = ?",
+    )
+    .bind(&ctx.org_id)
+    .fetch_all(&state.pool)
+    .await?;
+    // `core` is the workspace itself and is never switched off, so it is
+    // never stored and never filtered.
+    let in_use = |key: &str| {
+        key == crate::modules::CORE || chosen.is_empty() || chosen.iter().any(|m| m == key)
+    };
+
     let modules: Vec<Value> = state
         .registry
         .modules()
         .iter()
+        .filter(|m| in_use(m.key))
         .map(|m| {
             let entities: Vec<Value> = state
                 .registry

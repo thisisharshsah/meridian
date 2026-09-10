@@ -1,13 +1,14 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Providers } from "./providers";
+import { t } from "@/lib/i18n";
 
 export const metadata: Metadata = {
   title: {
-    default: "Aurovie Business",
-    template: "%s · Aurovie Business",
+    default: t("app.name"),
+    template: t("app.titleTemplate", undefined, { app: t("app.name") }),
   },
-  description: "One workspace for sales, finance, projects, people and support.",
+  description: t("app.tagline"),
 };
 
 export const viewport: Viewport = {

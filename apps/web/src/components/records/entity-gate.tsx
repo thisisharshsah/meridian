@@ -49,14 +49,14 @@ export function EntityGate({
               ? "You do not have access to this"
               : signedOut
                 ? "Please sign in again"
-                : "We couldn't open this screen"
+                : t("record.gateTitle")
           }
           description={
             forbidden
               ? "Ask whoever set up your workspace to give your role access to these records."
               : signedOut
                 ? "Your session timed out. Nothing has been lost — sign in and you'll come straight back."
-                : "This screen may have been renamed or removed. Head back home and pick it from the menu."
+                : t("record.gateBody")
           }
           action={
             <Button variant="secondary" asChild>

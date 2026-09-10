@@ -5,6 +5,7 @@ import { Eye, EyeOff } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { t } from "@/lib/i18n";
 
 /**
  * A password field with a reveal toggle. Typing a password blind is the usual
@@ -32,7 +33,7 @@ export const PasswordInput = React.forwardRef<
       <button
         type="button"
         onClick={() => setVisible((v) => !v)}
-        aria-label={visible ? "Hide password" : "Show password"}
+        aria-label={t(visible ? "auth.hidePassword" : "auth.showPassword")}
         aria-pressed={visible}
         className={cn(
           "absolute inset-y-0 right-0 flex w-9 items-center justify-center rounded-r-md",

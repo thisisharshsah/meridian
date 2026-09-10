@@ -26,6 +26,7 @@ step() {
 step "rust: build" cargo build --manifest-path server/Cargo.toml --quiet
 step "rust: tests" cargo test --manifest-path server/Cargo.toml --quiet
 step "web: words" node scripts/i18n-lint.mjs
+step "web: icons" node scripts/icon-lint.mjs
 # Invoked exactly as package.json does, from apps/web: run from the root
 # with --project instead and tsc resolves paths differently and fails.
 step "web: types" bash -c 'cd apps/web && ./node_modules/.bin/tsc --noEmit'

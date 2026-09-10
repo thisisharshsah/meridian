@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Building2, Check, KeyRound, ShieldCheck, Users, Webhook, Workflow } from "lucide-react";
+import { Building2, Check, LayoutGrid, KeyRound, ShieldCheck, Users, Webhook, Workflow } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -18,6 +18,7 @@ import { FieldRow, FormError } from "@/components/form/field";
 import { InviteSection } from "@/components/settings/invite-dialog";
 import { AutomationsTab } from "@/components/settings/automations";
 import { RolesTab } from "@/components/settings/role-editor";
+import { BusinessShapeTab } from "@/components/settings/business-shape";
 import { IntegrationsTab } from "@/components/settings/integrations";
 import { ApiError, get, patch } from "@/lib/api";
 import { CURRENCIES } from "@/lib/constants";
@@ -65,6 +66,10 @@ export default function SettingsPage() {
             <ShieldCheck className="size-3.5" />
             {t("settings.tab.roles")}
           </TabsTrigger>
+          <TabsTrigger value="shape">
+            <LayoutGrid className="size-3.5" />
+            {t("shape.tab")}
+          </TabsTrigger>
           <TabsTrigger value="automations">
             <Workflow className="size-3.5" />
             {t("settings.tab.automation")}
@@ -83,6 +88,9 @@ export default function SettingsPage() {
         </TabsContent>
         <TabsContent value="roles" className="pt-4">
           <RolesGate />
+        </TabsContent>
+        <TabsContent value="shape" className="pt-4">
+          <BusinessShapeTab />
         </TabsContent>
         <TabsContent value="automations" className="pt-4">
           <AutomationsGate />
@@ -247,7 +255,7 @@ function MembersTab() {
       toast.success(t("settings.memberUpdated"));
       qc.invalidateQueries({ queryKey: ["settings"] });
     },
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : "Could not update that member"),
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : t("record.memberFailed")),
   });
 
   if (members.isLoading || !members.data) return <Skeleton className="h-64 w-full" />;
@@ -343,7 +351,7 @@ function MembersTab() {
                 </TD>
 
                 <TD className="text-sm text-muted-foreground">
-                  {m.last_login_at ? relativeTime(m.last_login_at) : "Never"}
+                  {m.last_login_at ? relativeTime(m.last_login_at) : t("value.never")}
                 </TD>
                 <TD className="text-sm text-muted-foreground">{formatDate(m.joined_at)}</TD>
               </TR>

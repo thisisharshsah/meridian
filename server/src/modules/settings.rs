@@ -14,6 +14,7 @@ use sqlx::Row;
 
 use crate::auth::ctx::Ctx;
 use crate::common::audit;
+use crate::modules::CORE;
 use crate::error::{AppError, AppResult, FieldError};
 use crate::state::AppState;
 
@@ -25,6 +26,7 @@ pub fn router() -> Router<AppState> {
         .route("/settings/permissions", get(permission_catalog))
         .route("/settings/members", get(list_members))
         .route("/settings/members/{id}", patch(update_member))
+        .route("/settings/modules", get(list_modules).put(set_modules))
         .route("/settings/jobs", get(job_queue))
         .route("/settings/reindex", axum::routing::post(reindex))
 }
@@ -33,9 +35,142 @@ fn now() -> String {
     Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
 }
 
+/// Which parts of the suite this business uses, and every part it could.
+///
+/// Presentational, and said so plainly in the response: turning a module off
+/// hides it from the sidebar and the report list, and changes nobody's
+/// permissions. A link straight to a hidden record still opens.
+async fn list_modules(State(state): State<AppState>, ctx: Ctx) -> AppResult<Json<Value>> {
+    let chosen: Vec<String> =
+        sqlx::query_scalar("SELECT module_key FROM org_modules WHERE org_id = ?")
+            .bind(&ctx.org_id)
+            .fetch_all(&state.pool)
+            .await?;
+    let all = chosen.is_empty();
+
+    let business_type: String =
+        sqlx::query_scalar("SELECT business_type FROM organizations WHERE id = ?")
+            .bind(&ctx.org_id)
+            .fetch_optional(&state.pool)
+            .await?
+            .unwrap_or_else(|| "general".into());
+
+    let modules: Vec<Value> = state
+        .registry
+        .modules()
+        .iter()
+        // `core` is the workspace itself — its people, roles and settings.
+        // Offering a switch for it would offer to turn off the room you are
+        // standing in.
+        .filter(|m| m.key != CORE)
+        .map(|m| {
+            json!({
+                "key": m.key,
+                "label": m.label,
+                "icon": m.icon,
+                "description": m.description,
+                "in_use": all || chosen.iter().any(|c| c == m.key),
+            })
+        })
+        .collect();
+
+    let types: Vec<Value> = crate::modules::BUSINESS_TYPES
+        .iter()
+        .map(|b| {
+            json!({
+                "key": b.key,
+                "label": b.label,
+                "description": b.description,
+                "icon": b.icon,
+                "modules": b.modules,
+            })
+        })
+        .collect();
+
+    Ok(Json(json!({
+        "modules": modules,
+        "business_types": types,
+        "business_type": business_type,
+        "can_edit": ctx.is_owner,
+    })))
+}
+
+#[derive(Deserialize)]
+pub struct ModulesBody {
+    /// Every module that should show. Sending them all is how a workspace says
+    /// "everything", and it is stored as the empty set so that a module
+    /// shipped later shows up too.
+    pub modules: Vec<String>,
+    #[serde(default)]
+    pub business_type: Option<String>,
+}
+
+async fn set_modules(
+    State(state): State<AppState>,
+    ctx: Ctx,
+    Json(body): Json<ModulesBody>,
+) -> AppResult<Json<Value>> {
+    ctx.require_owner()?;
+
+    // Only keys the server actually has. A typo would otherwise hide a module
+    // by silently failing to list it.
+    let known: Vec<&str> =
+        state.registry.modules().iter().map(|m| m.key).filter(|k| *k != CORE).collect();
+    let mut wanted: Vec<String> = body
+        .modules
+        .iter()
+        .filter(|k| known.iter().any(|n| n == k))
+        .map(|k| k.to_string())
+        .collect();
+    wanted.sort();
+    wanted.dedup();
+
+    if wanted.is_empty() {
+        return Err(AppError::Validation(vec![FieldError::new(
+            "modules",
+            "Keep at least one part of the business switched on.",
+        )]));
+    }
+
+    let ts = now();
+    let mut tx = state.pool.begin().await?;
+    sqlx::query("DELETE FROM org_modules WHERE org_id = ?")
+        .bind(&ctx.org_id)
+        .execute(&mut *tx)
+        .await?;
+
+    // Everything selected is stored as no rows at all: it means "whatever the
+    // product has", which keeps being true as the product grows.
+    if wanted.len() < known.len() {
+        for key in &wanted {
+            sqlx::query("INSERT INTO org_modules (org_id, module_key, created_at) VALUES (?, ?, ?)")
+                .bind(&ctx.org_id)
+                .bind(key)
+                .bind(&ts)
+                .execute(&mut *tx)
+                .await?;
+        }
+    }
+
+    if let Some(kind) = &body.business_type {
+        if crate::modules::BUSINESS_TYPES.iter().any(|b| b.key == kind) {
+            sqlx::query("UPDATE organizations SET business_type = ?, updated_at = ? WHERE id = ?")
+                .bind(kind)
+                .bind(&ts)
+                .bind(&ctx.org_id)
+                .execute(&mut *tx)
+                .await?;
+        }
+    }
+    tx.commit().await?;
+
+    Ok(Json(json!({ "modules": wanted })))
+}
+
 async fn get_org(State(state): State<AppState>, ctx: Ctx) -> AppResult<Json<Value>> {
     let row = sqlx::query(
-        "SELECT id, name, slug, currency, country, timezone, fiscal_year_start_month, created_at
+        "SELECT id, name, slug, currency, country, timezone, fiscal_year_start_month,
+                business_type, created_at
          FROM organizations WHERE id = ?",
     )
     .bind(&ctx.org_id)
@@ -60,6 +195,7 @@ async fn get_org(State(state): State<AppState>, ctx: Ctx) -> AppResult<Json<Valu
         "country": row.try_get::<Option<String>, _>("country").ok().flatten(),
         "timezone": row.try_get::<String, _>("timezone").unwrap_or_default(),
         "fiscal_year_start_month": row.try_get::<i64, _>("fiscal_year_start_month").unwrap_or(1),
+        "business_type": row.try_get::<String, _>("business_type").unwrap_or_else(|_| "general".into()),
         "created_at": row.try_get::<String, _>("created_at").unwrap_or_default(),
         "member_count": counts.try_get::<i64, _>("members").unwrap_or(0),
         "role_count": counts.try_get::<i64, _>("roles").unwrap_or(0),

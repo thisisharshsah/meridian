@@ -121,7 +121,7 @@ export function RecordActions({
           loading={run.pending === "send"}
           onClick={() =>
             run.go("send", `actions/books.invoices/${record.id}/send`, {}, () => ({
-              message: "Invoice issued",
+              message: t("record.invoiceIssued"),
             }))
           }
         >
@@ -156,7 +156,7 @@ function useAction() {
       toast.success(message);
       if (href) router.push(href);
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : "That action could not be completed");
+      toast.error(e instanceof ApiError ? e.message : t("record.actionFailed"));
     } finally {
       setPending(null);
     }
@@ -186,7 +186,7 @@ function ConvertLeadDialog({
   React.useEffect(() => {
     if (!open) return;
     setCreateDeal(true);
-    setDealName(`${record.company ?? record.full_name ?? "New"} opportunity`);
+    setDealName(`${record.company ?? record.full_name ?? t("value.new")} opportunity`);
     setAmount("");
     setClosing("");
     setError(null);
@@ -211,7 +211,7 @@ function ConvertLeadDialog({
       onOpenChange(false);
       router.push(r.deal_id ? `/crm/deals/${r.deal_id}` : `/crm/accounts/${r.account_id}`);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not convert this lead");
+      setError(err instanceof ApiError ? err.message : t("record.convertFailed"));
     } finally {
       setSaving(false);
     }
@@ -224,8 +224,8 @@ function ConvertLeadDialog({
           <DialogHeader>
             <DialogTitle>{t("record.convertLead")}</DialogTitle>
             <DialogDescription>
-              Creates an account for {String(record.company ?? "this company")} and a contact for{" "}
-              {String(record.full_name ?? "this person")}. The lead stays on record, marked
+              Creates an account for {String(record.company ?? t("value.thisCompany"))} and a contact for{" "}
+              {String(record.full_name ?? t("value.thisPerson"))}. The lead stays on record, marked
               converted.
             </DialogDescription>
           </DialogHeader>

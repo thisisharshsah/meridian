@@ -39,6 +39,10 @@ pub struct RegisterBody {
     pub organization: Option<String>,
     #[serde(default)]
     pub currency: Option<String>,
+    /// What kind of business it is. Decides which modules start switched on;
+    /// an unknown or absent value means all of them.
+    #[serde(default)]
+    pub business_type: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -148,7 +152,10 @@ async fn register(
     // No business name means the account is all they asked for. They land on a
     // screen offering the two ways forward: start one, or accept an invitation.
     let org_id = match body.organization.as_deref().map(str::trim).filter(|o| !o.is_empty()) {
-        Some(name) => provision_organization(&mut tx, &user_id, name, &currency, &ts).await?,
+        Some(name) => {
+            let kind = body.business_type.as_deref().unwrap_or("general");
+            provision_organization(&mut tx, &user_id, name, &currency, kind, &ts).await?
+        }
         None => String::new(),
     };
 
@@ -406,6 +413,7 @@ async fn provision_organization(
     user_id: &str,
     name: &str,
     currency: &str,
+    business_type: &str,
     ts: &str,
 ) -> AppResult<String> {
     let org_id = new_id();
@@ -426,17 +434,33 @@ async fn provision_organization(
     }
 
     sqlx::query(
-        "INSERT INTO organizations (id, name, slug, currency, timezone, fiscal_year_start_month, created_at, updated_at)
-         VALUES (?, ?, ?, ?, 'UTC', 1, ?, ?)",
+        "INSERT INTO organizations
+           (id, name, slug, currency, timezone, fiscal_year_start_month, business_type, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'UTC', 1, ?, ?, ?)",
     )
     .bind(&org_id)
     .bind(name)
     .bind(&slug)
     .bind(currency)
+    .bind(business_type)
     .bind(ts)
     .bind(ts)
     .execute(&mut *tx)
     .await?;
+
+    // A trade that uses only part of the suite says so once, here. Writing no
+    // rows is what "all of it" looks like, so the general case costs nothing
+    // and a module shipped next year appears for them without asking.
+    if let Some(keys) = crate::modules::modules_for(business_type) {
+        for key in keys {
+            sqlx::query("INSERT INTO org_modules (org_id, module_key, created_at) VALUES (?, ?, ?)")
+                .bind(&org_id)
+                .bind(key)
+                .bind(ts)
+                .execute(&mut *tx)
+                .await?;
+        }
+    }
 
     let mut admin_role_id = String::new();
     for seed in DEFAULT_ROLES {
@@ -493,6 +517,8 @@ pub struct NewWorkspaceBody {
     pub organization: String,
     #[serde(default)]
     pub currency: Option<String>,
+    #[serde(default)]
+    pub business_type: Option<String>,
 }
 
 /// Start another business under the same login. The caller becomes its owner,
@@ -513,8 +539,10 @@ async fn create_workspace(
     let ts = now();
     let currency = body.currency.unwrap_or_else(|| "USD".into());
     let mut tx = state.pool.begin().await?;
+    let kind = body.business_type.as_deref().unwrap_or("general");
     let org_id =
-        provision_organization(&mut tx, &ctx.user_id, body.organization.trim(), &currency, &ts).await?;
+        provision_organization(&mut tx, &ctx.user_id, body.organization.trim(), &currency, kind, &ts)
+            .await?;
     tx.commit().await?;
 
     issue_session(&state, &ctx.user_id, &org_id, &ctx.email, &ctx.name, None).await.map(Json)
@@ -633,6 +661,7 @@ mod tests {
             password: "short".into(),
             organization: Some("".into()),
             currency: None,
+            business_type: None,
         };
         let Err(AppError::Validation(errs)) = validate_registration(&bad) else {
             panic!("expected validation failure");
@@ -651,6 +680,7 @@ mod tests {
             password: "hunter2hunter2".into(),
             organization: None,
             currency: None,
+            business_type: None,
         };
         assert!(validate_registration(&invited).is_ok());
     }

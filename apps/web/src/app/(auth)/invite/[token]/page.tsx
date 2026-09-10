@@ -55,7 +55,7 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
 
   if (error || !data) {
     const message =
-      error instanceof ApiError ? error.message : "This invitation link is not valid.";
+      error instanceof ApiError ? error.message : t("auth.linkInvalid");
     return (
       <div className="text-center">
         <div className="mx-auto mb-3 w-fit rounded-full bg-warning-subtle p-3">
@@ -142,13 +142,13 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
         )}
 
         <FieldRow
-          label={data.has_account ? "Your password" : "Choose a password"}
+          label={data.has_account ? t("auth.yourPassword") : t("auth.choosePassword")}
           htmlFor="invite-password"
           error={errors.password}
           hint={
             data.has_account
-              ? "You already have an account with this address."
-              : "At least 8 characters."
+              ? t("auth.haveAccountAlready")
+              : t("auth.passwordHint")
           }
           required
         >

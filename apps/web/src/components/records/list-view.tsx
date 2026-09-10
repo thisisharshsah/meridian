@@ -301,7 +301,7 @@ export function ListView({ meta, fixedFilters, embedded }: {
             description={
               error instanceof ApiError && error.status === 401
                 ? "Your session timed out. Sign in again and you'll come straight back here."
-                : "Nothing has been lost. Check your connection and try again in a moment."
+                : t("record.offline")
             }
           />
         ) : isLoading && !data ? (
@@ -313,7 +313,7 @@ export function ListView({ meta, fixedFilters, embedded }: {
         ) : data && data.data.length === 0 ? (
           <EmptyState
             icon={iconFor(meta.icon)}
-            title={debounced || activeFilters.length ? "No matches" : `No ${meta.label_plural.toLowerCase()} yet`}
+            title={debounced || activeFilters.length ? t("value.noMatches") : `No ${meta.label_plural.toLowerCase()} yet`}
             description={
               debounced || activeFilters.length
                 ? "Try a different search or clear the filters."
@@ -466,7 +466,7 @@ export function ListView({ meta, fixedFilters, embedded }: {
         description={
           <>
             <span className="font-medium text-foreground">
-              {String(confirming?.[meta.title_field] ?? "Untitled")}
+              {String(confirming?.[meta.title_field] ?? t("value.untitled"))}
             </span>{" "}
             will be removed from {meta.label_plural.toLowerCase()}.
           </>

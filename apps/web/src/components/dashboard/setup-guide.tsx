@@ -126,7 +126,7 @@ export function SetupGuide({ steps }: { steps: SetupStep[] }) {
                 </Button>
               )}
               <span className="sr-only">
-                {s.done ? "Done" : `Step ${i + 1} of ${steps.length}`}
+                {s.done ? t("value.done") : `Step ${i + 1} of ${steps.length}`}
               </span>
             </div>
           );

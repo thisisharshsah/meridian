@@ -74,11 +74,11 @@ function RequestList({ scope }: { scope: string }) {
     mutationFn: ({ id, decision, comment }: { id: string; decision: string; comment?: string }) =>
       post(`approvals/${id}/decide`, { decision, comment }),
     onSuccess: (_r, vars) => {
-      toast.success(vars.decision === "approve" ? "Approved" : "Rejected");
+      toast.success(t(vars.decision === "approve" ? "approvals.approved" : "approvals.rejected"));
       // The decision writes to the record, so lists and detail pages move too.
       qc.invalidateQueries();
     },
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : "Could not record that decision"),
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : t("approvals.decisionFailed")),
     onSettled: () => setDeciding(null),
   });
 
@@ -93,12 +93,12 @@ function RequestList({ scope }: { scope: string }) {
             ? "Nothing waiting on you"
             : scope === "mine"
               ? "You have not sent anything for approval"
-              : "Nothing decided yet"
+              : t("approvals.noneDecided")
         }
         description={
           scope === "pending"
             ? "Records that need your sign-off will appear here."
-            : "Approval rules are configured under Settings."
+            : t("approvals.rulesNote")
         }
       />
     );
@@ -116,7 +116,7 @@ function RequestList({ scope }: { scope: string }) {
                     href={`${entityPath(r.entity)}/${r.record_id}`}
                     className="text-sm font-medium hover:text-brand"
                   >
-                    {r.record_title ?? "Untitled"}
+                    {r.record_title ?? t("value.untitled")}
                   </Link>
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     {r.rule_name} · asked {relativeTime(r.created_at)}

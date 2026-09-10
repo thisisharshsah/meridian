@@ -3829,3 +3829,110 @@ async fn a_booking_does_not_clash_with_itself_when_edited() {
     let free = rep["rows"].as_array().unwrap().iter().find(|r| r["room"] == json!("8")).unwrap();
     assert_eq!(free["state"], json!("Free"), "an empty room says so rather than being left out");
 }
+
+/// A plumber should not be carrying a Rooms menu, and a hotel should not be
+/// carrying a Hiring pipeline. But hiding is not hiding *from* anyone: the
+/// records stay reachable, because a sidebar preference must never be able to
+/// strand data or break a link somebody saved.
+#[tokio::test]
+async fn a_business_sees_the_parts_of_the_suite_it_says_it_uses() {
+    let (app, _state) = test_app().await;
+
+    let (status, session) = call(
+        &app,
+        anon("POST", "/api/auth/register", json!({
+            "name": "Rivera", "email": "rivera@example.test",
+            "password": "a-long-enough-password", "organization": "Rivera Plumbing",
+            "business_type": "trades"
+        })),
+    )
+    .await;
+    assert!(status.is_success(), "signing up with a trade: {session:?}");
+    let owner = session["access_token"].as_str().unwrap().to_string();
+
+    let modules = |body: &Value| -> Vec<String> {
+        body["modules"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|m| m["key"].as_str().unwrap_or_default().to_string())
+            .collect()
+    };
+
+    let (_, meta) = call(&app, get("/api/meta", &owner)).await;
+    let shown = modules(&meta);
+    assert!(shown.contains(&"inventory".into()), "a plumber carries parts");
+    assert!(!shown.contains(&"hospitality".into()), "and does not let rooms");
+    assert!(!shown.contains(&"marketing".into()), "nor run campaigns");
+
+    // Reports follow the sidebar, or the list fills with things to read past.
+    let (_, reports) = call(&app, get("/api/reports", &owner)).await;
+    let keys: Vec<&str> =
+        reports["data"].as_array().unwrap().iter().filter_map(|r| r["key"].as_str()).collect();
+    assert!(keys.contains(&"stock_on_hand"), "stock is their business");
+    assert!(!keys.contains(&"room_board"), "the room board is not");
+
+    // The rule that keeps this safe: hidden is not forbidden.
+    let (status, room) = call(
+        &app,
+        send("POST", "/api/e/hospitality.rooms", &owner, json!({ "number": "1" })),
+    )
+    .await;
+    assert!(
+        status.is_success(),
+        "a hidden module is a preference, not a permission: {room:?}"
+    );
+    let (status, _) = call(
+        &app,
+        get(&format!("/api/e/hospitality.rooms/{}", room["id"].as_str().unwrap()), &owner),
+    )
+    .await;
+    assert!(status.is_success(), "and a link straight to the record still opens");
+
+    // Changing their mind, from settings.
+    let (status, before) = call(&app, get("/api/settings/modules", &owner)).await;
+    assert!(status.is_success(), "the owner can see the switches: {before:?}");
+    assert_eq!(before["business_type"], json!("trades"));
+    let hospitality = before["modules"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["key"] == json!("hospitality"))
+        .expect("every module is listed, on or off");
+    assert_eq!(hospitality["in_use"], json!(false), "listed, and switched off");
+
+    let (status, _) = call(
+        &app,
+        send("PUT", "/api/settings/modules", &owner, json!({
+            "modules": ["crm", "sales", "books", "inventory", "projects", "hr", "hospitality"],
+            "business_type": "general"
+        })),
+    )
+    .await;
+    assert!(status.is_success(), "and can switch one on");
+    let (_, meta) = call(&app, get("/api/meta", &owner)).await;
+    assert!(modules(&meta).contains(&"hospitality".into()), "which then appears");
+
+    // Nothing at all is not a workspace.
+    let (status, err) =
+        call(&app, send("PUT", "/api/settings/modules", &owner, json!({ "modules": [] }))).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "an empty product is not on offer: {err:?}");
+}
+
+/// A workspace that never answered the question sees everything — which is
+/// every workspace that existed before the question did.
+#[tokio::test]
+async fn a_workspace_that_never_chose_sees_all_of_it() {
+    let (app, state) = test_app().await;
+    let owner = new_org(&app, "unasked").await;
+
+    let rows: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM org_modules")
+        .fetch_one(&state.pool)
+        .await
+        .unwrap();
+    assert_eq!(rows, 0, "no choice is stored as no rows");
+
+    let (_, meta) = call(&app, get("/api/meta", &owner)).await;
+    let shown = meta["modules"].as_array().unwrap().len();
+    assert!(shown >= 10, "and shows the whole suite, not none of it — got {shown}");
+}

@@ -38,6 +38,84 @@ pub const SEQUENCE_SEEDS: &[(&str, &str)] = &[
     ("recruit.candidates", "CND-"),
 ];
 
+/// The kinds of business the setup question offers, and what each one starts
+/// with switched on.
+///
+/// Presets, not permissions: a choice here is a starting point somebody can
+/// change in settings five minutes later. They are kept on the server so that
+/// every client, and the seeder, agree on what "a shop" means — and so that
+/// adding a trade is one entry here rather than a hunt through the web app.
+///
+/// `general` deliberately holds every module: it is what an existing
+/// workspace is, and what someone who skips the question gets.
+/// The workspace itself: people, roles, settings. Always present, never a
+/// choice, and never stored in `org_modules`.
+pub const CORE: &str = "core";
+
+pub struct BusinessType {
+    pub key: &'static str,
+    pub label: &'static str,
+    pub description: &'static str,
+    pub icon: &'static str,
+    /// Empty means every module, now and whenever a new one ships.
+    pub modules: &'static [&'static str],
+}
+
+pub const BUSINESS_TYPES: &[BusinessType] = &[
+    BusinessType {
+        key: "general",
+        label: "A bit of everything",
+        description: "Show me all of it and I will decide as I go.",
+        icon: "LayoutGrid",
+        modules: &[],
+    },
+    BusinessType {
+        key: "shop",
+        label: "Shop or café",
+        description: "Serving people over a counter, with stock on the shelves.",
+        icon: "ShoppingBag",
+        modules: &["crm", "sales", "books", "inventory", "hr"],
+    },
+    BusinessType {
+        key: "pharmacy",
+        label: "Pharmacy or anything dated",
+        description: "Stock with an expiry date on it, sold over a counter.",
+        icon: "Pill",
+        modules: &["crm", "sales", "books", "inventory", "hr"],
+    },
+    BusinessType {
+        key: "hospitality",
+        label: "Hotel or guest house",
+        description: "Rooms let by the night, with bookings and arrivals.",
+        icon: "BedDouble",
+        modules: &["hospitality", "crm", "sales", "books", "inventory", "hr"],
+    },
+    BusinessType {
+        key: "services",
+        label: "Professional services",
+        description: "Billing for time and work: an agency, a practice, a firm.",
+        icon: "Briefcase",
+        modules: &["crm", "sales", "books", "projects", "hr", "desk"],
+    },
+    BusinessType {
+        key: "trades",
+        label: "On-site work",
+        description: "Jobs at a customer’s premises, with parts and a van.",
+        icon: "Wrench",
+        modules: &["crm", "sales", "books", "inventory", "projects", "hr"],
+    },
+];
+
+/// The modules a business type starts with, or `None` for all of them.
+pub fn modules_for(business_type: &str) -> Option<&'static [&'static str]> {
+    let preset = BUSINESS_TYPES.iter().find(|b| b.key == business_type)?;
+    if preset.modules.is_empty() {
+        None
+    } else {
+        Some(preset.modules)
+    }
+}
+
 /// Assembles the entity registry the whole server runs on.
 ///
 /// Order matters twice: modules appear in the sidebar in this order, and

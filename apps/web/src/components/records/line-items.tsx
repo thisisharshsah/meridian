@@ -66,13 +66,13 @@ export function LineItems({
     try {
       await create.mutateAsync({
         [child.foreign_key]: parentId,
-        description: "New line",
+        description: t("record.newLine"),
         quantity: "1",
         unit_price: "0",
         sort_order: rows.length,
       });
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : "Could not add a line");
+      toast.error(e instanceof ApiError ? e.message : t("record.addLineFailed"));
     }
   };
 
@@ -81,7 +81,7 @@ export function LineItems({
     try {
       await update.mutateAsync({ id: row.id, body: { [name]: value } });
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : "Could not save that change");
+      toast.error(e instanceof ApiError ? e.message : t("record.saveLineFailed"));
     }
   };
 

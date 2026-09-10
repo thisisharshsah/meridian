@@ -65,7 +65,7 @@ export function RolesTab({ canManage }: { canManage: boolean }) {
       toast.success(t("role.deleted"));
       qc.invalidateQueries({ queryKey: ["settings"] });
     },
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : "Could not delete that role"),
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : t("role.deleteFailed")),
   });
 
   if (roles.isLoading || !roles.data) return <Skeleton className="h-64 w-full max-w-5xl" />;
@@ -311,7 +311,7 @@ function RoleDialog({
       return existing ? patch(`settings/roles/${existing.id}`, body) : post("settings/roles", body);
     },
     onSuccess: () => {
-      toast.success(existing ? "Role updated" : "Role created");
+      toast.success(t(existing ? "role.updated" : "role.created"));
       qc.invalidateQueries({ queryKey: ["settings"] });
       onOpenChange(false);
     },
@@ -341,7 +341,11 @@ function RoleDialog({
         >
           <DialogHeader>
             <DialogTitle>
-              {existing ? "Edit role" : cloneOf ? `Duplicate ${cloneOf.name}` : "New role"}
+              {existing
+                ? t("role.edit")
+                : cloneOf
+                  ? t("role.duplicateOf", undefined, { name: cloneOf.name })
+                  : t("role.new")}
             </DialogTitle>
             <DialogDescription>
               Tick what this role may do. Everything here comes from the modules actually installed.
@@ -416,7 +420,7 @@ function RoleDialog({
                                 onClick={() => toggleModule(m, !everything)}
                                 className="text-xs text-brand hover:underline"
                               >
-                                {everything ? "Clear module" : "Grant everything"}
+                                {t(everything ? "role.clearModule" : "role.grantEverything")}
                               </button>
                             </td>
                           </tr>
@@ -457,7 +461,7 @@ function RoleDialog({
               {t("action.cancel")}
             </Button>
             <Button type="submit" variant="primary" loading={save.isPending} disabled={!grantCount}>
-              {existing ? "Save role" : "Create role"}
+              {t(existing ? "role.save" : "role.create")}
             </Button>
           </DialogFooter>
         </form>

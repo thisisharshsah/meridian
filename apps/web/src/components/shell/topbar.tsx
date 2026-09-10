@@ -109,7 +109,7 @@ export function Topbar({ session, onSearch }: { session?: Session; onSearch: () 
             <div className="px-2 pb-1.5 text-xs text-muted-foreground">
               {session?.user.email}
               <div className="mt-0.5 capitalize">
-                {session?.is_owner ? "Owner" : session?.role} · {session?.organization?.currency}
+                {session?.is_owner ? t("value.owner") : session?.role} · {session?.organization?.currency}
               </div>
             </div>
             {(invitations.data?.data.length ?? 0) > 0 && (

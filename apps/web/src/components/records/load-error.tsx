@@ -33,11 +33,11 @@ export function LoadError({
   return (
     <EmptyState
       icon={AlertTriangle}
-      title={signedOut ? "Please sign in again" : `We couldn't load your ${what}`}
+      title={signedOut ? t("record.signInAgain") : `We couldn't load your ${what}`}
       description={
         signedOut
           ? "Your session timed out. Nothing has been lost — sign in and you'll come straight back."
-          : "Nothing has been lost. Check your connection and try again in a moment."
+          : t("record.offline")
       }
       action={
         onRetry && !signedOut ? (

@@ -4,10 +4,10 @@ import { BarChart3, Boxes, Receipt, Users } from "lucide-react";
 import { t } from "@/lib/i18n";
 
 const PILLARS = [
-  { icon: Users, title: "Sell", body: "Leads, deals and pipelines with a shared customer record." },
-  { icon: Receipt, title: "Bill", body: "Quotes to invoices to payments, with the ledger kept straight." },
-  { icon: Boxes, title: "Deliver", body: "Projects, tasks, timesheets and stock in one place." },
-  { icon: BarChart3, title: "Understand", body: "Every module reporting into one set of numbers." },
+  { icon: Users, title: t("auth.pitch.sell"), body: t("auth.pitch.sellWhy") },
+  { icon: Receipt, title: t("auth.pitch.bill"), body: t("auth.pitch.billWhy") },
+  { icon: Boxes, title: t("auth.pitch.deliver"), body: t("auth.pitch.deliverWhy") },
+  { icon: BarChart3, title: t("auth.pitch.understand"), body: t("auth.pitch.understandWhy") },
 ];
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {

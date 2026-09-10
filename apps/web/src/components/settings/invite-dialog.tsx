@@ -81,7 +81,7 @@ export function InviteSection({ canManage }: { canManage: boolean }) {
                   </p>
                 </div>
                 <span className={i.expired ? "text-xs text-danger" : "text-xs text-muted-foreground"}>
-                  {i.expired ? "Expired" : `Expires ${formatDate(i.expires_at)}`}
+                  {i.expired ? t("value.expired") : `Expires ${formatDate(i.expires_at)}`}
                 </span>
                 <Button
                   variant="ghost"
@@ -181,7 +181,7 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
                 <code className="min-w-0 flex-1 truncate font-mono text-xs">{link}</code>
                 <Button variant="secondary" size="sm" onClick={copy}>
                   {copied ? <Check /> : <Copy />}
-                  {copied ? "Copied" : "Copy"}
+                  {t(copied ? "value.copied" : "value.copy")}
                 </Button>
               </div>
             </DialogBody>

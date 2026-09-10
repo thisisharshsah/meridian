@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState, Skeleton } from "@/components/ui/misc";
 import { PipelineChart, StatusBars } from "@/components/dashboard/charts";
 import { SetupGuide, type SetupStep } from "@/components/dashboard/setup-guide";
+import { BusinessShapePrompt } from "@/components/settings/business-shape";
 import { ClockCard } from "@/components/dashboard/clock-card";
 import { ModuleLauncher } from "@/components/dashboard/module-launcher";
 import { useAppMeta, useList, useSession, useStats } from "@/lib/queries";
@@ -100,7 +101,7 @@ export default function DashboardPage() {
       title: t("setup.deal.title"),
       why: t("setup.deal.why"),
       href: "/crm/deals",
-      cta: "Add a deal",
+      cta: t("dash.addDeal"),
       done: hasDeals,
     },
     {
@@ -108,7 +109,7 @@ export default function DashboardPage() {
       title: t("setup.invoice.title"),
       why: t("setup.invoice.why"),
       href: "/books/invoices",
-      cta: "Create an invoice",
+      cta: t("dash.createInvoice"),
       done: hasInvoices,
     },
     {
@@ -116,7 +117,7 @@ export default function DashboardPage() {
       title: t("setup.team.title"),
       why: t("setup.team.why"),
       href: "/settings",
-      cta: "Invite someone",
+      cta: t("dash.inviteSomeone"),
       done: hasTeam,
     },
   ];
@@ -145,7 +146,7 @@ export default function DashboardPage() {
           {greeting()}, {session?.user.name?.split(" ")[0] ?? "there"}
         </h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          Here is where {session?.organization?.name ?? "your workspace"} stands today.
+          Here is where {session?.organization?.name ?? t("value.thisWorkspace")} stands today.
         </p>
       </header>
 
@@ -166,6 +167,7 @@ export default function DashboardPage() {
 
       <ClockCard />
 
+      <BusinessShapePrompt />
       {!figuresFailed && <SetupGuide steps={setupSteps} />}
 
       <ModuleLauncher modules={meta.data?.modules ?? []} />
@@ -184,7 +186,7 @@ export default function DashboardPage() {
         <Stat
           label={t("dash.won")}
           value={formatMoney(wonValue, currency)}
-          sub="Closed won, all time"
+          sub={t("dash.wonWhy")}
           icon={TrendingUp}
           tone="success"
           loading={loading}
@@ -193,7 +195,7 @@ export default function DashboardPage() {
         <Stat
           label={t("dash.receivable")}
           value={formatMoney(receivableValue, currency)}
-          sub="Outstanding on unpaid invoices"
+          sub={t("dash.receivableWhy")}
           icon={CircleDollarSign}
           tone="warning"
           loading={loading}
@@ -202,7 +204,7 @@ export default function DashboardPage() {
         <Stat
           label={t("dash.openTickets")}
           value={String(openTickets)}
-          sub="Awaiting a response or fix"
+          sub={t("dash.ticketsWhy")}
           icon={Ticket}
           tone="danger"
           loading={ticketCounts.isLoading}
@@ -324,7 +326,7 @@ export default function DashboardPage() {
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium">{String(d.name)}</p>
                         <p className="truncate text-xs text-muted-foreground">
-                          {String(d.account_id__label ?? "No account")}
+                          {String(d.account_id__label ?? t("value.none"))}
                         </p>
                       </div>
                       <Badge tone={toneOf(stageTone(String(d.stage)))} dot>

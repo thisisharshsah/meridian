@@ -143,7 +143,7 @@ export default function TillPage() {
 
       const done = await patch<Record_>(`e/sales.counter_sales/${saleId}`, { status: "completed" });
       toast.success(
-        `${done.number ?? "Sale"} · ${formatMoney(done.total as number, currency)}` +
+        `${done.number ?? t("value.sale")} · ${formatMoney(done.total as number, currency)}` +
           (changeMinor ? ` · change ${formatMoney(changeMinor, currency)}` : ""),
       );
       clear();

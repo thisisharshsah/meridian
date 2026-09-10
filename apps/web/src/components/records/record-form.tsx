@@ -185,7 +185,7 @@ export function RecordForm({
               {editing ? `Edit ${meta.label.toLowerCase()}` : `New ${meta.label.toLowerCase()}`}
             </DialogTitle>
             <DialogDescription>
-              {editing ? "Update the details below." : `Add a ${meta.label.toLowerCase()} to ${meta.label_plural.toLowerCase()}.`}
+              {editing ? t("record.updateDetails") : `Add a ${meta.label.toLowerCase()} to ${meta.label_plural.toLowerCase()}.`}
             </DialogDescription>
           </DialogHeader>
 

@@ -78,7 +78,7 @@ export function BoardView({ meta, groupField }: { meta: EntityMeta; groupField: 
       clear();
     } catch (err) {
       clear();
-      toast.error(err instanceof ApiError ? err.message : "Could not move that card");
+      toast.error(err instanceof ApiError ? err.message : t("record.moveFailed"));
     }
   };
 
@@ -235,7 +235,7 @@ function CardBody({
           href={`${entityPath(meta.key)}/${record.id}`}
           className="min-w-0 flex-1 text-sm font-medium leading-snug hover:text-brand"
         >
-          {String(record[meta.title_field] ?? "Untitled")}
+          {String(record[meta.title_field] ?? t("value.untitled"))}
         </Link>
       </div>
 

@@ -179,8 +179,22 @@ const REPORTS: &[ReportDef] = &[
 ];
 
 async fn catalog(State(state): State<AppState>, ctx: Ctx) -> AppResult<Json<Value>> {
+    // A report about a part of the suite this business does not use is one
+    // more thing to read past. Same rule as the sidebar: no rows means the
+    // question was never asked, and everything shows.
+    let chosen: Vec<String> =
+        sqlx::query_scalar("SELECT module_key FROM org_modules WHERE org_id = ?")
+            .bind(&ctx.org_id)
+            .fetch_all(&state.pool)
+            .await?;
+
     let data: Vec<Value> = REPORTS
         .iter()
+        .filter(|r| {
+            r.module == crate::modules::CORE
+                || chosen.is_empty()
+                || chosen.iter().any(|m| m == r.module)
+        })
         .filter(|r| ctx.can(r.requires, Action::View))
         .map(|r| {
             let module = state.registry.modules().iter().find(|m| m.key == r.module);

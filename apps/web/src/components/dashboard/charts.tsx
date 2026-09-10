@@ -6,6 +6,7 @@ import { Badge, toneOf } from "@/components/ui/badge";
 import { formatMoney } from "@/lib/format";
 import type { StatsRow } from "@/lib/queries";
 import { cn } from "@/lib/utils";
+import { t } from "@/lib/i18n";
 
 /**
  * Both charts here answer a magnitude question ("how much sits in each bucket"),
@@ -96,7 +97,7 @@ export function PipelineChart({ rows, currency }: { rows: StatsRow[]; currency: 
     // Funnel order beats value order: a pipeline is read as a sequence.
     .sort((a, b) => rank(a.key) - rank(b.key));
 
-  return <Bars rows={mapped} currency={currency} emptyLabel="No open deals." />;
+  return <Bars rows={mapped} currency={currency} emptyLabel={t("dash.noOpenDeals")} />;
 }
 
 function rank(stage: string) {
@@ -128,7 +129,7 @@ export function StatusBars({ rows, currency }: { rows: StatsRow[]; currency: str
     <Bars
       rows={mapped}
       currency={currency}
-      emptyLabel="No invoices yet."
+      emptyLabel={t("dash.noInvoicesShort")}
       // Status colour rides along with the status word, never on its own.
       renderLabel={(r) => (
         <Badge tone={toneOf(r.tone)} dot className={cn("shrink-0")}>

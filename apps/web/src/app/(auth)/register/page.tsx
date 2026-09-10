@@ -18,12 +18,12 @@ import { CURRENCIES } from "@/lib/constants";
 import { t } from "@/lib/i18n";
 
 const schema = z.object({
-  name: z.string().min(1, "Your name is required"),
+  name: z.string().min(1, t("auth.nameRequired")),
   // Optional in the schema; required only on the "starting a business" path,
   // checked below. Someone joining a business does not have one to name.
   organization: z.string().optional(),
-  email: z.string().min(1, "Email is required").email("Enter a valid email address"),
-  password: z.string().min(8, "Use at least 8 characters"),
+  email: z.string().min(1, t("auth.emailRequired")).email(t("auth.emailInvalid")),
+  password: z.string().min(8, t("auth.passwordShort")),
   currency: z.string().min(3),
 });
 
@@ -42,7 +42,7 @@ export default function RegisterPage() {
   const onSubmit = form.handleSubmit(async (values) => {
     setFormError(null);
     if (starting && !values.organization?.trim()) {
-      form.setError("organization", { message: "Give the business a name" });
+      form.setError("organization", { message: t("auth.nameTheBusiness") });
       return;
     }
     // Joining sends no business at all, which is what tells the server this is
@@ -68,8 +68,8 @@ export default function RegisterPage() {
       <h2 className="text-xl font-semibold tracking-tight">{t("auth.createAccount")}</h2>
       <p className="mt-1 text-sm text-muted-foreground">
         {starting
-          ? "You will own this business, with full access to everything in it."
-          : "Sign up, then accept the invitation waiting for your email address."}
+          ? t("auth.ownerNote")
+          : t("auth.invitedNote")}
       </p>
 
       <div
@@ -78,8 +78,8 @@ export default function RegisterPage() {
         className="mt-4 grid grid-cols-2 gap-2"
       >
         {[
-          { on: true, label: "I'm starting a business", hint: "Set it up now" },
-          { on: false, label: "I was invited", hint: "Join someone else's" },
+          { on: true, label: t("auth.startingLabel"), hint: t("auth.startingHint") },
+          { on: false, label: t("auth.invitedLabel"), hint: t("auth.invitedHint") },
         ].map((opt) => (
           <button
             key={String(opt.on)}
@@ -163,7 +163,7 @@ export default function RegisterPage() {
           label={t("auth.password")}
           error={form.formState.errors.password?.message}
           htmlFor="password"
-          hint="At least 8 characters."
+          hint={t("auth.passwordHint")}
           required
         >
           <PasswordInput
