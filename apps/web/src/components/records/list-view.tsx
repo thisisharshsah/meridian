@@ -23,10 +23,10 @@ import { FieldValue } from "@/components/records/field-value";
 import { RecordForm } from "@/components/records/record-form";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ApiError } from "@/lib/api";
-import { entityPath, optionsOf, type EntityMeta, type FieldDef } from "@/lib/meta";
+import { entityPath, optionsOf, type EntityMeta, type FieldDef } from "@suite/shared/meta";
 import { useDelete, useList, useSession, type ListParams, type Record_ } from "@/lib/queries";
 import { cn } from "@/lib/utils";
-import { t } from "@/lib/i18n";
+import { t } from "@suite/shared/i18n";
 
 const PER_PAGE = 25;
 

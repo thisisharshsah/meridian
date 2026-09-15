@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button";
 import { EmptyState, Skeleton } from "@/components/ui/misc";
 import { ApiError } from "@/lib/api";
 import { useEntityMeta } from "@/lib/queries";
-import type { EntityMeta } from "@/lib/meta";
-import { t } from "@/lib/i18n";
+import type { EntityMeta } from "@suite/shared/meta";
+import { t } from "@suite/shared/i18n";
 
 /**
  * Resolves an entity key to its metadata before rendering a screen, and turns

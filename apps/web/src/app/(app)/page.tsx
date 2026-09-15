@@ -16,9 +16,9 @@ import { BusinessShapePrompt, useBusinessShape } from "@/components/settings/bus
 import { ClockCard } from "@/components/dashboard/clock-card";
 import { ModuleLauncher } from "@/components/dashboard/module-launcher";
 import { useAppMeta, useList, useSession, useStats } from "@/lib/queries";
-import { formatMoney, formatDate, daysUntil } from "@/lib/format";
+import { formatMoney, formatDate, daysUntil } from "@suite/shared/format";
 import { cn } from "@/lib/utils";
-import { plural, t } from "@/lib/i18n";
+import { plural, t } from "@suite/shared/i18n";
 
 /**
  * What to do first, per kind of business.

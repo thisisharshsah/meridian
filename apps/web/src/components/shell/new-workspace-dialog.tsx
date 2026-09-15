@@ -18,7 +18,7 @@ import {
 import { FieldRow, FormError } from "@/components/form/field";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { t } from "@/lib/i18n";
+import { t } from "@suite/shared/i18n";
 
 const CURRENCIES = ["USD", "EUR", "GBP", "INR", "AUD", "CAD", "SGD", "AED", "JPY"];
 

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-import { t } from "@/lib/i18n";
+import { t } from "@suite/shared/i18n";
 
 /**
  * Moving the session to another business.

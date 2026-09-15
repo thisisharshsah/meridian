@@ -17,9 +17,9 @@ import {
 import { Icon } from "@/components/icon";
 import { Logo, Wordmark } from "@/components/brand/logo";
 import { cn } from "@/lib/utils";
-import { entityPath, type ModuleMeta } from "@/lib/meta";
+import { entityPath, type ModuleMeta } from "@suite/shared/meta";
 import { Skeleton } from "@/components/ui/misc";
-import { t } from "@/lib/i18n";
+import { t } from "@suite/shared/i18n";
 import { useProductName } from "@/lib/queries";
 
 const OPEN_KEY = "suite-open-modules";

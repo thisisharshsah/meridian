@@ -7,7 +7,7 @@ import { Check, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { t } from "@/lib/i18n";
+import { t } from "@suite/shared/i18n";
 
 const DISMISS_KEY = "suite-setup-dismissed";
 

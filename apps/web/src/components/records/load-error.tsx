@@ -5,7 +5,7 @@ import { AlertTriangle, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/misc";
 import { ApiError } from "@/lib/api";
-import { t } from "@/lib/i18n";
+import { t } from "@suite/shared/i18n";
 
 /**
  * What a screen shows when the data did not arrive.

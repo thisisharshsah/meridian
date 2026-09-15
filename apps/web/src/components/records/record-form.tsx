@@ -17,9 +17,9 @@ import {
 import { FieldRow, FormError, fieldDescribedBy } from "@/components/form/field";
 import { FieldInput } from "@/components/records/field-input";
 import { ApiError } from "@/lib/api";
-import type { EntityMeta, FieldDef } from "@/lib/meta";
+import type { EntityMeta, FieldDef } from "@suite/shared/meta";
 import { useCreate, useUpdate, type Record_ } from "@/lib/queries";
-import { t } from "@/lib/i18n";
+import { t } from "@suite/shared/i18n";
 
 /**
  * Create/edit dialog generated from the entity metadata. Field-level errors

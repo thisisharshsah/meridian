@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Providers } from "./providers";
-import { t } from "@/lib/i18n";
+import { t } from "@suite/shared/i18n";
 
 export const metadata: Metadata = {
   title: {

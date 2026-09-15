@@ -8,9 +8,9 @@ import { Building2, Search } from "lucide-react";
 import { Icon } from "@/components/icon";
 import { useAppMeta, useGlobalSearch, useSession } from "@/lib/queries";
 import { useSwitchWorkspace } from "@/lib/use-workspace";
-import { entityPath } from "@/lib/meta";
+import { entityPath } from "@suite/shared/meta";
 import { cn } from "@/lib/utils";
-import { t } from "@/lib/i18n";
+import { t } from "@suite/shared/i18n";
 
 /** Cross-module search plus jump-to-screen, on the usual Cmd/Ctrl-K. */
 export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {

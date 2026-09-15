@@ -11,7 +11,7 @@ import { EmptyState, Skeleton, Switch } from "@/components/ui/misc";
 import { Icon } from "@/components/icon";
 import { get, put } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { t } from "@/lib/i18n";
+import { t } from "@suite/shared/i18n";
 
 type ModuleRow = {
   key: string;

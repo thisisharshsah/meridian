@@ -14,9 +14,9 @@ import { Input } from "@/components/ui/input";
 import { FieldRow, FormError } from "@/components/form/field";
 import { Checkbox } from "@/components/ui/misc";
 import { ApiError, post } from "@/lib/api";
-import type { EntityMeta } from "@/lib/meta";
+import type { EntityMeta } from "@suite/shared/meta";
 import type { Record_ } from "@/lib/queries";
-import { t } from "@/lib/i18n";
+import { t } from "@suite/shared/i18n";
 
 /**
  * The verbs that move a record to the next stage of the business, as opposed

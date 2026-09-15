@@ -15,12 +15,12 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/misc";
 import { RecordForm } from "@/components/records/record-form";
 import { ApiError } from "@/lib/api";
-import { formatDate, formatMoney } from "@/lib/format";
-import { entityPath, optionsOf, type EntityMeta, type FieldDef } from "@/lib/meta";
+import { formatDate, formatMoney } from "@suite/shared/format";
+import { entityPath, optionsOf, type EntityMeta, type FieldDef } from "@suite/shared/meta";
 import { useList, useSession, useUpdate, type Record_ } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { LoadError } from "@/components/records/load-error";
-import { t } from "@/lib/i18n";
+import { t } from "@suite/shared/i18n";
 
 /**
  * Board view for any entity with a select field to group by — deals by stage,

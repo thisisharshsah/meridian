@@ -129,7 +129,9 @@ for (const file of files.sort()) {
  * falls back rather than throwing -- right at runtime, useless at review time
  * -- so "auth.signIn" appears on the sign-in page and the types are happy.
  */
-const catalogue = readFileSync(join(ROOT, "lib/i18n.ts"), "utf8");
+// The catalogue lives in the shared package, because the mobile app speaks the
+// same words; the components that must use it are still the web's.
+const catalogue = readFileSync(new URL("../packages/shared/src/i18n.ts", import.meta.url), "utf8");
 const known = new Set([...catalogue.matchAll(/^\s*"([^"]+)":\s*"/gm)].map((m) => m[1]));
 
 for (const file of files) {
@@ -152,7 +154,7 @@ for (const file of files) {
 if (found.length) {
   console.error(`${found.length} string${found.length === 1 ? "" : "s"} written into a component:`);
   for (const f of found) console.error("  " + f);
-  console.error("\nAdd a key to apps/web/src/lib/i18n.ts and render it with t().");
+  console.error("\nAdd a key to packages/shared/src/i18n.ts and render it with t().");
   process.exit(1);
 }
 console.log(`${files.length} components, ${known.size} phrases, every word from the catalogue`);

@@ -4,8 +4,8 @@ import Link from "next/link";
 
 import { Icon } from "@/components/icon";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { entityPath, type ModuleMeta } from "@/lib/meta";
-import { t } from "@/lib/i18n";
+import { entityPath, type ModuleMeta } from "@suite/shared/meta";
+import { t } from "@suite/shared/i18n";
 
 /**
  * An icon launcher for the phone, where the module list is folded away behind

@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { FieldRow, FormError } from "@/components/form/field";
 import { submitSession } from "@/lib/auth-client";
 import { CURRENCIES } from "@/lib/constants";
-import { t } from "@/lib/i18n";
+import { t } from "@suite/shared/i18n";
 
 const schema = z.object({
   name: z.string().min(1, t("auth.nameRequired")),

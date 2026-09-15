@@ -362,7 +362,10 @@ apps/web/            Next.js 16 App Router, React 19, Tailwind v4
   src/app/(app)/       the shell, dashboard, and [module]/[entity] routes
   src/app/api/         proxy to the Rust API + session cookie routes
   src/components/      UI primitives, metadata-driven record components
-  src/lib/             API client, formatting, query hooks, metadata types
+  src/lib/             API client, session, query hooks
+packages/shared/     plain TypeScript every client imports — metadata types,
+                     money/date formatting, the word catalogue. No DOM, so the
+                     phone can run it too
 server/              Rust API
   src/auth/            registration, login, refresh, RBAC context
   src/engine/          the metadata-driven CRUD engine

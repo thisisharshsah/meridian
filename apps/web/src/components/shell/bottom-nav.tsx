@@ -7,8 +7,8 @@ import { LayoutDashboard, Menu, Search } from "lucide-react";
 
 import { Icon } from "@/components/icon";
 import { cn } from "@/lib/utils";
-import { entityPath, type ModuleMeta } from "@/lib/meta";
-import { t } from "@/lib/i18n";
+import { entityPath, type ModuleMeta } from "@suite/shared/meta";
+import { t } from "@suite/shared/i18n";
 
 /**
  * Phone navigation. The drawer holds everything, but reaching a drawer costs a

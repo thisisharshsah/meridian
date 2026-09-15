@@ -14,7 +14,7 @@
  * search results, the sidebar.
  */
 
-import type { AppMeta, EntityMeta, FieldDef, ModuleMeta } from "@/lib/meta";
+import type { AppMeta, EntityMeta, FieldDef, ModuleMeta } from "./meta";
 
 export type Locale = "en";
 

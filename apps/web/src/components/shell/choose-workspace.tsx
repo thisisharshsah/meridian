@@ -10,9 +10,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Wordmark } from "@/components/brand/logo";
 import { NewWorkspaceDialog } from "@/components/shell/new-workspace-dialog";
-import { t } from "@/lib/i18n";
+import { t } from "@suite/shared/i18n";
 import { usePendingInvitations } from "@/lib/queries";
-import type { Session } from "@/lib/meta";
+import type { Session } from "@suite/shared/meta";
 
 /**
  * What someone sees between having an account and having a business.

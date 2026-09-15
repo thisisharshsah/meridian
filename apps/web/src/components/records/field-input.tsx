@@ -8,9 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { RefPicker } from "@/components/records/ref-picker";
 import { ChipSelect } from "@/components/records/chip-select";
 import { SuggestInput } from "@/components/records/suggest-input";
-import { optionsOf, type FieldDef } from "@/lib/meta";
-import { moneyToInput, percentToInput, qtyToInput } from "@/lib/format";
-import { t } from "@/lib/i18n";
+import { optionsOf, type FieldDef } from "@suite/shared/meta";
+import { moneyToInput, percentToInput, qtyToInput } from "@suite/shared/format";
+import { t } from "@suite/shared/i18n";
 
 export type FieldValueInput = string | number | boolean | null;
 

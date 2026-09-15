@@ -4,11 +4,11 @@ import { FilePlus2, PencilLine, Trash2 } from "lucide-react";
 
 import { Avatar } from "@/components/ui/avatar";
 import { EmptyState, Skeleton } from "@/components/ui/misc";
-import { relativeTime } from "@/lib/format";
+import { relativeTime } from "@suite/shared/format";
 import { useAuditTrail, type AuditEvent } from "@/lib/queries";
-import type { EntityMeta } from "@/lib/meta";
+import type { EntityMeta } from "@suite/shared/meta";
 import { LoadError } from "@/components/records/load-error";
-import { t } from "@/lib/i18n";
+import { t } from "@suite/shared/i18n";
 
 const ICONS: Record<string, typeof PencilLine> = {
   create: FilePlus2,

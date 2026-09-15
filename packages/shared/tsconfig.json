@@ -1,0 +1,15 @@
+{
+  // No "dom" in lib, on purpose: this code also runs on a phone, where there is
+  // no window or document. A browser-only call fails to compile here.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "strict": true,
+    "noEmit": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "isolatedModules": true,
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*.ts"]
+}

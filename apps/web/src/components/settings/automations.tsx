@@ -17,10 +17,10 @@ import { EmptyState, Skeleton, Switch } from "@/components/ui/misc";
 import { Icon } from "@/components/icon";
 import { FieldRow, FormError } from "@/components/form/field";
 import { ApiError, del, get, patch, post } from "@/lib/api";
-import { relativeTime } from "@/lib/format";
-import { optionsOf, type FieldDef } from "@/lib/meta";
+import { relativeTime } from "@suite/shared/format";
+import { optionsOf, type FieldDef } from "@suite/shared/meta";
 import { useEntityMeta } from "@/lib/queries";
-import { plural, t } from "@/lib/i18n";
+import { plural, t } from "@suite/shared/i18n";
 
 type Condition = { field: string; op: string; value: string };
 type ActionSpec = {

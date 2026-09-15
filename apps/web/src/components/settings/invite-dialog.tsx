@@ -15,8 +15,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { EmptyState } from "@/components/ui/misc";
 import { FieldRow, FormError } from "@/components/form/field";
 import { ApiError, del, get, post } from "@/lib/api";
-import { formatDate, relativeTime } from "@/lib/format";
-import { t } from "@/lib/i18n";
+import { formatDate, relativeTime } from "@suite/shared/format";
+import { t } from "@suite/shared/i18n";
 
 type Role = { id: string; key: string; name: string; is_system: boolean };
 type Invite = {

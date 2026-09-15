@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import { Avatar } from "@/components/ui/avatar";
 import { WorkspaceSwitcher } from "@/components/shell/workspace-switcher";
 import { useSwitchWorkspace } from "@/lib/use-workspace";
-import { t } from "@/lib/i18n";
+import { t } from "@suite/shared/i18n";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -21,7 +21,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { Session } from "@/lib/meta";
+import type { Session } from "@suite/shared/meta";
 
 export function Topbar({ session, onSearch }: { session?: Session; onSearch: () => void }) {
   const router = useRouter();

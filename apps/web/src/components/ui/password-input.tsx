@@ -5,7 +5,7 @@ import { Eye, EyeOff } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { t } from "@/lib/i18n";
+import { t } from "@suite/shared/i18n";
 
 /**
  * A password field with a reveal toggle. Typing a password blind is the usual

@@ -25,6 +25,9 @@ step() {
 # its own commit if you want it.
 step "rust: build" cargo build --manifest-path server/Cargo.toml --quiet
 step "rust: tests" cargo test --manifest-path server/Cargo.toml --quiet
+# On its own, without the DOM: the phone has no `window`, and the web's own
+# typecheck would happily let a browser-only call into code the app imports.
+step "shared: types" apps/web/node_modules/.bin/tsc --noEmit -p packages/shared
 step "web: words" node scripts/i18n-lint.mjs
 step "web: icons" node scripts/icon-lint.mjs
 # Invoked exactly as package.json does, from apps/web: run from the root
@@ -38,7 +41,7 @@ printf '\n── counts\n'
 printf '   entities : %s\n' "$(grep -rc 'r.add(EntityDef' server/src/modules/*.rs | awk -F: '{s+=$2} END {print s}')"
 printf '   tests    : %s\n' "$(cargo test --manifest-path server/Cargo.toml 2>/dev/null | grep -oE '[0-9]+ passed' | head -1)"
 printf '   migrations: %s\n' "$(ls server/migrations/*.sql | wc -l | tr -d ' ')"
-printf '   phrases  : %s\n' "$(grep -c '": "' apps/web/src/lib/i18n.ts | tr -d ' ')"
+printf '   phrases  : %s\n' "$(grep -c '": "' packages/shared/src/i18n.ts | tr -d ' ')"
 printf '   editions : %s\n' "$(grep -c '^        key: "' server/src/editions.rs | tr -d ' ')"
 
 if [[ $fail -ne 0 ]]; then

@@ -1,5 +1,6 @@
 packages:
   - "apps/*"
+  - "packages/*"
 
 # Native packages that legitimately need their install scripts.
 onlyBuiltDependencies:

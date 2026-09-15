@@ -3,10 +3,10 @@
 import * as React from "react";
 
 import { Badge, toneOf } from "@/components/ui/badge";
-import { formatMoney } from "@/lib/format";
+import { formatMoney } from "@suite/shared/format";
 import type { StatsRow } from "@/lib/queries";
 import { cn } from "@/lib/utils";
-import { t } from "@/lib/i18n";
+import { t } from "@suite/shared/i18n";
 
 /**
  * Both charts here answer a magnitude question ("how much sits in each bucket"),

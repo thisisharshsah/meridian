@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Logo } from "@/components/brand/logo";
 import { BarChart3, Boxes, Receipt, Users } from "lucide-react";
-import { t } from "@/lib/i18n";
+import { t } from "@suite/shared/i18n";
 import { productName } from "@/lib/session";
 
 const PILLARS = [

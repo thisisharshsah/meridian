@@ -7,9 +7,9 @@ import { Check, ChevronDown, X } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/misc";
 import { useLookup } from "@/lib/queries";
 import { get } from "@/lib/api";
-import { entityPath } from "@/lib/meta";
+import { entityPath } from "@suite/shared/meta";
 import { cn } from "@/lib/utils";
-import { t } from "@/lib/i18n";
+import { t } from "@suite/shared/i18n";
 
 /**
  * Searchable picker for a reference field. It fetches `{id, label}` pairs from

@@ -12,10 +12,10 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { EmptyState, Skeleton } from "@/components/ui/misc";
 import { Icon } from "@/components/icon";
 import { get, qs } from "@/lib/api";
-import { formatDate, formatMoney, formatPercent, formatQuantity } from "@/lib/format";
+import { formatDate, formatMoney, formatPercent, formatQuantity } from "@suite/shared/format";
 import { useSession } from "@/lib/queries";
 import { cn } from "@/lib/utils";
-import { t } from "@/lib/i18n";
+import { t } from "@suite/shared/i18n";
 
 type ReportInfo = {
   key: string;

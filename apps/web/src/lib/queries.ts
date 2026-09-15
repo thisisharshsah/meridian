@@ -2,8 +2,8 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { del, get, patch, post, qs, type Page } from "@/lib/api";
-import type { AppMeta, EntityMeta, Session } from "@/lib/meta";
-import { localizeAppMeta, localizeEntityMeta, t } from "@/lib/i18n";
+import type { AppMeta, EntityMeta, Session } from "@suite/shared/meta";
+import { localizeAppMeta, localizeEntityMeta, t } from "@suite/shared/i18n";
 
 export type Record_ = Record<string, unknown> & { id: string };
 

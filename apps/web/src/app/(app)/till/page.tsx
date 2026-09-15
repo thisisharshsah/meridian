@@ -8,10 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmptyState, Skeleton } from "@/components/ui/misc";
 import { post, patch } from "@/lib/api";
-import { formatMoney, moneyToInput, MONEY_SCALE } from "@/lib/format";
+import { formatMoney, moneyToInput, MONEY_SCALE } from "@suite/shared/format";
 import { useList, useSession, useStats, type Record_ } from "@/lib/queries";
 import { cn } from "@/lib/utils";
-import { t } from "@/lib/i18n";
+import { t } from "@suite/shared/i18n";
 
 type Line = { itemId: string; name: string; unitMinor: number; qty: number };
 

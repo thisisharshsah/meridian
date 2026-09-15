@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useCreate, useList, useSession, useStats, useUpdate, type Record_ } from "@/lib/queries";
-import { t } from "@/lib/i18n";
+import { t } from "@suite/shared/i18n";
 
 /** Local calendar date, not UTC: a shift belongs to the day the worker had. */
 function today() {

@@ -22,8 +22,8 @@ import { BusinessShapeTab } from "@/components/settings/business-shape";
 import { IntegrationsTab } from "@/components/settings/integrations";
 import { ApiError, get, patch } from "@/lib/api";
 import { CURRENCIES } from "@/lib/constants";
-import { formatDate, relativeTime } from "@/lib/format";
-import { t } from "@/lib/i18n";
+import { formatDate, relativeTime } from "@suite/shared/format";
+import { t } from "@suite/shared/i18n";
 
 type Org = {
   id: string; name: string; slug: string; currency: string; country: string | null;

@@ -9,7 +9,7 @@ import { CommandPalette } from "@/components/shell/command-palette";
 import { useAppMeta, useSession } from "@/lib/queries";
 import { Skeleton } from "@/components/ui/misc";
 import { LoadError } from "@/components/records/load-error";
-import { t } from "@/lib/i18n";
+import { t } from "@suite/shared/i18n";
 
 const COLLAPSE_KEY = "suite-sidebar-collapsed";
 

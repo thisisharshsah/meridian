@@ -13,8 +13,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { NewWorkspaceDialog } from "@/components/shell/new-workspace-dialog";
 import { useSwitchWorkspace } from "@/lib/use-workspace";
-import { t } from "@/lib/i18n";
-import type { Session } from "@/lib/meta";
+import { t } from "@suite/shared/i18n";
+import type { Session } from "@suite/shared/meta";
 
 /**
  * Which business you are in, and how to leave it.

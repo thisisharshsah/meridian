@@ -11,11 +11,11 @@ import { EmptyState, Skeleton } from "@/components/ui/misc";
 import { FieldInput } from "@/components/records/field-input";
 import { RefPicker } from "@/components/records/ref-picker";
 import { ApiError } from "@/lib/api";
-import { formatMoney } from "@/lib/format";
-import type { ChildDef, EntityMeta, FieldDef } from "@/lib/meta";
+import { formatMoney } from "@suite/shared/format";
+import type { ChildDef, EntityMeta, FieldDef } from "@suite/shared/meta";
 import { useCreate, useDelete, useEntityMeta, useList, useUpdate, type Record_ } from "@/lib/queries";
 import { LoadError } from "@/components/records/load-error";
-import { t } from "@/lib/i18n";
+import { t } from "@suite/shared/i18n";
 
 const EDITABLE = ["description", "quantity", "unit_price", "discount_percent", "tax_rate"];
 

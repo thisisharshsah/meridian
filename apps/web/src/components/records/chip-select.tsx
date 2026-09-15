@@ -5,8 +5,8 @@ import { Check, X } from "lucide-react";
 
 import { badgeVariants, toneOf } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import type { SelectOption } from "@/lib/meta";
-import { t } from "@/lib/i18n";
+import type { SelectOption } from "@suite/shared/meta";
+import { t } from "@suite/shared/i18n";
 
 /**
  * A short option list laid out as chips rather than hidden behind a dropdown.

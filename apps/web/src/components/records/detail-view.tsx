@@ -18,13 +18,13 @@ import { LineItems } from "@/components/records/line-items";
 import { RecordActions } from "@/components/records/record-actions";
 import { ListView } from "@/components/records/list-view";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { entityPath, type EntityMeta, type FieldDef } from "@/lib/meta";
+import { entityPath, type EntityMeta, type FieldDef } from "@suite/shared/meta";
 import { useDelete, useEntityMeta, useRecord, useSession } from "@/lib/queries";
-import { formatMoney } from "@/lib/format";
+import { formatMoney } from "@suite/shared/format";
 import { cn } from "@/lib/utils";
 import { LoadError } from "@/components/records/load-error";
 import { ApiError } from "@/lib/api";
-import { t } from "@/lib/i18n";
+import { t } from "@suite/shared/i18n";
 
 /**
  * Record page: a header with the identifying fields, the full field list, the

@@ -14,9 +14,9 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmptyState, Skeleton } from "@/components/ui/misc";
 import { ApiError, get, post } from "@/lib/api";
-import { relativeTime } from "@/lib/format";
-import { entityPath } from "@/lib/meta";
-import { t } from "@/lib/i18n";
+import { relativeTime } from "@suite/shared/format";
+import { entityPath } from "@suite/shared/meta";
+import { t } from "@suite/shared/i18n";
 
 type Request = {
   id: string;

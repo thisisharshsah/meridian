@@ -15,7 +15,7 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { FieldRow, FormError } from "@/components/form/field";
 import { submitSession } from "@/lib/auth-client";
-import { t } from "@/lib/i18n";
+import { t } from "@suite/shared/i18n";
 
 const schema = z.object({
   email: z.string().min(1, t("auth.emailRequired")).email(t("auth.emailInvalid")),

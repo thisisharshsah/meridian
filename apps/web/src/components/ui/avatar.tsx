@@ -1,6 +1,6 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
-import { initials } from "@/lib/format";
+import { initials } from "@suite/shared/format";
 
 /**
  * Deterministic colour per name, so the same person keeps the same chip colour

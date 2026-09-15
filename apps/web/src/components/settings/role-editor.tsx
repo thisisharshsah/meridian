@@ -18,7 +18,7 @@ import { Icon } from "@/components/icon";
 import { FieldRow, FormError } from "@/components/form/field";
 import { ApiError, del, get, patch, post } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { t } from "@/lib/i18n";
+import { t } from "@suite/shared/i18n";
 
 type Role = {
   id: string; key: string; name: string; description: string | null;

@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { t } from "@/lib/i18n";
+import { t } from "@suite/shared/i18n";
 
 /** Four quadrants for the four sides of a business: sell, bill, deliver, support. */
 export function Logo({ className, size = 28 }: { className?: string; size?: number }) {

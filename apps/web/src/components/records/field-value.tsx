@@ -6,9 +6,9 @@ import { Check, X } from "lucide-react";
 import { Badge, toneOf } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
-import { entityPath, optionFor, type FieldDef } from "@/lib/meta";
-import { formatDate, formatDateTime, formatMoney, formatPercent, formatQuantity } from "@/lib/format";
-import { t } from "@/lib/i18n";
+import { entityPath, optionFor, type FieldDef } from "@suite/shared/meta";
+import { formatDate, formatDateTime, formatMoney, formatPercent, formatQuantity } from "@suite/shared/format";
+import { t } from "@suite/shared/i18n";
 
 /**
  * Renders one field for display. Every list cell and detail row goes through

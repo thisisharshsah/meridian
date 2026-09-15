@@ -13,7 +13,7 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { Skeleton } from "@/components/ui/misc";
 import { FieldRow, FormError } from "@/components/form/field";
 import { ApiError, get } from "@/lib/api";
-import { t } from "@/lib/i18n";
+import { t } from "@suite/shared/i18n";
 
 type Preview = {
   email: string;
