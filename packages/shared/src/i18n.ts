@@ -437,6 +437,17 @@ const en: Messages = {
   "value.copy": "Copy",
   "value.copied": "Copied",
   "value.noMatches": "No matches",
+  "value.signedInAs": "Signed in as",
+
+  // ---- the phone app ----
+  // Prefixed because they appear nowhere else: the app is one screen at a
+  // time and has to say things the web never needs to.
+  "mobile.noBusiness": "You are not in a business yet",
+  "mobile.noBusinessWhy": "Open Aurovie Business in a browser to start one, or to accept an invitation someone sent you.",
+  "mobile.noRecords": "No {label} yet",
+  "mobile.noRecordsWhy": "Anything added here, or on the web, will show up in this list.",
+  "mobile.offline": "No connection. Check your signal and try again.",
+  "mobile.sessionUnreachable": "Could not reach your session. Try again in a moment.",
 
   "dash.openDealCount.one": "{n} open deal",
   "dash.openDealCount.other": "{n} open deals",

@@ -34,6 +34,10 @@ step "web: icons" node scripts/icon-lint.mjs
 # with --project instead and tsc resolves paths differently and fails.
 step "web: types" bash -c 'cd apps/web && ./node_modules/.bin/tsc --noEmit'
 step "web: build" bash -c 'cd apps/web && ./node_modules/.bin/next build >/dev/null'
+# The phone app has no build here: a release is `eas build`, off this machine.
+# Types are what can be checked in a second, and they catch the mistake that
+# matters — a screen reading a field the API does not send.
+step "app: types" bash -c 'cd apps/mobile && ./node_modules/.bin/tsc --noEmit'
 
 # Counts are measured, never remembered: print what is actually there rather
 # than trusting a number somebody typed into a readme months ago.

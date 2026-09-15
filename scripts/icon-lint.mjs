@@ -1,5 +1,5 @@
 /**
- * Every icon the server names must be one the web app can draw.
+ * Every icon the server names must be one both clients can draw.
  *
  * The client maps icon names explicitly and falls back to a generic glyph for
  * anything it does not know. That fallback is right — a missing icon should
@@ -19,15 +19,25 @@ for (const file of readdirSync(modules).filter((f) => f.endsWith(".rs"))) {
   for (const m of src.matchAll(/\bicon:\s*"([A-Za-z0-9]+)"/g)) named.add(m[1]);
 }
 
-const iconFile = readFileSync(join(root, "apps/web/src/components/icon.tsx"), "utf8");
-const table = iconFile.slice(iconFile.indexOf("const ICONS"));
-const mapped = new Set(table.slice(0, table.indexOf("};")).match(/\b[A-Z][A-Za-z0-9]*/g) ?? []);
+/** Each client keeps its own table: lucide-react on the web, lucide-react-native on the phone. */
+const TABLES = [
+  { file: "apps/web/src/components/icon.tsx", client: "web app", from: "lucide-react" },
+  { file: "apps/mobile/src/components/icon.tsx", client: "phone app", from: "lucide-react-native" },
+];
 
-const missing = [...named].filter((n) => !mapped.has(n)).sort();
-if (missing.length) {
-  console.error(`${missing.length} icon name${missing.length === 1 ? "" : "s"} the web app cannot draw:`);
-  for (const m of missing) console.error("  " + m);
-  console.error("\nAdd them to apps/web/src/components/icon.tsx, importing from lucide-react.");
-  process.exit(1);
+let failed = false;
+for (const { file, client, from } of TABLES) {
+  const iconFile = readFileSync(join(root, file), "utf8");
+  const table = iconFile.slice(iconFile.indexOf("const ICONS"));
+  const mapped = new Set(table.slice(0, table.indexOf("};")).match(/\b[A-Z][A-Za-z0-9]*/g) ?? []);
+
+  const missing = [...named].filter((n) => !mapped.has(n)).sort();
+  if (missing.length) {
+    failed = true;
+    console.error(`${missing.length} icon name${missing.length === 1 ? "" : "s"} the ${client} cannot draw:`);
+    for (const m of missing) console.error("  " + m);
+    console.error(`\nAdd them to ${file}, importing from ${from}.`);
+  }
 }
-console.log(`${named.size} icons named by the server, all drawable`);
+if (failed) process.exit(1);
+console.log(`${named.size} icons named by the server, all drawable on both clients`);

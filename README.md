@@ -366,6 +366,42 @@ own binary means gating the `register()` calls behind cargo features named
 for these keys. Nothing downstream changes, which is what makes compiling
 them apart a later decision rather than a prerequisite.
 
+## The phone app
+
+The same suite, on a phone: sign in, pick a business, open any module, read any
+record you have permission to. It is built from `/api/meta` exactly as the web
+is, so it has no per-module code and a module added to the server appears in it
+without a line being written here.
+
+```bash
+cd apps/mobile && pnpm start     # then scan the QR with Expo Go
+```
+
+It talks to `https://business.aurovie.com/api/*` — the public origin, through
+the same Next proxy the browser uses, so the Rust API stays on loopback with
+one way in. `EXPO_PUBLIC_API_URL` points it somewhere else for development.
+
+What it does *not* share with the web is how it holds a session. The browser
+has an httpOnly cookie it cannot read; the app has no cookie, so it holds the
+tokens itself, in the **keychain** rather than AsyncStorage — a refresh token
+is a thirty-day credential and AsyncStorage is a plain file that lands in a
+backup of the phone. Refreshing is the app's own job, and it takes care to do
+it **once**: refresh tokens rotate, so three requests meeting an expired access
+token at the same moment would spend the same refresh token three times and log
+the person out mid-session. The first caller starts the refresh and the others
+wait on it.
+
+Signing out on the phone deletes the tokens on the phone and nothing more. The
+API's logout revokes *every* refresh token the person has, which would end
+their browser session on the desk because they closed an app on the train.
+
+Words and money come from `packages/shared`, so both clients say the same
+things, and the colours are the web's own tokens converted from OKLCH — React
+Native cannot parse `oklch()`, which is the only reason they are written twice.
+
+Not there yet: creating or editing records, search across modules, approvals,
+the till, offline. The first release reads.
+
 ## Layout
 
 ```
@@ -375,6 +411,9 @@ apps/web/            Next.js 16 App Router, React 19, Tailwind v4
   src/app/api/         proxy to the Rust API + session cookie routes
   src/components/      UI primitives, metadata-driven record components
   src/lib/             API client, session, query hooks
+apps/mobile/         Expo (SDK 57) phone app, React Native + expo-router
+  src/app/             sign in, workspaces, home, [module]/[entity] routes
+  src/lib/             API client with its own tokens, session, query hooks
 packages/shared/     plain TypeScript every client imports — metadata types,
                      money/date formatting, the word catalogue. No DOM, so the
                      phone can run it too

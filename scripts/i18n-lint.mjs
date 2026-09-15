@@ -10,7 +10,9 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 
-const ROOT = new URL("../apps/web/src", import.meta.url).pathname;
+const REPO = new URL("..", import.meta.url).pathname;
+/** Both clients: the phone says the same words, and can drift the same way. */
+const ROOTS = ["apps/web/src", "apps/mobile/src"].map((p) => join(REPO, p));
 
 /** Attributes whose value is read aloud or read on screen. */
 const SPOKEN = ["placeholder", "aria-label", "title", "description", "label", "alt"];
@@ -64,13 +66,15 @@ function prose(text) {
 }
 
 const files = [];
-(function walk(dir) {
-  for (const name of readdirSync(dir)) {
-    const p = join(dir, name);
-    if (statSync(p).isDirectory()) walk(p);
-    else if (p.endsWith(".tsx")) files.push(p);
-  }
-})(ROOT);
+for (const root of ROOTS) {
+  (function walk(dir) {
+    for (const name of readdirSync(dir)) {
+      const p = join(dir, name);
+      if (statSync(p).isDirectory()) walk(p);
+      else if (p.endsWith(".tsx")) files.push(p);
+    }
+  })(root);
+}
 
 const found = [];
 for (const file of files.sort()) {
@@ -92,7 +96,7 @@ for (const file of files.sort()) {
     const line = src.slice(0, m.index).split("\n").length;
     const source = lines[line - 1] ?? "";
     if (/\bt\(|plural\(|className|\bcn\(/.test(source)) continue;
-    found.push(`${relative(ROOT, file)}:${line}  expression  ${JSON.stringify(text)}`);
+    found.push(`${relative(REPO, file)}:${line}  expression  ${JSON.stringify(text)}`);
   }
 
   // Prose handed to a function: a validation message, an error set on a form.
@@ -107,18 +111,22 @@ for (const file of files.sort()) {
     const line = src.slice(0, m.index).split("\n").length;
     const source = lines[line - 1] ?? "";
     if (/\bt\(|plural\(|className|\bcn\(/.test(source)) continue;
-    found.push(`${relative(ROOT, file)}:${line}  argument  ${JSON.stringify(text)}`);
+    found.push(`${relative(REPO, file)}:${line}  argument  ${JSON.stringify(text)}`);
   }
 
   for (const { re, what } of PATTERNS) {
     for (const m of src.matchAll(re)) {
       const text = m[1].trim();
       if (ALLOWED.has(text)) continue;
+      // `) => Promise<void>` is an arrow and a generic, not a tag with a word
+      // between it and the next one. The `>` that opens the match belongs to
+      // `=>`, which no JSX element ever ends with.
+      if (what === "text" && src[m.index - 1] === "=") continue;
       const line = src.slice(0, m.index).split("\n").length;
       // A line already reaching the catalogue is doing the right thing with
       // some other part of itself.
       if (/\bt\(|plural\(/.test(lines[line - 1])) continue;
-      found.push(`${relative(ROOT, file)}:${line}  ${what}  ${JSON.stringify(text)}`);
+      found.push(`${relative(REPO, file)}:${line}  ${what}  ${JSON.stringify(text)}`);
     }
   }
 }
@@ -139,14 +147,14 @@ for (const file of files) {
   for (const m of src.matchAll(/\bt\(\s*"([^"${}]+)"/g)) {
     if (!known.has(m[1])) {
       const line = src.slice(0, m.index).split("\n").length;
-      found.push(`${relative(ROOT, file)}:${line}  unknown key  ${JSON.stringify(m[1])}`);
+      found.push(`${relative(REPO, file)}:${line}  unknown key  ${JSON.stringify(m[1])}`);
     }
   }
   // A plural needs at least the `other` form; every language has one.
   for (const m of src.matchAll(/\bplural\(\s*"([^"${}]+)"/g)) {
     if (!known.has(`${m[1]}.other`)) {
       const line = src.slice(0, m.index).split("\n").length;
-      found.push(`${relative(ROOT, file)}:${line}  no plural forms  ${JSON.stringify(m[1])}`);
+      found.push(`${relative(REPO, file)}:${line}  no plural forms  ${JSON.stringify(m[1])}`);
     }
   }
 }

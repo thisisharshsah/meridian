@@ -3,10 +3,11 @@
   "private": true,
   "scripts": {
     "dev": "./dev.sh",
+    "app": "cd apps/mobile && ./node_modules/.bin/expo start",
     "seed": "./seed.sh",
     "reset": "./reset.sh",
     "test": "cd server && cargo test",
-    "typecheck": "cd apps/web && ./node_modules/.bin/tsc --noEmit",
+    "typecheck": "cd apps/web && ./node_modules/.bin/tsc --noEmit && cd ../mobile && ./node_modules/.bin/tsc --noEmit",
     "build": "cd server && cargo build --release && cd ../apps/web && ./node_modules/.bin/next build"
   }
 }
