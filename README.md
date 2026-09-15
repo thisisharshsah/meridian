@@ -270,6 +270,18 @@ Expired access tokens are refreshed and the request replayed, transparently.
 Refresh tokens rotate on use and are stored as SHA-256 digests, so a database
 dump is not a set of live sessions.
 
+The cookie is never exchanged for a token a script can read. Switching or
+creating a workspace answers with a fresh token pair in the body, so when the
+proxy is spending the cookie it forwards no `auth/` route but `me` — the
+browser does all of that through `/api/session/*`, which writes the new tokens
+to cookies instead. The check reads the path after `..` is resolved, because
+`e/..%2Fauth%2Fswitch` is otherwise a records path that lands on `auth/switch`.
+
+The phone app is the other caller. It holds its own tokens and sends
+`Authorization` itself, through the same public origin, so the API still has
+exactly one way in. A request carrying that header is forwarded as-is: the
+proxy reads no cookie for it, writes none, and leaves refreshing to the app.
+
 **Inviting someone** produces a link rather than an email, since there is no
 mail server: an owner creates it, copies it, and passes it on. The token is
 shown exactly once — only its SHA-256 digest is stored — works a single time,

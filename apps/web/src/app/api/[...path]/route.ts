@@ -9,27 +9,30 @@ import {
 export const dynamic = "force-dynamic";
 
 /**
- * Single proxy between the browser and the Rust API.
+ * Single proxy between the clients and the Rust API, which is never exposed.
  *
- * It exists so the access token can live in an httpOnly cookie: the browser
- * never holds a bearer token, and every call is same-origin, so there is no
- * CORS surface either. When the access token has expired it silently spends the
- * refresh token and replays the request once.
+ * Two kinds of caller come through it, and where the credential comes from
+ * decides everything else:
+ *
+ * - The browser holds no token at all. Its access token lives in an httpOnly
+ *   cookie, attached here, and every call is same-origin, so there is no CORS
+ *   surface either. When the access token has expired this silently spends the
+ *   refresh token and replays the request once.
+ * - The phone app holds its own tokens and sends `Authorization` itself. That
+ *   header is forwarded untouched, cookies are neither read nor written, and
+ *   the app refreshes on its own — the proxy has nothing of its own to rotate.
  */
 async function forward(
   req: NextRequest,
-  path: string[],
-  accessToken: string | null,
+  url: URL,
+  authorization: string | null,
   body: ArrayBuffer | undefined,
 ) {
-  const url = new URL(`${API_URL}/api/${path.join("/")}`);
-  url.search = req.nextUrl.search;
-
   const headers = new Headers();
   const contentType = req.headers.get("content-type");
   if (contentType) headers.set("content-type", contentType);
   headers.set("accept", "application/json");
-  if (accessToken) headers.set("authorization", `Bearer ${accessToken}`);
+  if (authorization) headers.set("authorization", authorization);
 
   return fetch(url, {
     method: req.method,
@@ -58,8 +61,27 @@ async function refresh(refreshToken: string) {
 
 async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
   const { path } = await ctx.params;
-  const accessToken = req.cookies.get(ACCESS_COOKIE)?.value ?? null;
-  const refreshToken = req.cookies.get(REFRESH_COOKIE)?.value ?? null;
+  // Resolved before anything is judged: `new URL` collapses `..`, so the check
+  // below reads the path the API will actually receive. Checking the joined
+  // segments instead lets `e/..%2Fauth%2Fswitch` through as a records path.
+  const url = new URL(`${API_URL}/api/${path.join("/")}`);
+  url.search = req.nextUrl.search;
+
+  const header = req.headers.get("authorization");
+  const accessToken = header ? null : (req.cookies.get(ACCESS_COOKIE)?.value ?? null);
+  const refreshToken = header ? null : (req.cookies.get(REFRESH_COOKIE)?.value ?? null);
+  const usingCookie = Boolean(accessToken || refreshToken);
+
+  // The cookie is never exchanged for a token a script can read. Switching and
+  // creating a workspace answer with a fresh token pair in the body; forwarded
+  // on the cookie's say-so, that pair would reach any script on the page — a
+  // thirty-day refresh token the httpOnly cookie exists to keep out of reach.
+  // The browser has `/api/session/*` for all of it, which writes tokens to
+  // cookies instead, so `me` is the only auth route it needs here. An allowlist,
+  // so a token-minting route added later is refused until someone decides.
+  if (usingCookie && url.pathname.startsWith("/api/auth/") && url.pathname !== "/api/auth/me") {
+    return NextResponse.json({ error: { code: "not_found", message: "Not found" } }, { status: 404 });
+  }
 
   // Buffer the body once. A Request body is a stream that can only be read a
   // single time, and the 401 path below replays the request — reading it again
@@ -69,7 +91,7 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
 
   let upstream: Response;
   try {
-    upstream = await forward(req, path, accessToken, body);
+    upstream = await forward(req, url, header ?? (accessToken && `Bearer ${accessToken}`), body);
   } catch {
     return NextResponse.json(
       {
@@ -86,10 +108,12 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
   let rotated: Awaited<ReturnType<typeof refresh>> = null;
   let refreshFailed = false;
 
-  if (upstream.status === 401 && refreshToken && path.join("/") !== "auth/refresh") {
+  // Only a cookie session is refreshed here; an app's refresh token is the
+  // app's. `auth/refresh` itself cannot arrive with a cookie, per the guard.
+  if (upstream.status === 401 && refreshToken) {
     rotated = await refresh(refreshToken);
     if (rotated) {
-      upstream = await forward(req, path, rotated.access_token, body);
+      upstream = await forward(req, url, `Bearer ${rotated.access_token}`, body);
     } else {
       refreshFailed = true;
     }
