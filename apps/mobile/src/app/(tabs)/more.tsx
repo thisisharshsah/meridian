@@ -1,9 +1,7 @@
 import * as React from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useRouter } from "expo-router";
-import { ChevronsUpDown } from "lucide-react-native";
 
-import { BusinessSheet } from "@/components/business-list";
 import { NAV_MODULES } from "@/app/(tabs)/_layout";
 import { RequireSession } from "@/components/guard";
 import { Icon } from "@/components/icon";
@@ -34,33 +32,12 @@ function MoreScreen() {
   const session = useSession();
   const meta = useAppMeta();
   const { signOut } = useSessionState();
-  const [switching, setSwitching] = React.useState(false);
 
   const modules = (meta.data?.modules ?? []).slice(NAV_MODULES);
 
   return (
     <>
       <ScrollView contentContainerStyle={{ padding: space.lg, gap: space.lg }}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t("workspace.switch")}
-          onPress={() => setSwitching(true)}
-          style={({ pressed }) => ({
-            flexDirection: "row",
-            alignItems: "center",
-            gap: space.sm,
-            alignSelf: "flex-start",
-            marginLeft: -space.sm,
-            paddingHorizontal: space.sm,
-            paddingVertical: space.xs,
-            borderRadius: radius,
-            backgroundColor: pressed ? c.surfaceMuted : "transparent",
-          })}
-        >
-          <Title numberOfLines={1} style={{ fontSize: 18 }}>{session.data?.organization?.name}</Title>
-          <ChevronsUpDown size={15} color={c.subtleForeground} />
-        </Pressable>
-
         {meta.isPending ? <Loading /> : null}
         {meta.error ? <Problem error={meta.error} onRetry={() => meta.refetch()} /> : null}
 
@@ -78,7 +55,6 @@ function MoreScreen() {
         </Card>
       </ScrollView>
 
-      <BusinessSheet open={switching} onClose={() => setSwitching(false)} />
     </>
   );
 }

@@ -1,10 +1,9 @@
 import * as React from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useRouter } from "expo-router";
-import { ChevronsUpDown } from "lucide-react-native";
 
 import { AuthShell } from "@/components/auth-shell";
-import { BusinessList, BusinessSheet } from "@/components/business-list";
+import { BusinessList } from "@/components/business-list";
 import { RequireSession } from "@/components/guard";
 import { Body, Card, Empty, Label, Loading, Problem, Title } from "@/components/ui";
 import { useAppMeta, useSession, useShortList, useStats, type Record_ } from "@/lib/queries";
@@ -50,7 +49,6 @@ function Dashboard() {
   const router = useRouter();
   const session = useSession();
   const meta = useAppMeta();
-  const [switching, setSwitching] = React.useState(false);
 
   const organization = session.data?.organization;
   const currency = organization?.currency ?? "USD";
@@ -85,31 +83,9 @@ function Dashboard() {
   return (
     <>
       <ScrollView contentContainerStyle={{ padding: space.lg, gap: space.lg }}>
-        {/* The business's name is the heading, and the heading is the switcher:
-            this screen is about the business you are in, and choosing another
-            is a control on it rather than a screen in front of it. */}
-        <View style={{ gap: space.xs }}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t("workspace.switch")}
-            onPress={() => setSwitching(true)}
-            style={({ pressed }) => ({
-              flexDirection: "row",
-              alignItems: "center",
-              gap: space.sm,
-              alignSelf: "flex-start",
-              marginLeft: -space.sm,
-              paddingHorizontal: space.sm,
-              paddingVertical: space.xs,
-              borderRadius: radius,
-              backgroundColor: pressed ? c.surfaceMuted : "transparent",
-            })}
-          >
-            <Title numberOfLines={1}>{organization?.name}</Title>
-            <ChevronsUpDown size={16} color={c.subtleForeground} />
-          </Pressable>
-          <Body muted>{greeting()}, {session.data?.user.name?.split(" ")[0] ?? ""}</Body>
-        </View>
+        {/* The business's name is in the app bar, where it stays on every
+            screen; repeating it here as a heading said it twice. */}
+        <Body muted>{greeting()}, {session.data?.user.name?.split(" ")[0] ?? ""}</Body>
 
         {meta.isPending ? <Loading /> : null}
 
@@ -154,7 +130,6 @@ function Dashboard() {
         <View style={{ height: space.xl }} />
       </ScrollView>
 
-      <BusinessSheet open={switching} onClose={() => setSwitching(false)} />
     </>
   );
 }

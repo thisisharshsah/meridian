@@ -1,11 +1,12 @@
 import * as React from "react";
-import { Pressable } from "react-native";
-import { Tabs, router } from "expo-router";
-import { LayoutDashboard, Menu, Search } from "lucide-react-native";
+import { Tabs } from "expo-router";
+import { LayoutDashboard, Menu } from "lucide-react-native";
+
+import { AppBarSearch, AppBarTitle } from "@/components/app-bar";
 
 import { Icon } from "@/components/icon";
 import { useAppMeta, useSession } from "@/lib/queries";
-import { space, useTheme } from "@/lib/theme";
+import { useTheme } from "@/lib/theme";
 import { t } from "@suite/shared/i18n";
 
 /** The bar holds home, three modules and the rest; anything further is More. */
@@ -35,16 +36,6 @@ export default function TabsLayout() {
   // between; a bar of one item would only be in the way.
   const inside = !!session.data?.organization;
 
-  const search = () => (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={t("nav.search")}
-      onPress={() => router.navigate("/search")}
-      style={({ pressed }) => ({ padding: space.sm, opacity: pressed ? 0.6 : 1 })}
-    >
-      <Search size={20} color={c.foreground} />
-    </Pressable>
-  );
 
   return (
     <Tabs
@@ -52,7 +43,10 @@ export default function TabsLayout() {
         headerStyle: { backgroundColor: c.surface },
         headerTintColor: c.foreground,
         headerTitleStyle: { color: c.foreground },
-        headerRight: search,
+        // The bar carries the business and a way to search from any page; the
+        // tabs below already say which page it is.
+        headerTitle: () => <AppBarTitle />,
+        headerRight: () => <AppBarSearch />,
         // A tab builds itself the first time it is opened, not when the bar
         // is drawn: nobody pays for three modules' records to look at home.
         // (`true` is the default; it is the whole point of this screen, so it
@@ -78,7 +72,6 @@ export default function TabsLayout() {
           // No business yet means home is the ways-in list, which carries its
           // own heading and wants no chrome above it.
           headerShown: inside,
-          title: session.data?.organization?.name || t("nav.home"),
           tabBarLabel: t("nav.home"),
           tabBarIcon: ({ color, size }) => <LayoutDashboard size={size} color={color} />,
         }}
@@ -91,7 +84,7 @@ export default function TabsLayout() {
             key={slot}
             name={`m${slot + 1}`}
             options={{
-              title: m?.label ?? "",
+              tabBarLabel: m?.label ?? "",
               tabBarIcon: ({ color, size }) => <Icon name={m?.icon ?? ""} size={size} color={String(color)} />,
               // A business with fewer modules than slots leaves the spare ones
               // out of the bar rather than showing a tab that opens nothing.
@@ -104,7 +97,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="more"
         options={{
-          title: t("nav.more"),
+          tabBarLabel: t("nav.more"),
           tabBarIcon: ({ color, size }) => <Menu size={size} color={color} />,
         }}
       />

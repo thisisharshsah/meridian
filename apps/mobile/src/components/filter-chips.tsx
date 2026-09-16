@@ -43,7 +43,7 @@ export function FilterChips({
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: space.md, gap: space.sm, paddingBottom: space.sm }}
+        contentContainerStyle={{ paddingHorizontal: space.md, gap: space.xs, paddingBottom: space.xs }}
       >
         {selects.map((f) => {
           const picked = value[f.name];
@@ -59,19 +59,19 @@ export function FilterChips({
                 flexDirection: "row",
                 alignItems: "center",
                 gap: space.xs,
-                minHeight: 36,
-                paddingHorizontal: space.md,
+                minHeight: 30,
+                paddingHorizontal: space.sm + 2,
                 borderRadius: 999,
                 borderWidth: StyleSheet.hairlineWidth,
                 borderColor: on ? c.brand : c.border,
                 backgroundColor: pressed ? c.surfaceMuted : on ? c.brandSubtle : c.surface,
               })}
             >
-              <Text style={{ color: c.mutedForeground, fontSize: 13 }}>{f.label}:</Text>
-              <Text style={{ color: on ? c.brandSubtleForeground : c.foreground, fontSize: 13, fontWeight: "600" }}>
+              <Text style={{ color: c.mutedForeground, fontSize: 12 }}>{f.label}:</Text>
+              <Text style={{ color: on ? c.brandSubtleForeground : c.foreground, fontSize: 12, fontWeight: "600" }}>
                 {label}
               </Text>
-              <ChevronDown size={13} color={c.subtleForeground} />
+              <ChevronDown size={12} color={c.subtleForeground} />
             </Pressable>
           );
         })}

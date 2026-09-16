@@ -1,15 +1,15 @@
 import * as React from "react";
-import { Pressable, useColorScheme } from "react-native";
-import { Stack, router } from "expo-router";
-import { Search } from "lucide-react-native";
+import { useColorScheme } from "react-native";
+import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
+import { AppBarCompany } from "@/components/app-bar";
+import { ChromeProvider } from "@/components/chrome";
 import { ApiError } from "@/lib/api";
 import { SessionProvider } from "@/lib/session";
-import { space, useTheme } from "@/lib/theme";
-import { t } from "@suite/shared/i18n";
+import { useTheme } from "@/lib/theme";
 
 const client = new QueryClient({
   defaultOptions: {
@@ -30,7 +30,9 @@ export default function RootLayout() {
     <QueryClientProvider client={client}>
       <SafeAreaProvider>
         <SessionProvider>
-          <Chrome />
+          <ChromeProvider>
+            <Shell />
+          </ChromeProvider>
         </SessionProvider>
       </SafeAreaProvider>
     </QueryClientProvider>
@@ -45,7 +47,7 @@ export default function RootLayout() {
  * switch instantly and keep their state; pushes animate, because arriving at
  * one record from a list of them is a movement and should look like one.
  */
-function Chrome() {
+function Shell() {
   const c = useTheme();
   const scheme = useColorScheme();
 
@@ -64,21 +66,10 @@ function Chrome() {
         <Stack.Screen name="sign-in" options={{ headerShown: false }} />
         <Stack.Screen name="sign-up" options={{ headerShown: false }} />
         <Stack.Screen name="new-business" options={{ headerShown: false }} />
-        <Stack.Screen
-          name="[module]/[entity]/index"
-          options={{
-            headerRight: () => (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={t("nav.search")}
-                onPress={() => router.navigate("/search")}
-                style={({ pressed }) => ({ padding: space.sm, opacity: pressed ? 0.6 : 1 })}
-              >
-                <Search size={20} color={c.foreground} />
-              </Pressable>
-            ),
-          }}
-        />
+        {/* A pushed screen keeps its own title and back arrow; the business
+            and search ride along on the right. */}
+        <Stack.Screen name="[module]/[entity]/index" options={{ headerRight: () => <AppBarCompany /> }} />
+        <Stack.Screen name="[module]/[entity]/[id]" options={{ headerRight: () => <AppBarCompany /> }} />
       </Stack>
     </>
   );
