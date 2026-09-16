@@ -28,6 +28,10 @@ step "rust: tests" cargo test --manifest-path server/Cargo.toml --quiet
 # On its own, without the DOM: the phone has no `window`, and the web's own
 # typecheck would happily let a browser-only call into code the app imports.
 step "shared: types" apps/web/node_modules/.bin/tsc --noEmit -p packages/shared
+# The phone's engine carries less of `Intl` than a browser does, and the types
+# are identical either way, so this is the only thing between us and a screen
+# that crashes on a device while every other check is green.
+step "shared: hermes" node scripts/hermes-check.mjs
 step "web: words" node scripts/i18n-lint.mjs
 step "web: icons" node scripts/icon-lint.mjs
 # Invoked exactly as package.json does, from apps/web: run from the root

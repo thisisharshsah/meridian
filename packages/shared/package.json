@@ -2,6 +2,7 @@
   "name": "@suite/shared",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "description": "Plain TypeScript both clients import: API metadata types, number and date formatting, the word catalogue",
   "exports": {
     "./constants": "./src/constants.ts",

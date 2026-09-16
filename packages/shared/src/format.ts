@@ -96,7 +96,12 @@ export function relativeTime(value: string | null | undefined) {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
   let delta = (d.getTime() - Date.now()) / 1000;
-  const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+  // Hermes, which runs the phone app, carries a subset of `Intl` and this is
+  // not in it. An absolute date says less than "3 days ago" but it says it
+  // correctly, which beats a screen that will not render at all.
+  const RTF = (Intl as { RelativeTimeFormat?: typeof Intl.RelativeTimeFormat }).RelativeTimeFormat;
+  if (!RTF) return formatDateTime(value);
+  const rtf = new RTF(undefined, { numeric: "auto" });
   for (const [size, unit] of RELATIVE_STEPS) {
     if (Math.abs(delta) < size) return rtf.format(Math.round(delta), unit);
     delta /= size;

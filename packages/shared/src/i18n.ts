@@ -791,7 +791,7 @@ export function t(key: string, fallback?: string, vars?: Record<string, string |
  * The count is passed to the message as `{n}`, already grouped for the locale.
  */
 export function plural(key: string, n: number, vars?: Record<string, string | number>): string {
-  const form = new Intl.PluralRules(active).select(n);
+  const form = pluralForm(n);
   const raw =
     CATALOGUES[active]?.[`${key}.${form}`]
     ?? CATALOGUES[active]?.[`${key}.other`]
@@ -799,8 +799,35 @@ export function plural(key: string, n: number, vars?: Record<string, string | nu
     ?? CATALOGUES.en[`${key}.other`]
     ?? key;
   return raw.replace(/\{(\w+)\}/g, (m, name) =>
-    name === "n" ? new Intl.NumberFormat(active).format(n) : String(vars?.[name] ?? m),
+    name === "n" ? count(n) : String(vars?.[name] ?? m),
   );
+}
+
+/**
+ * Which plural form a number takes — asked of the platform where it can
+ * answer, and worked out here where it cannot.
+ *
+ * This code runs in two engines. Browsers carry the whole of `Intl`; Hermes,
+ * which runs the phone app, carries a subset, and `Intl.PluralRules` is not in
+ * it — `new undefined()` crashed the app's home screen on a record count. The
+ * fallback is English's two forms, which is right for the only catalogue that
+ * exists and wrong for the languages the paragraph above is about, so a second
+ * language means polyfilling `Intl.PluralRules` on the phone rather than
+ * extending the rule below.
+ */
+function pluralForm(n: number): Intl.LDMLPluralRule {
+  const Rules = (Intl as { PluralRules?: typeof Intl.PluralRules }).PluralRules;
+  if (Rules) return new Rules(active).select(n);
+  return n === 1 ? "one" : "other";
+}
+
+/** A number, grouped for the locale where the engine can, plain where it cannot. */
+function count(n: number): string {
+  try {
+    return new Intl.NumberFormat(active).format(n);
+  } catch {
+    return String(n);
+  }
 }
 
 function pick(key: string, serverValue: string): string {
