@@ -65,12 +65,20 @@ const PER_PAGE = 25;
  * A page at a time, appended as you scroll — a phone list has no pager.
  * `total_pages` from the API decides when to stop asking.
  */
-export function useRecordList(entity: string | undefined, search: string) {
+export function useRecordList(
+  entity: string | undefined,
+  search: string,
+  filters: Record<string, string> = {},
+) {
   return useInfiniteQuery({
-    queryKey: ["list", entity, search],
+    queryKey: ["list", entity, search, filters],
     initialPageParam: 1,
     queryFn: ({ pageParam }) =>
-      get<Page<Record_>>(`e/${entity}${qs({ page: pageParam, per_page: PER_PAGE, q: search || undefined })}`),
+      get<Page<Record_>>(
+        // The engine's own grammar: an unknown field is dropped rather than
+        // interpolated, so a filter can only ever narrow what it is allowed to.
+        `e/${entity}${qs({ page: pageParam, per_page: PER_PAGE, q: search || undefined, ...filters })}`,
+      ),
     getNextPageParam: (last) => (last.page < last.total_pages ? last.page + 1 : undefined),
     enabled: !!entity,
   });

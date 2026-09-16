@@ -101,7 +101,7 @@ export default function TillPage() {
       add(hits[0]);
       setTerm("");
     } else if (hits.length === 0 && debounced) {
-      toast.error(`Nothing found for “${debounced}”`);
+      toast.error(t("till.nothingFoundFor", undefined, { term: debounced }));
     }
   };
 
@@ -248,11 +248,11 @@ export default function TillPage() {
                     </p>
                   </div>
                   <div className="flex items-center gap-1">
-                    <Button variant="secondary" size="icon-sm" onClick={() => bump(l.itemId, -1)} aria-label={`One less ${l.name}`}>
+                    <Button variant="secondary" size="icon-sm" onClick={() => bump(l.itemId, -1)} aria-label={t("till.oneLess", undefined, { label: l.name })}>
                       <Minus />
                     </Button>
                     <span className="w-7 text-center text-sm font-medium tabular-nums">{l.qty}</span>
-                    <Button variant="secondary" size="icon-sm" onClick={() => bump(l.itemId, 1)} aria-label={`One more ${l.name}`}>
+                    <Button variant="secondary" size="icon-sm" onClick={() => bump(l.itemId, 1)} aria-label={t("till.oneMore", undefined, { label: l.name })}>
                       <Plus />
                     </Button>
                   </div>

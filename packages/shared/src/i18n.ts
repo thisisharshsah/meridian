@@ -463,6 +463,37 @@ const en: Messages = {
   "approvals.noneDecided": "Nothing decided yet",
   "approvals.rulesNote": "Approval rules are configured under Settings.",
 
+  // ---- built around a value ----
+  // Each of these used to be a template literal with the words baked in, which
+  // no rule in the word lint could see. They carry their value instead, so a
+  // translation can put it wherever its grammar wants it.
+  "record.notFoundThing": "{label} not found",
+  "record.deleteThis": "Delete this {label}",
+  "record.deleteThisQ": "Delete this {label}?",
+  "action.deleteThing": "Delete {label}",
+  "action.duplicateThing": "Duplicate {label}",
+  "action.editThing": "Edit {label}",
+  "record.actionsFor": "Actions for this {label}",
+  "record.deleteFailedThing": "Could not delete this {label}",
+  "record.searchIn": "Search {label}…",
+  "record.filterBy": "Filter by {label}",
+  "record.loadFailedThing": "We couldn’t load your {label}",
+  "record.createFirstWhy": "Create your first {label} to get started.",
+  "record.countRecords.one": "{n} record",
+  "record.countRecords.other": "{n} records",
+  "record.clearThing": "Clear {label}",
+  "record.nothingMatches": "Nothing matches “{term}”.",
+  "record.noneYet": "You have no {label} yet.",
+  "record.orderCreatedLines.one": "Sales order created with {n} line",
+  "record.orderCreatedLines.other": "Sales order created with {n} lines",
+  "record.invoiceCreatedLines.one": "Invoice created with {n} line",
+  "record.invoiceCreatedLines.other": "Invoice created with {n} lines",
+  "record.invoiceGeneratedFor": "Invoice generated for {date}",
+  "till.nothingFoundFor": "Nothing found for “{term}”",
+  "till.oneLess": "One less {label}",
+  "till.oneMore": "One more {label}",
+  "chart.tooltip": "{label}: {value} · {count} · {share}% of total",
+
   // ---- fallbacks and small words ----
   "value.untitled": "Untitled",
   "value.never": "Never",

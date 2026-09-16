@@ -124,6 +124,33 @@ for (const file of files.sort()) {
     found.push(`${relative(REPO, file)}:${line}  argument  ${JSON.stringify(text)}`);
   }
 
+  // Prose in a template literal. Every rule above reads double-quoted strings,
+  // so `Search ${meta.label_plural}…` was invisible to all of them — as was an
+  // English plural spelled `record${n === 1 ? "" : "s"}`, which is the exact
+  // thing the catalogue's plural forms exist to carry.
+  for (const m of src.matchAll(/`([^`\\]*)`/g)) {
+    const raw = m[1];
+    // A route, an endpoint or a query key: machinery that happens to be built
+    // by interpolation. No screen ever shows one.
+    if (/^[/.]|:\/\/|^[a-z0-9_.-]*\/|\?[a-z_]+=/.test(raw.trim())) continue;
+    // The theme script in the document head is code, not copy.
+    if (raw.length > 200) continue;
+    // A comment explaining the code can quote a command in backticks; nobody
+    // reads it on a screen.
+    const commentLine = (lines[src.slice(0, m.index).split("\n").length - 1] ?? "").trim();
+    if (commentLine.startsWith("*") || commentLine.startsWith("//")) continue;
+    // Judge what a reader would see: the words, with the holes taken out.
+    const text = raw.replace(/\$\{[^}]*\}/g, " ").replace(/\s+/g, " ").trim();
+    if (!text || !prose(text)) continue;
+    // Two words, or one capitalised one. A lone lowercase fragment left over
+    // from stripping the holes is not a sentence anybody reads.
+    if (!/[A-Za-z]{2,}\s+[A-Za-z]{2,}/.test(text) && !/^[A-Z][a-z]+$/.test(text)) continue;
+    const line = src.slice(0, m.index).split("\n").length;
+    const source = lines[line - 1] ?? "";
+    if (/\bt\(|plural\(|className|\bcn\(|href|src=/.test(source)) continue;
+    found.push(`${relative(REPO, file)}:${line}  template  ${JSON.stringify(text)}`);
+  }
+
   for (const { re, what } of PATTERNS) {
     for (const m of src.matchAll(re)) {
       const text = m[1].trim();

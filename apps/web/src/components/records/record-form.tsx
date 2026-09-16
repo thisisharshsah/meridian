@@ -182,7 +182,9 @@ export function RecordForm({
         <form onSubmit={submit} className="flex min-h-0 flex-col">
           <DialogHeader>
             <DialogTitle>
-              {editing ? `Edit ${meta.label.toLowerCase()}` : `New ${meta.label.toLowerCase()}`}
+              {editing
+                ? t("action.editThing", undefined, { label: meta.label.toLowerCase() })
+                : t("action.newThing", undefined, { thing: meta.label.toLowerCase() })}
             </DialogTitle>
             <DialogDescription>
               {editing ? t("record.updateDetails") : `Add a ${meta.label.toLowerCase()} to ${meta.label_plural.toLowerCase()}.`}

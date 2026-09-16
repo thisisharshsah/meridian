@@ -16,7 +16,7 @@ import { Checkbox } from "@/components/ui/misc";
 import { ApiError, post } from "@/lib/api";
 import type { EntityMeta } from "@suite/shared/meta";
 import type { Record_ } from "@/lib/queries";
-import { t } from "@suite/shared/i18n";
+import { plural, t } from "@suite/shared/i18n";
 
 /**
  * The verbs that move a record to the next stage of the business, as opposed
@@ -64,7 +64,7 @@ export function RecordActions({
           loading={run.pending === "quote"}
           onClick={() =>
             run.go("quote", `actions/sales.quotes/${record.id}/convert`, {}, (r) => ({
-              message: `Sales order created with ${r.lines} lines`,
+              message: plural("record.orderCreatedLines", r.lines),
               href: `/sales/orders/${r.sales_order_id}`,
             }))
           }
@@ -83,7 +83,7 @@ export function RecordActions({
           loading={run.pending === "order"}
           onClick={() =>
             run.go("order", `actions/sales.orders/${record.id}/convert`, { payment_terms_days: 30 }, (r) => ({
-              message: `Invoice created with ${r.lines} lines`,
+              message: plural("record.invoiceCreatedLines", r.lines),
               href: `/books/invoices/${r.invoice_id}`,
             }))
           }
@@ -102,7 +102,7 @@ export function RecordActions({
           loading={run.pending === "recurring"}
           onClick={() =>
             run.go("recurring", `actions/books.recurring/${record.id}/generate`, {}, (r) => ({
-              message: `Invoice generated for ${r.billing_date}`,
+              message: t("record.invoiceGeneratedFor", undefined, { date: r.billing_date }),
               href: `/books/invoices/${r.invoice_id}`,
             }))
           }

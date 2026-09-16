@@ -6,7 +6,7 @@ import { Badge, toneOf } from "@/components/ui/badge";
 import { formatMoney } from "@suite/shared/format";
 import type { StatsRow } from "@/lib/queries";
 import { cn } from "@/lib/utils";
-import { t } from "@suite/shared/i18n";
+import { plural, t } from "@suite/shared/i18n";
 
 /**
  * Both charts here answer a magnitude question ("how much sits in each bucket"),
@@ -49,7 +49,12 @@ function Bars({
             <li
               key={r.key}
               className="group"
-              title={`${r.label}: ${formatMoney(r.value, currency)} · ${r.count} record${r.count === 1 ? "" : "s"} · ${share.toFixed(0)}% of total`}
+              title={t("chart.tooltip", undefined, {
+                label: r.label,
+                value: formatMoney(r.value, currency),
+                count: plural("record.countRecords", r.count),
+                share: share.toFixed(0),
+              })}
             >
               <div className="mb-1 flex items-baseline justify-between gap-3">
                 <span className="flex min-w-0 items-center gap-1.5 text-xs">

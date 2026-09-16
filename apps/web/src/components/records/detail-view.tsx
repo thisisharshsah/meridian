@@ -68,7 +68,7 @@ export function DetailView({ meta, id }: { meta: EntityMeta; id: string }) {
       <div className="p-5">
         <EmptyState
           icon={iconFor(meta.icon)}
-          title={`${meta.label} not found`}
+          title={t("record.notFoundThing", undefined, { label: meta.label })}
           description={t("record.gone")}
           action={
             <Button variant="secondary" asChild>
@@ -101,7 +101,12 @@ export function DetailView({ meta, id }: { meta: EntityMeta; id: string }) {
   return (
     <div className="p-5">
       <div className="mb-4 flex flex-wrap items-start gap-3">
-        <Button variant="ghost" size="icon" asChild aria-label={`Back to ${meta.label_plural}`}>
+        <Button
+          variant="ghost"
+          size="icon"
+          asChild
+          aria-label={t("action.backTo", undefined, { label: meta.label_plural })}
+        >
           <Link href={entityPath(meta.key)}>
             <ArrowLeft />
           </Link>
@@ -143,7 +148,7 @@ export function DetailView({ meta, id }: { meta: EntityMeta; id: string }) {
               variant="ghost"
               size="icon"
               onClick={() => setConfirming(true)}
-              aria-label={`Delete this ${meta.label.toLowerCase()}`}
+              aria-label={t("record.deleteThis", undefined, { label: meta.label.toLowerCase() })}
             >
               <Trash2 />
             </Button>
@@ -208,14 +213,14 @@ export function DetailView({ meta, id }: { meta: EntityMeta; id: string }) {
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
-        title={`Delete this ${meta.label.toLowerCase()}?`}
+        title={t("record.deleteThisQ", undefined, { label: meta.label.toLowerCase() })}
         description={
           <>
             <span className="font-medium text-foreground">{title}</span> will be removed,
             along with anything filed under it.
           </>
         }
-        confirmLabel={`Delete ${meta.label.toLowerCase()}`}
+        confirmLabel={t("action.deleteThing", undefined, { label: meta.label.toLowerCase() })}
         pending={remove.isPending}
         onConfirm={onDelete}
       />

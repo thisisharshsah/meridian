@@ -134,7 +134,7 @@ export function RolesTab({ canManage }: { canManage: boolean }) {
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      aria-label={`Duplicate ${role.name}`}
+                      aria-label={t("action.duplicateThing", undefined, { label: role.name })}
                       title={t("role.duplicate")}
                       onClick={() => setCloning(role)}
                     >
@@ -145,7 +145,7 @@ export function RolesTab({ canManage }: { canManage: boolean }) {
                         <Button
                           variant="ghost"
                           size="icon-sm"
-                          aria-label={`Edit ${role.name}`}
+                          aria-label={t("action.editThing", undefined, { label: role.name })}
                           onClick={() => setEditing(role)}
                         >
                           <Pencil />
@@ -153,7 +153,7 @@ export function RolesTab({ canManage }: { canManage: boolean }) {
                         <Button
                           variant="ghost"
                           size="icon-sm"
-                          aria-label={`Delete ${role.name}`}
+                          aria-label={t("action.deleteThing", undefined, { label: role.name })}
                           onClick={() => remove.mutate(role.id)}
                         >
                           <Trash2 />

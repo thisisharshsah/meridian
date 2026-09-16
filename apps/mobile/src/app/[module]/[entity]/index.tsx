@@ -4,12 +4,13 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 
 import { RequireSession } from "@/components/guard";
 import { EntityTabs } from "@/components/entity-tabs";
+import { FilterChips } from "@/components/filter-chips";
 import { FieldValue } from "@/components/field-value";
 import { Body, Empty, Input, Loading, Problem } from "@/components/ui";
 import { useEntityMeta, useRecordList, useSession, type Record_ } from "@/lib/queries";
 import { space, useTheme } from "@/lib/theme";
 import { entityKeyFrom, entityPath, type EntityMeta } from "@suite/shared/meta";
-import { t } from "@suite/shared/i18n";
+import { plural, t } from "@suite/shared/i18n";
 
 export default function List() {
   return (
@@ -37,6 +38,7 @@ function Records({ meta, initialSearch }: { meta: EntityMeta; initialSearch: str
   const session = useSession();
   const [search, setSearch] = React.useState(initialSearch);
   const [query, setQuery] = React.useState(initialSearch);
+  const [filters, setFilters] = React.useState<Record<string, string>>({});
 
   // Typing is not a search. A quarter of a second after the last keystroke is
   // what the web waits, and it is the difference between one request and one
@@ -46,7 +48,7 @@ function Records({ meta, initialSearch }: { meta: EntityMeta; initialSearch: str
     return () => clearTimeout(id);
   }, [search]);
 
-  const list = useRecordList(meta.key, query);
+  const list = useRecordList(meta.key, query, filters);
   const records = list.data?.pages.flatMap((p) => p.data) ?? [];
   const currency = session.data?.organization?.currency ?? "USD";
 
@@ -74,6 +76,16 @@ function Records({ meta, initialSearch }: { meta: EntityMeta; initialSearch: str
               returnKeyType="search"
             />
           </View>
+        ) : null}
+
+        <FilterChips fields={meta.fields} value={filters} onChange={setFilters} />
+
+        {/* How many there are, which a list that pages as you scroll cannot
+            otherwise say. */}
+        {list.data ? (
+          <Body muted style={{ fontSize: 12, paddingHorizontal: space.lg, paddingBottom: space.sm }}>
+            {plural("record.countRecords", list.data.pages[0]?.total ?? 0)}
+          </Body>
         ) : null}
 
         {list.isPending ? <Loading /> : null}

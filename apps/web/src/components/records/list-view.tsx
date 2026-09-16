@@ -26,7 +26,7 @@ import { ApiError } from "@/lib/api";
 import { entityPath, optionsOf, type EntityMeta, type FieldDef } from "@suite/shared/meta";
 import { useDelete, useList, useSession, type ListParams, type Record_ } from "@/lib/queries";
 import { cn } from "@/lib/utils";
-import { t } from "@suite/shared/i18n";
+import { plural, t } from "@suite/shared/i18n";
 
 const PER_PAGE = 25;
 
@@ -111,7 +111,7 @@ export function ListView({ meta, fixedFilters, embedded }: {
   const RowActions = ({ r }: { r: Record_ }) => (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label={`Actions for this ${meta.label.toLowerCase()}`}>
+        <Button variant="ghost" size="icon-sm" aria-label={t("record.actionsFor", undefined, { label: meta.label.toLowerCase() })}>
           <MoreHorizontal />
         </Button>
       </DropdownMenuTrigger>
@@ -169,7 +169,7 @@ export function ListView({ meta, fixedFilters, embedded }: {
       toast.success(`${meta.label} deleted`);
     } catch {
       setConfirming(null);
-      toast.error(`Could not delete this ${meta.label.toLowerCase()}`);
+      toast.error(t("record.deleteFailedThing", undefined, { label: meta.label.toLowerCase() }));
     }
   };
 
@@ -184,7 +184,7 @@ export function ListView({ meta, fixedFilters, embedded }: {
             <div>
               <h1 className="text-base font-semibold tracking-tight">{meta.label_plural}</h1>
               <p className="text-xs text-muted-foreground">
-                {data ? `${data.total.toLocaleString()} record${data.total === 1 ? "" : "s"}` : "…"}
+                {data ? plural("record.countRecords", data.total) : "…"}
               </p>
             </div>
           </div>
@@ -220,9 +220,17 @@ export function ListView({ meta, fixedFilters, embedded }: {
             )}
 
             {meta.permissions.create && (
-              <Button variant="primary" onClick={() => setCreating(true)}>
+              <Button
+                variant="primary"
+                onClick={() => setCreating(true)}
+                aria-label={t("action.newThing", undefined, { thing: meta.label.toLowerCase() })}
+              >
                 <Plus />
-                {t("action.newThing", undefined, { thing: meta.label.toLowerCase() })}
+                {/* The words cost a third of a phone's width to repeat what
+                    the tab above already says. */}
+                <span className="hidden sm:inline">
+                  {t("action.newThing", undefined, { thing: meta.label.toLowerCase() })}
+                </span>
               </Button>
             )}
           </div>
@@ -233,13 +241,16 @@ export function ListView({ meta, fixedFilters, embedded }: {
         <BoardView meta={meta} groupField={boardField} />
       ) : (
       <>
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <div className="relative w-full max-w-xs">
+      {/* One scrolling row on a phone rather than four stacked controls: the
+          filters are worth having within reach, not worth the whole screen
+          above the first record. */}
+      <div className="mb-3 flex flex-nowrap items-center gap-2 overflow-x-auto pb-1 md:flex-wrap md:overflow-visible md:pb-0">
+        <div className="relative w-44 shrink-0 sm:w-56 md:w-full md:max-w-xs">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-subtle-foreground" />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder={`Search ${meta.label_plural.toLowerCase()}…`}
+            placeholder={t("record.searchIn", undefined, { label: meta.label_plural.toLowerCase() })}
             className="pl-8"
           />
         </div>
@@ -256,7 +267,7 @@ export function ListView({ meta, fixedFilters, embedded }: {
             {/* The field name stays on screen. As a placeholder it vanished the
                 moment a value was picked, leaving a lone "Closed won" with
                 nothing saying what it filtered. */}
-            <SelectTrigger className="w-auto min-w-[9rem]" aria-label={`Filter by ${f.label}`}>
+            <SelectTrigger className="w-auto min-w-36 shrink-0" aria-label={t("record.filterBy", undefined, { label: f.label })}>
               <span className="mr-1 text-muted-foreground">{f.label}:</span>
               <SelectValue placeholder={t("record.all")} />
             </SelectTrigger>
@@ -297,7 +308,7 @@ export function ListView({ meta, fixedFilters, embedded }: {
         {isError ? (
           <EmptyState
             icon={iconFor(meta.icon)}
-            title={`We couldn't load your ${meta.label_plural.toLowerCase()}`}
+            title={t("record.loadFailedThing", undefined, { label: meta.label_plural.toLowerCase() })}
             description={
               error instanceof ApiError && error.status === 401
                 ? "Your session timed out. Sign in again and you'll come straight back here."
@@ -317,7 +328,7 @@ export function ListView({ meta, fixedFilters, embedded }: {
             description={
               debounced || activeFilters.length
                 ? "Try a different search or clear the filters."
-                : `Create your first ${meta.label.toLowerCase()} to get started.`
+                : t("record.createFirstWhy", undefined, { label: meta.label.toLowerCase() })
             }
             action={
               meta.permissions.create && !debounced && !activeFilters.length ? (
@@ -466,7 +477,7 @@ export function ListView({ meta, fixedFilters, embedded }: {
       <ConfirmDialog
         open={!!confirming}
         onOpenChange={(v) => !v && setConfirming(null)}
-        title={`Delete this ${meta.label.toLowerCase()}?`}
+        title={t("record.deleteThisQ", undefined, { label: meta.label.toLowerCase() })}
         description={
           <>
             <span className="font-medium text-foreground">
@@ -475,7 +486,7 @@ export function ListView({ meta, fixedFilters, embedded }: {
             will be removed from {meta.label_plural.toLowerCase()}.
           </>
         }
-        confirmLabel={`Delete ${meta.label.toLowerCase()}`}
+        confirmLabel={t("action.deleteThing", undefined, { label: meta.label.toLowerCase() })}
         pending={remove.isPending}
         onConfirm={confirmDelete}
       />

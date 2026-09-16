@@ -102,7 +102,7 @@ export function RefPicker({
         {value && (
           <button
             type="button"
-            aria-label={`Clear ${selectedLabel ?? label ?? "selection"}`}
+            aria-label={t("record.clearThing", undefined, { label: selectedLabel ?? label ?? "" })}
             onClick={() => onChange(null)}
             className="absolute right-7 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center rounded text-subtle-foreground transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-brand"
           >
@@ -130,7 +130,9 @@ export function RefPicker({
             // thing is created rather than only reporting its absence.
             <div className="px-2 py-3 text-center">
               <p className="text-xs text-muted-foreground">
-                {term ? `Nothing matches “${term}”.` : `You have no ${lookupLabel} yet.`}
+                {term
+                  ? t("record.nothingMatches", undefined, { term })
+                  : t("record.noneYet", undefined, { label: lookupLabel })}
               </p>
               <Link
                 href={entityPath(entity)}
