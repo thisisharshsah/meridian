@@ -468,6 +468,9 @@ const en: Messages = {
   // no rule in the word lint could see. They carry their value instead, so a
   // translation can put it wherever its grammar wants it.
   "record.notFoundThing": "{label} not found",
+  "record.createdThing": "{label} created",
+  "record.updatedThing": "{label} updated",
+  "record.deletedThing": "{label} deleted",
   "record.deleteThis": "Delete this {label}",
   "record.deleteThisQ": "Delete this {label}?",
   "action.deleteThing": "Delete {label}",
@@ -496,6 +499,7 @@ const en: Messages = {
 
   // ---- fallbacks and small words ----
   "value.untitled": "Untitled",
+  "value.unassigned": "Unassigned",
   "value.never": "Never",
   "value.none": "No account",
   "value.new": "New",
@@ -560,6 +564,7 @@ const en: Messages = {
   "auth.noServer": "Cannot reach the server. Is it running?",
   "settings.saveFailed": "Could not save those settings",
   "record.somethingWrong": "Something went wrong. Please try again.",
+  "record.someDetailsFailed": "Some details could not be saved.",
   "invite.createFailed": "Could not create that invitation",
   "role.saveFailed": "Could not save that role",
   "auth.showPassword": "Show password",

@@ -1,6 +1,7 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 import { initials } from "@suite/shared/format";
+import { t } from "@suite/shared/i18n";
 
 /**
  * Deterministic colour per name, so the same person keeps the same chip colour
@@ -30,7 +31,7 @@ export function Avatar({
   size?: "xs" | "sm" | "md" | "lg";
   className?: string;
 }) {
-  const label = name?.trim() || "Unassigned";
+  const label = name?.trim() || t("value.unassigned");
   return (
     <span
       title={label}

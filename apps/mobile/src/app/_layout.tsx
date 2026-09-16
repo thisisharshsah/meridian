@@ -69,7 +69,7 @@ function Shell() {
         {/* A pushed screen keeps its own title and back arrow; the business
             and search ride along on the right. */}
         <Stack.Screen name="[module]/[entity]/index" options={{ headerRight: () => <AppBarCompany /> }} />
-        <Stack.Screen name="[module]/[entity]/[id]" options={{ headerRight: () => <AppBarCompany /> }} />
+        <Stack.Screen name="[module]/[entity]/[id]/index" options={{ headerRight: () => <AppBarCompany /> }} />
       </Stack>
     </>
   );

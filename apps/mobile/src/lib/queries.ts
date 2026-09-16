@@ -1,6 +1,6 @@
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { get, post, qs } from "@/lib/api";
+import { del, get, patch, post, qs } from "@/lib/api";
 import type { AppMeta, EntityMeta, Session } from "@suite/shared/meta";
 import { localizeAppMeta, localizeEntityMeta } from "@suite/shared/i18n";
 
@@ -140,5 +140,60 @@ export function useRecord(entity: string | undefined, id: string | undefined) {
     queryKey: ["record", entity, id],
     queryFn: () => get<Record_>(`e/${entity}/${id}`),
     enabled: !!entity && !!id,
+  });
+}
+
+/**
+ * What a write invalidates.
+ *
+ * Broadly, on purpose: the server's hooks can change a record this write never
+ * mentioned — an invoice's totals from a line, a project's progress from a
+ * task — so anything showing records, figures or history is asked again rather
+ * than guessed at.
+ */
+function useInvalidate() {
+  const qc = useQueryClient();
+  return () => {
+    for (const key of ["list", "record", "stats", "lookup", "search"]) {
+      qc.invalidateQueries({ queryKey: [key] });
+    }
+  };
+}
+
+export function useCreate(entity: string) {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (body: Record<string, unknown>) => post<Record_>(`e/${entity}`, body),
+    onSuccess: invalidate,
+  });
+}
+
+export function useUpdate(entity: string) {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: Record<string, unknown> }) =>
+      patch<Record_>(`e/${entity}/${id}`, body),
+    onSuccess: invalidate,
+  });
+}
+
+export function useDelete(entity: string) {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (id: string) => del<{ ok: boolean }>(`e/${entity}/${id}`),
+    onSuccess: invalidate,
+  });
+}
+
+/** Records of another entity, for choosing one: the server searches and labels them. */
+export function useLookup(entity: string | undefined, search: string) {
+  return useQuery({
+    queryKey: ["lookup", entity, search],
+    queryFn: () =>
+      get<{ data: { id: string; label: string }[]; total: number }>(
+        `lookup/${entity}${qs({ q: search || undefined, per_page: 20 })}`,
+      ),
+    enabled: !!entity,
+    staleTime: 30_000,
   });
 }

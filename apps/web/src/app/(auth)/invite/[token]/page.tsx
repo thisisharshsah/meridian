@@ -93,7 +93,7 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
           (err?.fields ?? []).map((f: { field: string; message: string }) => [f.field, f.message]),
         );
         setErrors(map);
-        if (!Object.keys(map).length) setFormError(err?.message ?? "Could not accept this invitation");
+        if (!Object.keys(map).length) setFormError(err?.message ?? t("invite.failed"));
         return;
       }
 

@@ -45,6 +45,10 @@ const PATTERNS = [
   // as surely as one written into the JSX, and nothing before it looks like a
   // call or an assignment for the rules above to catch.
   { re: /\breturn\s+"([A-Z][^"\\\n]*)"/g, what: "returned" },
+  // The word shown when the real one is missing: `record[title] || "Untitled"`
+  // is read by everyone whose record has no name yet, and the catalogue has
+  // carried `value.untitled` for it all along.
+  { re: /(?:\|\||\?\?)\s*"([A-Z][^"\\\n]*)"/g, what: "fallback" },
 ];
 
 /**
@@ -141,10 +145,17 @@ for (const file of files.sort()) {
     if (commentLine.startsWith("*") || commentLine.startsWith("//")) continue;
     // Judge what a reader would see: the words, with the holes taken out.
     const text = raw.replace(/\$\{[^}]*\}/g, " ").replace(/\s+/g, " ").trim();
-    if (!text || !prose(text)) continue;
-    // Two words, or one capitalised one. A lone lowercase fragment left over
-    // from stripping the holes is not a sentence anybody reads.
-    if (!/[A-Za-z]{2,}\s+[A-Za-z]{2,}/.test(text) && !/^[A-Z][a-z]+$/.test(text)) continue;
+    if (!text) continue;
+    // A template that opens with its hole leaves a lowercase fragment behind,
+    // and that fragment is what follows a value: `${label} updated` reads as a
+    // sentence on screen and as nothing at all to the rules above.
+    const trailing = raw.trimStart().startsWith("${") && /^[a-z]{4,}$/.test(text);
+    if (!trailing) {
+      if (!prose(text)) continue;
+      // Otherwise: two words, or one capitalised one. A lone lowercase
+      // fragment is usually punctuation or a path segment.
+      if (!/[A-Za-z]{2,}\s+[A-Za-z]{2,}/.test(text) && !/^[A-Z][a-z]+$/.test(text)) continue;
+    }
     const line = src.slice(0, m.index).split("\n").length;
     const source = lines[line - 1] ?? "";
     if (/\bt\(|plural\(|className|\bcn\(|href|src=/.test(source)) continue;
@@ -159,6 +170,11 @@ for (const file of files.sort()) {
       // between it and the next one. The `>` that opens the match belongs to
       // `=>`, which no JSX element ever ends with.
       if (what === "text" && src[m.index - 1] === "=") continue;
+      // A fallback is often a code rather than a word — `?? "USD"`, `|| "GBP"`
+      // — and those are machinery the same way an enum value is.
+      if (what === "fallback" && !prose(text)) continue;
+      // `icon ?? "Workflow"` names a glyph, and a glyph is machinery.
+      if (what === "fallback" && /icon/i.test(lines[src.slice(0, m.index).split("\n").length - 1] ?? "")) continue;
       const line = src.slice(0, m.index).split("\n").length;
       // A line already reaching the catalogue is doing the right thing with
       // some other part of itself.

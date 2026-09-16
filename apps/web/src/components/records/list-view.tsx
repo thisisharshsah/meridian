@@ -166,7 +166,7 @@ export function ListView({ meta, fixedFilters, embedded }: {
     try {
       await remove.mutateAsync(r.id);
       setConfirming(null);
-      toast.success(`${meta.label} deleted`);
+      toast.success(t("record.deletedThing", undefined, { label: meta.label }));
     } catch {
       setConfirming(null);
       toast.error(t("record.deleteFailedThing", undefined, { label: meta.label.toLowerCase() }));

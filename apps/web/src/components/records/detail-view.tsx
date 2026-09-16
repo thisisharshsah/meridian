@@ -82,7 +82,7 @@ export function DetailView({ meta, id }: { meta: EntityMeta; id: string }) {
     );
   }
 
-  const title = (record[meta.title_field] as string) || "Untitled";
+  const title = (record[meta.title_field] as string) || t("value.untitled");
   const headline = headlineFields(meta);
   const detailFields = meta.fields.filter((f) => !headline.includes(f));
 
@@ -90,7 +90,7 @@ export function DetailView({ meta, id }: { meta: EntityMeta; id: string }) {
     try {
       await remove.mutateAsync(id);
       setConfirming(false);
-      toast.success(`${meta.label} deleted`);
+      toast.success(t("record.deletedThing", undefined, { label: meta.label }));
       router.push(entityPath(meta.key));
     } catch {
       setConfirming(false);

@@ -82,7 +82,7 @@ export default function TillPage() {
         ...cur,
         {
           itemId: id,
-          name: (r.name as string) || "Item",
+          name: (r.name as string) || t("record.item"),
           unitMinor: (r.sell_price as number) ?? 0,
           qty: 1,
         },
@@ -196,7 +196,7 @@ export default function TillPage() {
                     onClick={() => add(r)}
                     className="flex h-full min-h-20 w-full flex-col justify-between rounded-md border border-border bg-surface p-2.5 text-left transition-colors hover:bg-surface-hover active:bg-surface-muted"
                   >
-                    <span className="line-clamp-2 text-sm font-medium">{(r.name as string) || "Item"}</span>
+                    <span className="line-clamp-2 text-sm font-medium">{(r.name as string) || t("record.item")}</span>
                     <span className="mt-1 text-sm tabular-nums text-muted-foreground">
                       {formatMoney((r.sell_price as number) ?? 0, currency)}
                     </span>

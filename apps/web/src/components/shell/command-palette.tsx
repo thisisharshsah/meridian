@@ -184,7 +184,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                   )}
                 >
                   <Icon name={g.icon} className="size-4 text-subtle-foreground" />
-                  <span className="truncate">{item.title || "Untitled"}</span>
+                  <span className="truncate">{item.title || t("value.untitled")}</span>
                 </Command.Item>
               ))}
               {g.total > g.items.length && (

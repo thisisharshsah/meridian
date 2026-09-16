@@ -61,7 +61,7 @@ export function RefPicker({
         if (cancelled) return;
         // The lookup endpoint reports the title field, so mirror it here.
         const label = (r["name"] ?? r["full_name"] ?? r["subject"] ?? r["number"] ?? r["title"]) as string;
-        setSelectedLabel(label ?? "Selected");
+        setSelectedLabel(label ?? t("value.untitled"));
       })
       .catch(() => !cancelled && setSelectedLabel("Unknown"));
     return () => {
@@ -156,7 +156,7 @@ export function RefPicker({
               }}
               className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-surface-hover"
             >
-              <span className="flex-1 truncate">{o.label || "Untitled"}</span>
+              <span className="flex-1 truncate">{o.label || t("value.untitled")}</span>
               {o.id === value && <Check className="size-3.5 text-brand" />}
             </button>
           ))}

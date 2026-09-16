@@ -1,12 +1,13 @@
 import * as React from "react";
 import { FlatList, Pressable, StyleSheet, View } from "react-native";
 import { useRouter } from "expo-router";
+import { Plus } from "lucide-react-native";
 
 import { FieldValue } from "@/components/field-value";
 import { FilterChips } from "@/components/filter-chips";
 import { Body, Empty, Input, Loading, Problem } from "@/components/ui";
 import { useEntityMeta, useRecordList, useSession, type Record_ } from "@/lib/queries";
-import { space, useTheme } from "@/lib/theme";
+import { radius, space, useTheme } from "@/lib/theme";
 import { entityPath, type EntityMeta } from "@suite/shared/meta";
 import { plural, t } from "@suite/shared/i18n";
 
@@ -30,6 +31,7 @@ export function RecordsList({ entityKey, initialSearch = "" }: { entityKey: stri
 }
 
 function Records({ meta, initialSearch }: { meta: EntityMeta; initialSearch: string }) {
+  const c = useTheme();
   const router = useRouter();
   const session = useSession();
   const [search, setSearch] = React.useState(initialSearch);
@@ -114,6 +116,29 @@ function Records({ meta, initialSearch }: { meta: EntityMeta; initialSearch: str
           />
         )}
       />
+
+      {/* Reachable with the thumb that is already holding the phone, and only
+          where the person may actually create one. */}
+      {meta.permissions.create ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t("action.newThing", undefined, { thing: meta.label.toLowerCase() })}
+          onPress={() => router.push(`${entityPath(meta.key)}/new`)}
+          style={({ pressed }) => ({
+            position: "absolute",
+            right: space.lg,
+            bottom: space.lg,
+            width: 52,
+            height: 52,
+            borderRadius: 26,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: pressed ? c.brandHover : c.brand,
+          })}
+        >
+          <Plus size={24} color={c.brandForeground} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }

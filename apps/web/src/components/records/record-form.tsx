@@ -110,7 +110,11 @@ export function RecordForm({
       const saved = editing
         ? await update.mutateAsync({ id: record!.id, body: payload })
         : await create.mutateAsync(payload);
-      toast.success(editing ? `${meta.label} updated` : `${meta.label} created`);
+      toast.success(
+        editing
+          ? t("record.updatedThing", undefined, { label: meta.label })
+          : t("record.createdThing", undefined, { label: meta.label }),
+      );
       onOpenChange(false);
       onSaved?.(saved);
     } catch (err) {
@@ -127,7 +131,7 @@ export function RecordForm({
             ? err.message
             : shown.length > 0
               ? "Please fix the highlighted fields below."
-              : err.message || "Some details could not be saved.",
+              : err.message || t("record.someDetailsFailed"),
         );
         // Long forms scroll: without this the highlighted field can be well
         // below the fold and the user sees no reaction to pressing Create.
