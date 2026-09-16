@@ -463,6 +463,10 @@ const en: Messages = {
   "approvals.decisionFailed": "Could not record that decision",
   "approvals.noneDecided": "Nothing decided yet",
   "approvals.nothingWaiting": "Nothing waiting",
+  "reports.none": "No reports for this business",
+  "reports.noRows": "Nothing to report",
+  "reports.noRowsWhy": "There are no records in this period yet.",
+  "reports.total": "Total",
   "approvals.rulesNote": "Approval rules are configured under Settings.",
 
   // ---- built around a value ----

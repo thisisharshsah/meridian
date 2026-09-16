@@ -58,6 +58,24 @@ function MoreScreen() {
             <Icon name="CheckSquare" size={16} color={c.brand} />
             <Body style={{ flex: 1 }}>{t("nav.approvals")}</Body>
           </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push("/reports")}
+            style={({ pressed }) => ({
+              flexDirection: "row",
+              alignItems: "center",
+              gap: space.md,
+              paddingHorizontal: space.lg,
+              minHeight: 52,
+              borderTopWidth: StyleSheet.hairlineWidth,
+              borderTopColor: c.border,
+              backgroundColor: pressed ? c.surfaceMuted : "transparent",
+            })}
+          >
+            <Icon name="LayoutDashboard" size={16} color={c.brand} />
+            <Body style={{ flex: 1 }}>{t("nav.reports")}</Body>
+          </Pressable>
         </Card>
 
         {modules.map((m) => (

@@ -416,12 +416,18 @@ export function ListView({ meta, fixedFilters, embedded }: {
                   <span className="block truncate text-sm font-medium">
                     <FieldValue field={columns[0]} record={r} currency={currency} compact linkless />
                   </span>
-                  <span className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                  {/* A grid rather than a wrapping line: the labels share a
+                      column and the values start at the same place in every
+                      row, so the eye runs down one field instead of hunting
+                      for it in a different position each time. */}
+                  <span className="mt-1 grid grid-cols-[6rem_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-xs">
                     {columns.slice(1, 4).map((f) => (
-                      <span key={f.name} className="text-xs text-muted-foreground">
-                        <span className="text-subtle-foreground">{f.label}: </span>
-                        <FieldValue field={f} record={r} currency={currency} compact linkless />
-                      </span>
+                      <React.Fragment key={f.name}>
+                        <span className="truncate text-subtle-foreground">{f.label}</span>
+                        <span className="min-w-0 text-muted-foreground">
+                          <FieldValue field={f} record={r} currency={currency} compact linkless />
+                        </span>
+                      </React.Fragment>
                     ))}
                   </span>
                 </Link>

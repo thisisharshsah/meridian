@@ -181,16 +181,27 @@ function Row({
           {String(record[meta.title_field] ?? t("value.untitled"))}
         </Body>
       )}
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.md }}>
-        {rest.map((f) => (
-          <View key={f.name} style={{ flexDirection: "row", alignItems: "center", gap: space.xs }}>
-            <Body subtle style={{ fontSize: 12 }}>{f.label}</Body>
-            <View style={{ maxWidth: 200 }}>
-              <FieldValue field={f} record={record} currency={currency} />
-            </View>
+
+      {/* A grid rather than a wrapping line: the labels share a column and the
+          values start at the same place in every row, so the eye runs down one
+          field instead of hunting for it in a different position each time. */}
+      {rest.map((f) => (
+        <View key={f.name} style={{ flexDirection: "row", alignItems: "flex-start", gap: space.sm }}>
+          <Body subtle style={{ fontSize: 12, width: LABEL_COLUMN }} numberOfLines={1}>
+            {f.label}
+          </Body>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <FieldValue field={f} record={record} currency={currency} />
           </View>
-        ))}
-      </View>
+        </View>
+      ))}
     </Pressable>
   );
 }
+
+/**
+ * Wide enough for the labels this schema actually uses and narrow enough to
+ * leave a value room on a small phone. Fixed, because a column that changes
+ * width per row is not a column.
+ */
+const LABEL_COLUMN = 92;
