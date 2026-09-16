@@ -250,7 +250,9 @@ export default function DashboardPage() {
           {greeting()}, {session?.user.name?.split(" ")[0] ?? "there"}
         </h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          Here is where {session?.organization?.name ?? t("value.thisWorkspace")} stands today.
+          {t("dash.standsToday", undefined, {
+            name: session?.organization?.name ?? t("value.thisWorkspace"),
+          })}
         </p>
       </header>
 

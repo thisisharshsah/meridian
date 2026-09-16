@@ -33,6 +33,12 @@ const TECHNICAL = new Set([
 const PATTERNS = [
   // A JSX text node that is a sentence rather than a value or a symbol.
   { re: />\s*([A-Z][a-z]+(?:[ ,'’-][A-Za-z]+)*[.?!]?)\s*</g, what: "text" },
+  // The same thing ending in an interpolation rather than in a tag:
+  // `<h2>Join {data.organization}</h2>` is a sentence with a hole in it, and
+  // the rule above never saw it because what follows the words is `{`. The
+  // invite page had shipped exactly that, in two places, with the catalogue
+  // already holding `invite.join` for it.
+  { re: />\s*([A-Z][a-z]+(?:[ ,'’-][A-Za-z]+)*)\s+\{/g, what: "text" },
   { re: new RegExp(`\\b(?:${SPOKEN.join("|")})="([A-Z][^"]{2,})"`, "g"), what: "attribute" },
   { re: /toast\.(?:error|success|message|warning)\(\s*"([^"]+)"/g, what: "toast" },
 ];

@@ -102,8 +102,10 @@ export function BoardView({ meta, groupField }: { meta: EntityMeta; groupField: 
     <>
       {data && data.total > records.length && (
         <p className="mb-2 text-xs text-muted-foreground">
-          Showing the {records.length} most recent of {data.total.toLocaleString()}. Switch to the
-          table for the full set.
+          {t("record.boardSubset", undefined, {
+            n: records.length,
+            total: data.total.toLocaleString(),
+          })}
         </p>
       )}
 

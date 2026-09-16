@@ -14,7 +14,7 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FieldRow, FormError } from "@/components/form/field";
 import { submitSession } from "@/lib/auth-client";
-import { CURRENCIES } from "@/lib/constants";
+import { CURRENCIES } from "@suite/shared/constants";
 import { t } from "@suite/shared/i18n";
 
 const schema = z.object({
@@ -177,7 +177,7 @@ export default function RegisterPage() {
         </FieldRow>
 
         <Button type="submit" variant="primary" size="lg" className="w-full" loading={form.formState.isSubmitting}>
-          Create workspace
+          {t("auth.createWorkspaceCta")}
           {!form.formState.isSubmitting && <ArrowRight />}
         </Button>
       </form>

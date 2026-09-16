@@ -72,7 +72,9 @@ export function DetailView({ meta, id }: { meta: EntityMeta; id: string }) {
           description={t("record.gone")}
           action={
             <Button variant="secondary" asChild>
-              <Link href={entityPath(meta.key)}>Back to {meta.label_plural.toLowerCase()}</Link>
+              <Link href={entityPath(meta.key)}>
+                {t("action.backTo", undefined, { label: meta.label_plural.toLowerCase() })}
+              </Link>
             </Button>
           }
         />

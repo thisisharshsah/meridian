@@ -193,7 +193,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                   onSelect={() => go(`${entityPath(g.entity)}?q=${encodeURIComponent(debounced)}`)}
                   className="cursor-pointer rounded-md px-2.5 py-1.5 text-xs text-brand data-[selected=true]:bg-surface-hover"
                 >
-                  See all {g.total} in {g.label}
+                  {t("action.seeAllIn", undefined, { n: g.total, label: g.label })}
                 </Command.Item>
               )}
             </Command.Group>

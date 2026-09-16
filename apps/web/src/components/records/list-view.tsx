@@ -222,7 +222,7 @@ export function ListView({ meta, fixedFilters, embedded }: {
             {meta.permissions.create && (
               <Button variant="primary" onClick={() => setCreating(true)}>
                 <Plus />
-                New {meta.label.toLowerCase()}
+                {t("action.newThing", undefined, { thing: meta.label.toLowerCase() })}
               </Button>
             )}
           </div>
@@ -261,7 +261,7 @@ export function ListView({ meta, fixedFilters, embedded }: {
               <SelectValue placeholder={t("record.all")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="__all">All {f.label.toLowerCase()}</SelectItem>
+              <SelectItem value="__all">{t("record.allOf", undefined, { label: f.label.toLowerCase() })}</SelectItem>
               {optionsOf(f).map((o) => (
                 <SelectItem key={o.value} value={o.value}>
                   {o.label}
@@ -323,7 +323,7 @@ export function ListView({ meta, fixedFilters, embedded }: {
               meta.permissions.create && !debounced && !activeFilters.length ? (
                 <Button variant="primary" onClick={() => setCreating(true)}>
                   <Plus />
-                  New {meta.label.toLowerCase()}
+                  {t("action.newThing", undefined, { thing: meta.label.toLowerCase() })}
                 </Button>
               ) : undefined
             }
@@ -424,7 +424,11 @@ export function ListView({ meta, fixedFilters, embedded }: {
       {data && data.total_pages > 1 && (
         <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
           <span>
-            Page {data.page} of {data.total_pages} · {data.total.toLocaleString()} records
+            {t("record.pageSummary", undefined, {
+              page: data.page,
+              pages: data.total_pages,
+              total: data.total.toLocaleString(),
+            })}
           </span>
           <div className="flex gap-1">
             <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>

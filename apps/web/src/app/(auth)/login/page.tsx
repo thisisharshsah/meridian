@@ -115,7 +115,7 @@ function LoginForm() {
           className="w-full"
           loading={form.formState.isSubmitting}
         >
-          Sign in
+          {t("auth.signIn")}
           {!form.formState.isSubmitting && <ArrowRight />}
         </Button>
       </form>

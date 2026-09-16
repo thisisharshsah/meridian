@@ -117,7 +117,9 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
 
   return (
     <div>
-      <h2 className="text-xl font-semibold tracking-tight">Join {data.organization}</h2>
+      <h2 className="text-xl font-semibold tracking-tight">
+        {t("invite.join", undefined, { name: data.organization })}
+      </h2>
       <p className="mt-1 text-sm text-muted-foreground">
         {t("auth.invitedAs", undefined, { role: data.role_name })}
       </p>
@@ -165,7 +167,7 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
         </FieldRow>
 
         <Button type="submit" variant="primary" size="lg" className="w-full" loading={saving}>
-          Join {data.organization}
+          {t("invite.join", undefined, { name: data.organization })}
           {!saving && <ArrowRight />}
         </Button>
       </form>

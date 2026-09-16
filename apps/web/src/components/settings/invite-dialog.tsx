@@ -171,8 +171,7 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
             <DialogHeader>
               <DialogTitle>{t("invite.ready")}</DialogTitle>
               <DialogDescription>
-                Send this link to {email}. It works once, expires in 14 days, and cannot be
-                retrieved again — so copy it now.
+                {t("invite.sendLinkTo", undefined, { email })}
               </DialogDescription>
             </DialogHeader>
             <DialogBody>

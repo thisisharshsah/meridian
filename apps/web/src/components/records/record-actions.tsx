@@ -224,9 +224,10 @@ function ConvertLeadDialog({
           <DialogHeader>
             <DialogTitle>{t("record.convertLead")}</DialogTitle>
             <DialogDescription>
-              Creates an account for {String(record.company ?? t("value.thisCompany"))} and a contact for{" "}
-              {String(record.full_name ?? t("value.thisPerson"))}. The lead stays on record, marked
-              converted.
+              {t("record.convertLeadWhy", undefined, {
+                company: String(record.company ?? t("value.thisCompany")),
+                person: String(record.full_name ?? t("value.thisPerson")),
+              })}
             </DialogDescription>
           </DialogHeader>
 

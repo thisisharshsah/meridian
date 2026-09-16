@@ -136,7 +136,9 @@ export function RefPicker({
                 href={entityPath(entity)}
                 className="mt-1 inline-block text-xs font-medium text-brand hover:underline"
               >
-                Add {term ? "one" : `your first ${lookupLabel}`} first →
+                {term
+                  ? t("record.addOneFirst")
+                  : t("record.addFirstOf", undefined, { label: lookupLabel })}
               </Link>
             </div>
           )}
@@ -158,7 +160,7 @@ export function RefPicker({
           ))}
           {data && data.total > data.data.length && (
             <p className="px-2 py-1.5 text-center text-[11px] text-subtle-foreground">
-              Showing {data.data.length} of {data.total}. Keep typing to narrow.
+              {t("record.lookupSubset", undefined, { n: data.data.length, total: data.total })}
             </p>
           )}
         </div>
