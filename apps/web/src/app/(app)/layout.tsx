@@ -126,11 +126,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </main>
       </div>
 
-      <BottomNav
-        modules={modules}
-        onSearch={() => setPaletteOpen(true)}
-        onMenu={() => setNavOpen(true)}
-      />
+      <BottomNav modules={modules} onMenu={() => setNavOpen(true)} />
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
     </div>
   );

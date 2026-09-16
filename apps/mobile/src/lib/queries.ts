@@ -1,6 +1,6 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 
-import { get, qs } from "@/lib/api";
+import { get, post, qs } from "@/lib/api";
 import type { AppMeta, EntityMeta, Session } from "@suite/shared/meta";
 import { localizeAppMeta, localizeEntityMeta } from "@suite/shared/i18n";
 
@@ -72,6 +72,34 @@ export function useRecordList(entity: string | undefined, search: string) {
     queryFn: ({ pageParam }) =>
       get<Page<Record_>>(`e/${entity}${qs({ page: pageParam, per_page: PER_PAGE, q: search || undefined })}`),
     getNextPageParam: (last) => (last.page < last.total_pages ? last.page + 1 : undefined),
+    enabled: !!entity,
+  });
+}
+
+export type StatsRow = { bucket: string | number | boolean | null; value: number; count: number };
+
+/**
+ * One aggregate from the server rather than a page of records counted here: a
+ * phone should not download a year of invoices to add up what is owed.
+ */
+export function useStats(
+  entity: string,
+  req: { group_by?: string; measure?: string; agg?: string; filters?: Record<string, string> },
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: ["stats", entity, req],
+    queryFn: () => post<{ data: StatsRow[] }>(`stats/${entity}`, req),
+    enabled,
+    staleTime: 30_000,
+  });
+}
+
+/** A short list — the few records a screen shows without paging. */
+export function useShortList(entity: string | undefined, params: Record<string, string | number>) {
+  return useQuery({
+    queryKey: ["list", entity, params],
+    queryFn: () => get<Page<Record_>>(`e/${entity}${qs(params)}`),
     enabled: !!entity,
   });
 }

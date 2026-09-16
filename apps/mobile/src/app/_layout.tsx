@@ -1,5 +1,7 @@
 import * as React from "react";
-import { Stack, usePathname } from "expo-router";
+import { Stack, router, usePathname } from "expo-router";
+import { Pressable } from "react-native";
+import { Search } from "lucide-react-native";
 import { StatusBar } from "expo-status-bar";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -9,7 +11,8 @@ import { BottomNav } from "@/components/bottom-nav";
 import { ApiError } from "@/lib/api";
 import { useSession } from "@/lib/queries";
 import { SessionProvider, useSessionState } from "@/lib/session";
-import { useTheme } from "@/lib/theme";
+import { space, useTheme } from "@/lib/theme";
+import { t } from "@suite/shared/i18n";
 
 const client = new QueryClient({
   defaultOptions: {
@@ -65,9 +68,23 @@ function Chrome() {
           headerTintColor: c.foreground,
           headerTitleStyle: { color: c.foreground },
           contentStyle: { backgroundColor: c.background },
+          // Search lost its place in the bar to a third module, and a
+          // magnifier in the header is where a phone looks for it anyway.
+          headerRight: () => (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t("nav.search")}
+              onPress={() => router.navigate("/search")}
+              style={({ pressed }) => ({ padding: space.sm, opacity: pressed ? 0.6 : 1 })}
+            >
+              <Search size={20} color={c.foreground} />
+            </Pressable>
+          ),
         }}
       >
         <Stack.Screen name="sign-in" options={{ headerShown: false }} />
+        {/* The one screen that does not need a way to reach itself. */}
+        <Stack.Screen name="search" options={{ headerRight: undefined }} />
       </Stack>
       {/* A sibling of the stack rather than something each screen draws, so it
           stays put while screens push and pop over one another. */}

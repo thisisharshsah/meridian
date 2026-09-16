@@ -3,6 +3,7 @@ import { FlatList, Pressable, StyleSheet, View } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 
 import { RequireSession } from "@/components/guard";
+import { EntityTabs } from "@/components/entity-tabs";
 import { FieldValue } from "@/components/field-value";
 import { Body, Empty, Input, Loading, Problem } from "@/components/ui";
 import { useEntityMeta, useRecordList, useSession, type Record_ } from "@/lib/queries";
@@ -59,6 +60,8 @@ function Records({ meta, initialSearch }: { meta: EntityMeta; initialSearch: str
     <>
       <Stack.Screen options={{ title: meta.label_plural }} />
       <View style={{ flex: 1 }}>
+        <EntityTabs entityKey={meta.key} />
+
         {meta.fields.some((f) => f.searchable) ? (
           <View style={{ padding: space.md }}>
             <Input

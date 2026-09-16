@@ -6,13 +6,13 @@ import { ChevronsUpDown } from "lucide-react-native";
 import { AuthShell } from "@/components/auth-shell";
 import { BusinessList, BusinessSheet } from "@/components/business-list";
 import { RequireSession } from "@/components/guard";
-import { Icon } from "@/components/icon";
-import { Body, Card, Loading, Problem, Title } from "@/components/ui";
-import { useAppMeta, useSession } from "@/lib/queries";
+import { Body, Card, Empty, Label, Loading, Problem, Title } from "@/components/ui";
+import { useAppMeta, useSession, useShortList, useStats, type Record_ } from "@/lib/queries";
 import { useSessionState } from "@/lib/session";
 import { radius, space, useTheme } from "@/lib/theme";
-import { entityPath, type ModuleMeta } from "@suite/shared/meta";
-import { t } from "@suite/shared/i18n";
+import { entityPath } from "@suite/shared/meta";
+import { formatMoney, daysUntil } from "@suite/shared/format";
+import { plural, t } from "@suite/shared/i18n";
 
 export default function Home() {
   return (
@@ -36,14 +36,51 @@ function HomeScreen() {
   return <Dashboard />;
 }
 
+/**
+ * Where the business stands, not a menu of it.
+ *
+ * Home listed every module and so did More, which made one of them pointless.
+ * The modules are the bottom bar's job now; this screen answers what is
+ * happening: what is owed, what is in the pipeline, and what has gone past its
+ * due date. Each figure is one aggregate from the server, because a phone
+ * should not download a year of invoices to add them up.
+ */
 function Dashboard() {
   const c = useTheme();
+  const router = useRouter();
   const session = useSession();
   const meta = useAppMeta();
   const [switching, setSwitching] = React.useState(false);
 
   const organization = session.data?.organization;
-  const modules = meta.data?.modules ?? [];
+  const currency = organization?.currency ?? "USD";
+  const today = new Date().toISOString().slice(0, 10);
+
+  // A build or a business without a module has no figures from it, and asking
+  // would be a 403 rather than a zero.
+  const has = (key: string) => (meta.data?.modules ?? []).some((m) => m.key === key);
+  const [sells, bills] = [has("crm"), has("books")];
+
+  const pipeline = useStats("crm.deals", { group_by: "stage", measure: "amount", agg: "sum" }, sells);
+  const receivable = useStats(
+    "books.invoices",
+    { measure: "balance_due", agg: "sum", filters: { status__ne: "paid" } },
+    bills,
+  );
+  const overdue = useShortList(bills ? "books.invoices" : undefined, {
+    status__ne: "paid",
+    due_date__lt: today,
+    sort: "due_date",
+    per_page: 5,
+  });
+
+  const openRows = (pipeline.data?.data ?? []).filter(
+    (r) => typeof r.bucket === "string" && !String(r.bucket).startsWith("closed_"),
+  );
+  const openValue = openRows.reduce((sum, r) => sum + r.value, 0);
+  const openCount = openRows.reduce((sum, r) => sum + r.count, 0);
+  const owed = receivable.data?.data[0]?.value ?? 0;
+  const late = overdue.data?.data ?? [];
 
   return (
     <>
@@ -72,24 +109,138 @@ function Dashboard() {
             <Title numberOfLines={1}>{organization?.name}</Title>
             <ChevronsUpDown size={16} color={c.subtleForeground} />
           </Pressable>
-          <Body muted>{session.data?.product}</Body>
+          <Body muted>{greeting()}, {session.data?.user.name?.split(" ")[0] ?? ""}</Body>
         </View>
 
         {meta.isPending ? <Loading /> : null}
-        {meta.error ? <Problem error={meta.error} onRetry={() => meta.refetch()} /> : null}
 
-        {modules.map((m) => (
-          <ModuleCard key={m.key} module={m} />
-        ))}
+        <View style={{ flexDirection: "row", gap: space.md }}>
+          {bills ? (
+            <Figure
+              label={t("dash.receivable")}
+              value={formatMoney(owed, currency, { compact: true, showZero: true })}
+              why={t("dash.receivableWhy")}
+              loading={receivable.isPending}
+              onPress={() => router.navigate(entityPath("books.invoices"))}
+            />
+          ) : null}
+          {sells ? (
+            <Figure
+              label={t("dash.openPipeline")}
+              value={formatMoney(openValue, currency, { compact: true, showZero: true })}
+              why={plural("dash.openDealCount", openCount)}
+              loading={pipeline.isPending}
+              onPress={() => router.navigate(entityPath("crm.deals"))}
+            />
+          ) : null}
+        </View>
 
-        {/* Who you are and signing out live under More now, with the rest of
-            the menu, rather than at the foot of the screen you look at most. */}
+        {bills ? (
+          <View style={{ gap: space.sm }}>
+            <Label>{t("dash.overdueInvoices")}</Label>
+            <Card>
+              {overdue.isPending ? (
+                <Loading />
+              ) : late.length === 0 ? (
+                <Empty title={t("dash.nothingOverdue")} body={t("dash.nothingOverdueWhy")} />
+              ) : (
+                late.map((inv, i) => (
+                  <OverdueRow key={inv.id} invoice={inv} currency={currency} first={i === 0} />
+                ))
+              )}
+            </Card>
+          </View>
+        ) : null}
+
         <View style={{ height: space.xl }} />
       </ScrollView>
 
       <BusinessSheet open={switching} onClose={() => setSwitching(false)} />
     </>
   );
+}
+
+function Figure({
+  label,
+  value,
+  why,
+  loading,
+  onPress,
+}: {
+  label: string;
+  value: string;
+  why: string;
+  loading: boolean;
+  onPress: () => void;
+}) {
+  const c = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => ({
+        flex: 1,
+        backgroundColor: pressed ? c.surfaceMuted : c.surface,
+        borderColor: c.border,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderRadius: radius,
+        padding: space.md,
+        gap: 2,
+      })}
+    >
+      <Label>{label}</Label>
+      {loading ? (
+        <Body muted>{t("dash.loading")}</Body>
+      ) : (
+        <Body style={{ fontSize: 20, fontWeight: "700" }} numberOfLines={1}>{value}</Body>
+      )}
+      <Body subtle style={{ fontSize: 11 }} numberOfLines={1}>{why}</Body>
+    </Pressable>
+  );
+}
+
+/** How late, in days, because "overdue" alone does not say how much trouble. */
+function OverdueRow({ invoice, currency, first }: { invoice: Record_; currency: string; first: boolean }) {
+  const c = useTheme();
+  const router = useRouter();
+  const days = daysUntil(invoice.due_date as string);
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={() => router.push(`${entityPath("books.invoices")}/${invoice.id}`)}
+      style={({ pressed }) => ({
+        flexDirection: "row",
+        alignItems: "center",
+        gap: space.md,
+        paddingHorizontal: space.lg,
+        paddingVertical: space.md,
+        minHeight: 56,
+        borderTopWidth: first ? 0 : StyleSheet.hairlineWidth,
+        borderTopColor: c.border,
+        backgroundColor: pressed ? c.surfaceMuted : "transparent",
+      })}
+    >
+      <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+        <Body numberOfLines={1} style={{ fontWeight: "600" }}>
+          {String(invoice.account_id__label ?? invoice.number ?? t("value.untitled"))}
+        </Body>
+        <Body style={{ color: c.dangerStrong, fontSize: 12 }}>
+          {days === null ? "" : plural("dash.daysLate", Math.abs(days))}
+        </Body>
+      </View>
+      <Body style={{ fontVariant: ["tabular-nums"], fontWeight: "600" }}>
+        {formatMoney(invoice.balance_due as number, currency)}
+      </Body>
+    </Pressable>
+  );
+}
+
+function greeting() {
+  const h = new Date().getHours();
+  if (h < 12) return t("dash.morning");
+  if (h < 18) return t("dash.afternoon");
+  return t("dash.evening");
 }
 
 /** Home, for someone whose account is real but who is not in a business yet. */
@@ -121,47 +272,5 @@ function NoBusinessYet() {
         </Body>
       </AuthShell>
     </>
-  );
-}
-
-/**
- * A module and the things inside it, drawn from `/api/meta` — the same payload
- * the web builds its sidebar from. Nothing here knows what a deal or an
- * invoice is, so a module added to the server appears here on its own.
- */
-function ModuleCard({ module: m }: { module: ModuleMeta }) {
-  const c = useTheme();
-  const router = useRouter();
-
-  return (
-    <Card style={{ padding: space.md, gap: space.sm }}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
-        <Icon name={m.icon} size={18} color={c.brand} />
-        <Body style={{ fontWeight: "600" }}>{m.label}</Body>
-      </View>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
-        {m.entities.map((e) => (
-          <Pressable
-            key={e.key}
-            accessibilityRole="button"
-            onPress={() => router.push(entityPath(e.key))}
-            style={({ pressed }) => ({
-              flexDirection: "row",
-              alignItems: "center",
-              gap: space.xs,
-              backgroundColor: pressed ? c.surfaceMuted : c.background,
-              borderColor: c.border,
-              borderWidth: StyleSheet.hairlineWidth,
-              borderRadius: radius,
-              paddingHorizontal: space.md,
-              minHeight: 44,
-            })}
-          >
-            <Icon name={e.icon} size={15} color={c.mutedForeground} />
-            <Body style={{ fontSize: 14 }}>{e.label_plural}</Body>
-          </Pressable>
-        ))}
-      </View>
-    </Card>
   );
 }

@@ -1,7 +1,7 @@
 import * as React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { usePathname, useRouter } from "expo-router";
-import { LayoutDashboard, Menu, Search, type LucideIcon } from "lucide-react-native";
+import { LayoutDashboard, Menu, type LucideIcon } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Icon } from "@/components/icon";
@@ -10,14 +10,20 @@ import { space, useTheme } from "@/lib/theme";
 import { entityPath } from "@suite/shared/meta";
 import { t } from "@suite/shared/i18n";
 
+/** The bar holds home, three modules and the rest; anything further is More. */
+export const NAV_MODULES = 3;
+
 /**
- * Phone navigation, the same five places the web puts across the bottom of a
- * narrow screen: home, the two screens this business actually lives in,
- * search, and everything else.
+ * Phone navigation: five places, and three of them are this business's own.
  *
- * The middle pair comes from `/api/meta` rather than a hardcoded choice, so it
- * can never offer a screen the person's role cannot open — and a hotel gets
- * rooms where a shop gets products, without either being named here.
+ * A module is a page and its entities are its tabs, so tapping Sales lands on
+ * leads with accounts, deals and quotes across the top — crossing between
+ * things that belong together costs a tap, not a trip back to a menu.
+ *
+ * Which three is not a decision made here. They are the first modules
+ * `/api/meta` returns, already narrowed to what this business uses and what
+ * this person's role may open, so a hotel gets rooms where a shop gets
+ * products and neither is named in this file.
  */
 export function BottomNav() {
   const c = useTheme();
@@ -26,10 +32,7 @@ export function BottomNav() {
   const insets = useSafeAreaInsets();
   const meta = useAppMeta();
 
-  const shortcuts = (meta.data?.modules ?? [])
-    .map((m) => m.entities[0])
-    .filter((e): e is NonNullable<typeof e> => !!e)
-    .slice(0, 2);
+  const modules = (meta.data?.modules ?? []).slice(0, NAV_MODULES);
 
   return (
     <View
@@ -51,25 +54,22 @@ export function BottomNav() {
         onPress={() => router.navigate("/")}
       />
 
-      {shortcuts.map((e) => {
-        const href = entityPath(e.key);
+      {modules.map((m) => {
+        // The module's page is its first entity; the tabs on that screen are
+        // the rest of it.
+        const first = m.entities[0];
+        if (!first) return null;
         return (
           <Cell
-            key={e.key}
-            icon={e.icon}
-            label={e.label_plural}
-            active={pathname === href || pathname.startsWith(`${href}/`)}
-            onPress={() => router.navigate(href)}
+            key={m.key}
+            icon={m.icon}
+            label={m.label}
+            active={pathname.startsWith(`/${m.key}/`)}
+            onPress={() => router.navigate(entityPath(first.key))}
           />
         );
       })}
 
-      <Cell
-        glyph={Search}
-        label={t("nav.search")}
-        active={pathname === "/search"}
-        onPress={() => router.navigate("/search")}
-      />
       <Cell
         glyph={Menu}
         label={t("nav.more")}

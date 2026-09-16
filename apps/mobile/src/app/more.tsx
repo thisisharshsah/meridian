@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import { ChevronsUpDown } from "lucide-react-native";
 
+import { NAV_MODULES } from "@/components/bottom-nav";
 import { BusinessSheet } from "@/components/business-list";
 import { RequireSession } from "@/components/guard";
 import { Icon } from "@/components/icon";
@@ -22,9 +23,11 @@ export default function More() {
 }
 
 /**
- * Everything the bottom bar has no room for: every module this business uses,
- * every entity inside it, which business you are in, and who you are signed in
- * as. The drawer the web opens from the same place.
+ * Everything the bottom bar has no room for.
+ *
+ * The bar carries the first three modules, so this carries the rest — listing
+ * all of them again would make this screen and home the same screen, which is
+ * what they were. Plus which business you are in and who you are signed in as.
  */
 function MoreScreen() {
   const c = useTheme();
@@ -33,7 +36,7 @@ function MoreScreen() {
   const { signOut } = useSessionState();
   const [switching, setSwitching] = React.useState(false);
 
-  const modules = meta.data?.modules ?? [];
+  const modules = (meta.data?.modules ?? []).slice(NAV_MODULES);
 
   return (
     <>
