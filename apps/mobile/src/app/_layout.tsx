@@ -1,12 +1,14 @@
 import * as React from "react";
-import { Stack } from "expo-router";
+import { Stack, usePathname } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { useColorScheme } from "react-native";
+import { useColorScheme, View } from "react-native";
 
+import { BottomNav } from "@/components/bottom-nav";
 import { ApiError } from "@/lib/api";
-import { SessionProvider } from "@/lib/session";
+import { useSession } from "@/lib/queries";
+import { SessionProvider, useSessionState } from "@/lib/session";
 import { useTheme } from "@/lib/theme";
 
 const client = new QueryClient({
@@ -35,11 +37,27 @@ export default function RootLayout() {
   );
 }
 
+/**
+ * The way in has no navigation to speak of — there is one thing to do on each
+ * of those screens — so the bar appears only once someone is inside a
+ * business.
+ */
+const ENTRY_ROUTES = ["/sign-in", "/sign-up", "/invite", "/new-business"];
+
 function Chrome() {
   const c = useTheme();
   const scheme = useColorScheme();
+  const pathname = usePathname();
+  const { status } = useSessionState();
+  const session = useSession();
+
+  const inside =
+    status === "signedIn" &&
+    !!session.data?.organization &&
+    !ENTRY_ROUTES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+
   return (
-    <>
+    <View style={{ flex: 1, backgroundColor: c.background }}>
       <StatusBar style={scheme === "dark" ? "light" : "dark"} />
       <Stack
         screenOptions={{
@@ -51,6 +69,9 @@ function Chrome() {
       >
         <Stack.Screen name="sign-in" options={{ headerShown: false }} />
       </Stack>
-    </>
+      {/* A sibling of the stack rather than something each screen draws, so it
+          stays put while screens push and pop over one another. */}
+      {inside ? <BottomNav /> : null}
+    </View>
   );
 }

@@ -76,6 +76,29 @@ export function useRecordList(entity: string | undefined, search: string) {
   });
 }
 
+export type SearchGroup = {
+  entity: string;
+  label: string;
+  icon: string;
+  total: number;
+  items: { id: string; title: string }[];
+};
+
+/**
+ * One term against every entity the person may read, answered by the server's
+ * FTS index rather than by asking each list in turn. Two characters is the
+ * floor: one letter matches most of a workspace and is never what anybody
+ * meant.
+ */
+export function useGlobalSearch(term: string) {
+  return useQuery({
+    queryKey: ["search", term],
+    queryFn: () => get<{ groups: SearchGroup[] }>(`search${qs({ q: term })}`),
+    enabled: term.trim().length >= 2,
+    staleTime: 10_000,
+  });
+}
+
 export function useRecord(entity: string | undefined, id: string | undefined) {
   return useQuery({
     queryKey: ["record", entity, id],

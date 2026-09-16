@@ -19,7 +19,8 @@ export default function List() {
 }
 
 function ListScreen() {
-  const { module, entity } = useLocalSearchParams<{ module: string; entity: string }>();
+  // `q` arrives when search sends someone here to see the rest of a group.
+  const { module, entity, q } = useLocalSearchParams<{ module: string; entity: string; q?: string }>();
   const key = entityKeyFrom(module, entity);
   const meta = useEntityMeta(key);
 
@@ -27,14 +28,14 @@ function ListScreen() {
   if (meta.error) return <Problem error={meta.error} onRetry={() => meta.refetch()} />;
   if (!meta.data) return null;
 
-  return <Records meta={meta.data} />;
+  return <Records meta={meta.data} initialSearch={q ?? ""} />;
 }
 
-function Records({ meta }: { meta: EntityMeta }) {
+function Records({ meta, initialSearch }: { meta: EntityMeta; initialSearch: string }) {
   const router = useRouter();
   const session = useSession();
-  const [search, setSearch] = React.useState("");
-  const [query, setQuery] = React.useState("");
+  const [search, setSearch] = React.useState(initialSearch);
+  const [query, setQuery] = React.useState(initialSearch);
 
   // Typing is not a search. A quarter of a second after the last keystroke is
   // what the web waits, and it is the difference between one request and one

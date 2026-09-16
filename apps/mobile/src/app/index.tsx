@@ -7,7 +7,7 @@ import { AuthShell } from "@/components/auth-shell";
 import { BusinessList, BusinessSheet } from "@/components/business-list";
 import { RequireSession } from "@/components/guard";
 import { Icon } from "@/components/icon";
-import { Body, Button, Card, Label, Loading, Problem, Title } from "@/components/ui";
+import { Body, Card, Loading, Problem, Title } from "@/components/ui";
 import { useAppMeta, useSession } from "@/lib/queries";
 import { useSessionState } from "@/lib/session";
 import { radius, space, useTheme } from "@/lib/theme";
@@ -40,7 +40,6 @@ function Dashboard() {
   const c = useTheme();
   const session = useSession();
   const meta = useAppMeta();
-  const { signOut } = useSessionState();
   const [switching, setSwitching] = React.useState(false);
 
   const organization = session.data?.organization;
@@ -83,15 +82,8 @@ function Dashboard() {
           <ModuleCard key={m.key} module={m} />
         ))}
 
-        <Card style={{ padding: space.lg, gap: space.md }}>
-          <View>
-            <Label>{t("value.signedInAs")}</Label>
-            <Body>{session.data?.user.name}</Body>
-            <Body muted style={{ fontSize: 13 }}>{session.data?.user.email}</Body>
-          </View>
-          <Button title={t("action.signOut")} variant="quiet" onPress={() => void signOut()} />
-        </Card>
-
+        {/* Who you are and signing out live under More now, with the rest of
+            the menu, rather than at the foot of the screen you look at most. */}
         <View style={{ height: space.xl }} />
       </ScrollView>
 
