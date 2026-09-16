@@ -26,6 +26,28 @@ type Messages = Record<string, string>;
  * Keys are structural, not sentences: `entity.<key>.one`, `field.<entity>.<name>`,
  * `help.<entity>.<name>`, `module.<key>`, and a flat namespace for chrome.
  * A translator sees where each string appears from the key alone.
+ *
+ * ## Business or workspace
+ *
+ * Both words are used, and they are not synonyms. The product had been mixing
+ * them — a screen offering to "create a workspace" above a field labelled
+ * "Business name" — so the rule is written down here rather than remembered:
+ *
+ * - **business** — the company itself, the thing that exists outside this
+ *   software: its name, its money, its customers. Anything an owner would
+ *   recognise as theirs. "Start a business", "Business name", "Switch
+ *   business", "This business uses…".
+ * - **workspace** — where a *team* works inside the product for that business:
+ *   the sign-in you return to, what an invitation admits you to, who is a
+ *   member of it, what a role grants within it. "Welcome back to your
+ *   workspace", "Members of this workspace".
+ *
+ * The test: if swapping in the company's own name reads right, it is a
+ * business. "Rivera Plumbing name" is nonsense, so that field is a business
+ * name; "welcome back to Rivera Plumbing" reads fine, so that one is the
+ * workspace only because it is about coming back to the *place*, and either
+ * word would do — in that case prefer workspace, since signing in is an act
+ * inside the software.
  */
 const en: Messages = {
   // ---- app chrome ----
@@ -315,8 +337,12 @@ const en: Messages = {
   "auth.email": "Work email",
   "auth.password": "Password",
   "auth.firstTime": "First time here?",
-  "auth.createWorkspace": "Create a new workspace",
-  "auth.createWorkspaceCta": "Create workspace",
+  // Creating an account and creating a business are one act here, and the
+  // button says whichever of the two the person actually chose.
+  "auth.startBusiness": "Start a business",
+  "auth.createBusinessCta": "Create business",
+  "auth.createAccountCta": "Create account",
+  "auth.selfHosted": "Self-hosted · your data stays on your machine",
   "auth.createAccount": "Create your account",
   "auth.intent": "What are you here to do?",
   "auth.yourName": "Your name",
@@ -478,15 +504,6 @@ const en: Messages = {
   "dash.inviteSomeone": "Invite someone",
   "dash.noOpenDeals": "No open deals.",
   "dash.noInvoicesShort": "No invoices yet.",
-
-  "auth.pitch.sell": "Sell",
-  "auth.pitch.sellWhy": "Leads, deals and pipelines with a shared customer record.",
-  "auth.pitch.bill": "Bill",
-  "auth.pitch.billWhy": "Quotes to invoices to payments, with the ledger kept straight.",
-  "auth.pitch.deliver": "Deliver",
-  "auth.pitch.deliverWhy": "Projects, tasks, timesheets and stock in one place.",
-  "auth.pitch.understand": "Understand",
-  "auth.pitch.understandWhy": "Every module reporting into one set of numbers.",
   "auth.tagline": "One workspace for sales, finance, projects, people and support.",
   "auth.nameTheBusiness": "Give the business a name",
   "auth.ownerNote": "You will own this business, with full access to everything in it.",

@@ -126,7 +126,7 @@ function LoginForm() {
       <div className="mt-6 border-t border-border pt-5 text-center">
         <p className="text-sm text-muted-foreground">{t("auth.firstTime")}</p>
         <Button variant="secondary" size="lg" className="mt-2 w-full" asChild>
-          <Link href="/register">{t("auth.createWorkspace")}</Link>
+          <Link href="/register">{t("auth.startBusiness")}</Link>
         </Button>
       </div>
     </div>

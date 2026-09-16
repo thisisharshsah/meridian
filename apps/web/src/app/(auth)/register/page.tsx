@@ -87,8 +87,10 @@ export default function RegisterPage() {
             role="radio"
             aria-checked={starting === opt.on}
             onClick={() => setStarting(opt.on)}
+            // `h-full` so the two cards match even when one label wraps to a
+            // second line and the other does not.
             className={
-              "rounded-md border p-2.5 text-left transition-colors " +
+              "h-full rounded-md border p-2.5 text-left transition-colors " +
               (starting === opt.on
                 ? "border-brand bg-brand-subtle"
                 : "border-border hover:bg-surface-hover")
@@ -125,7 +127,7 @@ export default function RegisterPage() {
           </FieldRow>
         )}
 
-        <div className={starting ? "grid grid-cols-[1fr_7rem] gap-3" : ""}>
+        <div className="space-y-4">
           <FieldRow label={t("auth.email")} error={form.formState.errors.email?.message} htmlFor="email" required>
             <Input
               id="email"
@@ -138,8 +140,10 @@ export default function RegisterPage() {
             />
           </FieldRow>
 
+          {/* Full width, and naming the currency rather than showing a
+              three-letter code in a box too narrow to say what it is. */}
           {starting && (
-          <FieldRow label={t("auth.currency")} htmlFor="currency">
+          <FieldRow label={t("auth.currency")} htmlFor="currency" hint={t("workspace.currencyHint")}>
             <Select
               value={form.watch("currency")}
               onValueChange={(v) => form.setValue("currency", v, { shouldDirty: true })}
@@ -150,7 +154,7 @@ export default function RegisterPage() {
               <SelectContent>
                 {CURRENCIES.map((c) => (
                   <SelectItem key={c.code} value={c.code}>
-                    {c.code}
+                    {c.code} · {c.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -177,7 +181,9 @@ export default function RegisterPage() {
         </FieldRow>
 
         <Button type="submit" variant="primary" size="lg" className="w-full" loading={form.formState.isSubmitting}>
-          {t("auth.createWorkspaceCta")}
+          {/* What the button does depends on what they chose: one of these
+              creates a company, the other only an account. */}
+          {starting ? t("auth.createBusinessCta") : t("auth.createAccountCta")}
           {!form.formState.isSubmitting && <ArrowRight />}
         </Button>
       </form>

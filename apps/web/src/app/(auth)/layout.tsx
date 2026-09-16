@@ -1,64 +1,56 @@
 import Link from "next/link";
 import { Logo } from "@/components/brand/logo";
-import { BarChart3, Boxes, Receipt, Users } from "lucide-react";
 import { t } from "@suite/shared/i18n";
 import { productName } from "@/lib/session";
 
-const PILLARS = [
-  { icon: Users, title: t("auth.pitch.sell"), body: t("auth.pitch.sellWhy") },
-  { icon: Receipt, title: t("auth.pitch.bill"), body: t("auth.pitch.billWhy") },
-  { icon: Boxes, title: t("auth.pitch.deliver"), body: t("auth.pitch.deliverWhy") },
-  { icon: BarChart3, title: t("auth.pitch.understand"), body: t("auth.pitch.understandWhy") },
-];
-
+/**
+ * The shell every way in shares: sign in, sign up, accept an invitation.
+ *
+ * One composition at every width — the mark and the product's name, then a
+ * card — rather than a marketing panel that existed only above `lg`. On a
+ * phone that panel was simply absent, so the first screen a customer ever saw
+ * carried no name at all, which for an installation sold as Aurovie Rooms is
+ * the one place the name has to be.
+ *
+ * The ground is `brand-subtle`, which is a pale tint in light and a deep one
+ * in dark, so the same rule gives a branded field in both themes instead of a
+ * bright slab burning beside a near-black form.
+ */
 export default async function AuthLayout({ children }: { children: React.ReactNode }) {
   const product = await productName(t("app.name"));
   return (
-    <div className="grid min-h-dvh lg:grid-cols-[1.05fr_1fr]">
-      {/* Story panel: hidden on small screens where the form is all that matters. */}
-      <div className="relative hidden overflow-hidden bg-brand p-10 text-brand-foreground lg:flex lg:flex-col lg:justify-between">
-        <div
-          className="pointer-events-none absolute inset-0 opacity-[0.14]"
-          style={{
-            backgroundImage:
-              "radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)",
-            backgroundSize: "22px 22px",
-          }}
-        />
-        <Link href="/" className="relative flex items-center gap-2.5">
-          <Logo size={30} className="[&>rect]:fill-white/15" />
+    <div className="relative min-h-dvh overflow-hidden bg-brand-subtle">
+      {/* A texture, not a picture: it reads as a surface at any size and costs
+          nothing to load. `currentColor` keeps it in the brand ink of whichever
+          theme is active. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 text-brand opacity-[0.12]"
+        style={{
+          backgroundImage: "radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)",
+          backgroundSize: "22px 22px",
+        }}
+      />
+
+      {/* `my-auto` rather than `justify-center`: it centres while the block
+          fits and collapses to nothing when it does not, so a tall form on a
+          short window scrolls from its top instead of having its head cut off. */}
+      <div className="relative flex min-h-dvh flex-col px-4">
+      <div className="my-auto flex flex-col items-center py-10 sm:py-14">
+        <Link href="/" className="flex items-center gap-2.5 text-brand-subtle-foreground">
+          <Logo size={32} />
           <span className="text-lg font-semibold tracking-tight">{product}</span>
         </Link>
+        <p className="mt-2 max-w-sm text-center text-sm text-brand-subtle-foreground/80">
+          {t("auth.pitch")}
+        </p>
 
-        <div className="relative max-w-md">
-          <h1 className="text-3xl font-semibold leading-tight tracking-tight">
-            {t("auth.pitch")}
-          </h1>
-          <p className="mt-3 text-sm/relaxed opacity-80">
-            Sales, finance, inventory, projects, people and support — sharing one customer
-            record, one permission model and one source of numbers.
-          </p>
-
-          <dl className="mt-9 grid gap-5 sm:grid-cols-2">
-            {PILLARS.map(({ icon: Icon, title, body }) => (
-              <div key={title}>
-                <dt className="flex items-center gap-2 text-sm font-medium">
-                  <Icon className="size-4 opacity-80" />
-                  {title}
-                </dt>
-                <dd className="mt-1 text-xs/relaxed opacity-70">{body}</dd>
-              </div>
-            ))}
-          </dl>
+        <div className="mt-7 w-full max-w-sm rounded-xl border border-border bg-surface p-6 shadow-pop sm:p-7">
+          {children}
         </div>
 
-        <p className="relative text-xs opacity-60">
-          Self-hosted · Your data stays on your machine
-        </p>
+        <p className="mt-6 text-xs text-brand-subtle-foreground/70">{t("auth.selfHosted")}</p>
       </div>
-
-      <div className="flex items-center justify-center p-6 sm:p-10">
-        <div className="w-full max-w-sm">{children}</div>
       </div>
     </div>
   );
