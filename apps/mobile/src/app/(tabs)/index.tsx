@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
-import { Stack, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { ChevronsUpDown } from "lucide-react-native";
 
 import { AuthShell } from "@/components/auth-shell";
@@ -84,7 +84,6 @@ function Dashboard() {
 
   return (
     <>
-      <Stack.Screen options={{ title: organization?.name ?? "" }} />
       <ScrollView contentContainerStyle={{ padding: space.lg, gap: space.lg }}>
         {/* The business's name is the heading, and the heading is the switcher:
             this screen is about the business you are in, and choosing another
@@ -252,7 +251,6 @@ function NoBusinessYet() {
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: false }} />
       <AuthShell
         title={t("choose.title", undefined, { name: first })}
         lede={t("choose.lede")}

@@ -1,30 +1,30 @@
 import * as React from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { useRouter } from "expo-router";
 
-import { useAppMeta } from "@/lib/queries";
 import { space, useTheme } from "@/lib/theme";
-import { entityPath } from "@suite/shared/meta";
+import type { ModuleEntity } from "@suite/shared/meta";
 
 /**
  * The rest of the module, across the top.
  *
- * A module is the page and its entities are its tabs: arriving at Sales means
- * arriving at leads with accounts, deals and quotes one tap away, rather than
- * going back out to a menu to cross between things that belong together.
+ * Controlled rather than routed. These used to be links: each tap replaced the
+ * screen, so moving from leads to deals played a screen transition and threw
+ * the list away to build another one. Which entity is showing is state on the
+ * module's page, so switching is a re-render and nothing slides.
  *
- * The tabs are the registry's, so a module's shape here is whatever the server
- * says it is, already filtered to what this person may open. A module with one
- * entity has nothing to offer and draws nothing.
+ * A module with one entity has nothing to offer and draws nothing.
  */
-export function EntityTabs({ entityKey }: { entityKey: string }) {
+export function EntityTabs({
+  entities,
+  value,
+  onChange,
+}: {
+  entities: ModuleEntity[];
+  value: string;
+  onChange: (key: string) => void;
+}) {
   const c = useTheme();
-  const router = useRouter();
-  const meta = useAppMeta();
-
-  const module = meta.data?.modules.find((m) => m.entities.some((e) => e.key === entityKey));
-  const tabs = module?.entities ?? [];
-  if (tabs.length < 2) return null;
+  if (entities.length < 2) return null;
 
   return (
     <View style={{ borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border }}>
@@ -33,16 +33,14 @@ export function EntityTabs({ entityKey }: { entityKey: string }) {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: space.md, gap: space.xs }}
       >
-        {tabs.map((e) => {
-          const on = e.key === entityKey;
+        {entities.map((e) => {
+          const on = e.key === value;
           return (
             <Pressable
               key={e.key}
               accessibilityRole="tab"
               accessibilityState={{ selected: on }}
-              // `replace`, so moving between tabs does not stack a back entry
-              // for every one visited on the way.
-              onPress={() => (on ? undefined : router.replace(entityPath(e.key)))}
+              onPress={() => (on ? undefined : onChange(e.key))}
               style={({ pressed }) => ({
                 minHeight: 44,
                 justifyContent: "center",

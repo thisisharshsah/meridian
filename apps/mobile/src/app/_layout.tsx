@@ -1,16 +1,13 @@
 import * as React from "react";
-import { Stack, router, usePathname } from "expo-router";
-import { Pressable } from "react-native";
+import { Pressable, useColorScheme } from "react-native";
+import { Stack, router } from "expo-router";
 import { Search } from "lucide-react-native";
 import { StatusBar } from "expo-status-bar";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { useColorScheme, View } from "react-native";
 
-import { BottomNav } from "@/components/bottom-nav";
 import { ApiError } from "@/lib/api";
-import { useSession } from "@/lib/queries";
-import { SessionProvider, useSessionState } from "@/lib/session";
+import { SessionProvider } from "@/lib/session";
 import { space, useTheme } from "@/lib/theme";
 import { t } from "@suite/shared/i18n";
 
@@ -41,26 +38,19 @@ export default function RootLayout() {
 }
 
 /**
- * The way in has no navigation to speak of — there is one thing to do on each
- * of those screens — so the bar appears only once someone is inside a
- * business.
+ * The stack over the tabs.
+ *
+ * `(tabs)` is one screen here and carries its own bar and headers; everything
+ * in this stack — a record, a search, the ways in — pushes over it. Tabs
+ * switch instantly and keep their state; pushes animate, because arriving at
+ * one record from a list of them is a movement and should look like one.
  */
-const ENTRY_ROUTES = ["/sign-in", "/sign-up", "/invite", "/new-business"];
-
 function Chrome() {
   const c = useTheme();
   const scheme = useColorScheme();
-  const pathname = usePathname();
-  const { status } = useSessionState();
-  const session = useSession();
-
-  const inside =
-    status === "signedIn" &&
-    !!session.data?.organization &&
-    !ENTRY_ROUTES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 
   return (
-    <View style={{ flex: 1, backgroundColor: c.background }}>
+    <>
       <StatusBar style={scheme === "dark" ? "light" : "dark"} />
       <Stack
         screenOptions={{
@@ -68,27 +58,28 @@ function Chrome() {
           headerTintColor: c.foreground,
           headerTitleStyle: { color: c.foreground },
           contentStyle: { backgroundColor: c.background },
-          // Search lost its place in the bar to a third module, and a
-          // magnifier in the header is where a phone looks for it anyway.
-          headerRight: () => (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t("nav.search")}
-              onPress={() => router.navigate("/search")}
-              style={({ pressed }) => ({ padding: space.sm, opacity: pressed ? 0.6 : 1 })}
-            >
-              <Search size={20} color={c.foreground} />
-            </Pressable>
-          ),
         }}
       >
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="sign-in" options={{ headerShown: false }} />
-        {/* The one screen that does not need a way to reach itself. */}
-        <Stack.Screen name="search" options={{ headerRight: undefined }} />
+        <Stack.Screen name="sign-up" options={{ headerShown: false }} />
+        <Stack.Screen name="new-business" options={{ headerShown: false }} />
+        <Stack.Screen
+          name="[module]/[entity]/index"
+          options={{
+            headerRight: () => (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t("nav.search")}
+                onPress={() => router.navigate("/search")}
+                style={({ pressed }) => ({ padding: space.sm, opacity: pressed ? 0.6 : 1 })}
+              >
+                <Search size={20} color={c.foreground} />
+              </Pressable>
+            ),
+          }}
+        />
       </Stack>
-      {/* A sibling of the stack rather than something each screen draws, so it
-          stays put while screens push and pop over one another. */}
-      {inside ? <BottomNav /> : null}
-    </View>
+    </>
   );
 }

@@ -1,10 +1,10 @@
 import * as React from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
-import { Stack, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { ChevronsUpDown } from "lucide-react-native";
 
-import { NAV_MODULES } from "@/components/bottom-nav";
 import { BusinessSheet } from "@/components/business-list";
+import { NAV_MODULES } from "@/app/(tabs)/_layout";
 import { RequireSession } from "@/components/guard";
 import { Icon } from "@/components/icon";
 import { Body, Button, Card, Label, Loading, Problem, Title } from "@/components/ui";
@@ -40,7 +40,6 @@ function MoreScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: t("nav.more") }} />
       <ScrollView contentContainerStyle={{ padding: space.lg, gap: space.lg }}>
         <Pressable
           accessibilityRole="button"

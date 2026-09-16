@@ -1,16 +1,12 @@
 import * as React from "react";
-import { FlatList, Pressable, StyleSheet, View } from "react-native";
+import { View } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 
-import { RequireSession } from "@/components/guard";
 import { EntityTabs } from "@/components/entity-tabs";
-import { FilterChips } from "@/components/filter-chips";
-import { FieldValue } from "@/components/field-value";
-import { Body, Empty, Input, Loading, Problem } from "@/components/ui";
-import { useEntityMeta, useRecordList, useSession, type Record_ } from "@/lib/queries";
-import { space, useTheme } from "@/lib/theme";
-import { entityKeyFrom, entityPath, type EntityMeta } from "@suite/shared/meta";
-import { plural, t } from "@suite/shared/i18n";
+import { RequireSession } from "@/components/guard";
+import { RecordsList } from "@/components/records-list";
+import { useAppMeta, useEntityMeta } from "@/lib/queries";
+import { entityKeyFrom, entityPath } from "@suite/shared/meta";
 
 export default function List() {
   return (
@@ -20,158 +16,35 @@ export default function List() {
   );
 }
 
+/**
+ * One entity's records, reached by a link rather than by a tab — from search,
+ * or from a figure on the home screen.
+ *
+ * The module's other entities are still across the top, and here they do
+ * navigate, because this screen exists at a particular address and that
+ * address should follow what is being looked at.
+ */
 function ListScreen() {
+  const router = useRouter();
   // `q` arrives when search sends someone here to see the rest of a group.
   const { module, entity, q } = useLocalSearchParams<{ module: string; entity: string; q?: string }>();
   const key = entityKeyFrom(module, entity);
   const meta = useEntityMeta(key);
+  const app = useAppMeta();
 
-  if (meta.isPending) return <Loading />;
-  if (meta.error) return <Problem error={meta.error} onRetry={() => meta.refetch()} />;
-  if (!meta.data) return null;
-
-  return <Records meta={meta.data} initialSearch={q ?? ""} />;
-}
-
-function Records({ meta, initialSearch }: { meta: EntityMeta; initialSearch: string }) {
-  const router = useRouter();
-  const session = useSession();
-  const [search, setSearch] = React.useState(initialSearch);
-  const [query, setQuery] = React.useState(initialSearch);
-  const [filters, setFilters] = React.useState<Record<string, string>>({});
-
-  // Typing is not a search. A quarter of a second after the last keystroke is
-  // what the web waits, and it is the difference between one request and one
-  // per letter on a phone connection.
-  React.useEffect(() => {
-    const id = setTimeout(() => setQuery(search), 250);
-    return () => clearTimeout(id);
-  }, [search]);
-
-  const list = useRecordList(meta.key, query, filters);
-  const records = list.data?.pages.flatMap((p) => p.data) ?? [];
-  const currency = session.data?.organization?.currency ?? "USD";
-
-  // What a row says: the title field leads, then the next few list columns as
-  // label-and-value pairs. The same choice the web makes on a narrow screen.
-  const columns = meta.fields.filter((f) => f.in_list);
-  const lead = columns[0];
-  const rest = columns.slice(1, 4);
+  const entities = app.data?.modules.find((m) => m.entities.some((e) => e.key === key))?.entities ?? [];
 
   return (
     <>
-      <Stack.Screen options={{ title: meta.label_plural }} />
+      <Stack.Screen options={{ title: meta.data?.label_plural ?? "" }} />
       <View style={{ flex: 1 }}>
-        <EntityTabs entityKey={meta.key} />
-
-        {meta.fields.some((f) => f.searchable) ? (
-          <View style={{ padding: space.md }}>
-            <Input
-              value={search}
-              onChangeText={setSearch}
-              placeholder={t("record.searchPlaceholder")}
-              autoCapitalize="none"
-              autoCorrect={false}
-              clearButtonMode="while-editing"
-              returnKeyType="search"
-            />
-          </View>
-        ) : null}
-
-        <FilterChips fields={meta.fields} value={filters} onChange={setFilters} />
-
-        {/* How many there are, which a list that pages as you scroll cannot
-            otherwise say. */}
-        {list.data ? (
-          <Body muted style={{ fontSize: 12, paddingHorizontal: space.lg, paddingBottom: space.sm }}>
-            {plural("record.countRecords", list.data.pages[0]?.total ?? 0)}
-          </Body>
-        ) : null}
-
-        {list.isPending ? <Loading /> : null}
-        {list.error ? <Problem error={list.error} onRetry={() => list.refetch()} /> : null}
-
-        <FlatList
-          data={records}
-          keyExtractor={(r) => r.id}
-          onRefresh={() => list.refetch()}
-          refreshing={list.isRefetching && !list.isFetchingNextPage}
-          onEndReachedThreshold={0.4}
-          onEndReached={() => {
-            if (list.hasNextPage && !list.isFetchingNextPage) void list.fetchNextPage();
-          }}
-          ListEmptyComponent={
-            list.isPending || list.error ? null : (
-              <Empty
-                title={query ? t("value.noMatches") : t("mobile.noRecords", undefined, { label: meta.label_plural })}
-                body={query ? undefined : t("mobile.noRecordsWhy")}
-              />
-            )
-          }
-          ListFooterComponent={list.isFetchingNextPage ? <Loading /> : null}
-          renderItem={({ item }) => (
-            <Row
-              record={item}
-              onPress={() => router.push(`${entityPath(meta.key)}/${item.id}`)}
-              lead={lead}
-              rest={rest}
-              currency={currency}
-              meta={meta}
-            />
-          )}
+        <EntityTabs
+          entities={entities}
+          value={key}
+          onChange={(next) => router.replace(entityPath(next))}
         />
+        <RecordsList entityKey={key} initialSearch={q ?? ""} />
       </View>
     </>
-  );
-}
-
-function Row({
-  record,
-  onPress,
-  lead,
-  rest,
-  currency,
-  meta,
-}: {
-  record: Record_;
-  onPress: () => void;
-  lead: EntityMeta["fields"][number] | undefined;
-  rest: EntityMeta["fields"];
-  currency: string;
-  meta: EntityMeta;
-}) {
-  const c = useTheme();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={({ pressed }) => ({
-        paddingHorizontal: space.lg,
-        paddingVertical: space.md,
-        gap: space.xs,
-        minHeight: 64,
-        borderBottomWidth: StyleSheet.hairlineWidth,
-        borderBottomColor: c.border,
-        backgroundColor: pressed ? c.surfaceMuted : "transparent",
-      })}
-    >
-      {lead ? (
-        <FieldValue field={lead} record={record} currency={currency} strong />
-      ) : (
-        <Body style={{ fontWeight: "600" }}>
-          {String(record[meta.title_field] ?? t("value.untitled"))}
-        </Body>
-      )}
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.md }}>
-        {rest.map((f) => (
-          <View key={f.name} style={{ flexDirection: "row", alignItems: "center", gap: space.xs }}>
-            <Body subtle style={{ fontSize: 12 }}>{f.label}</Body>
-            <View style={{ maxWidth: 200 }}>
-              <FieldValue field={f} record={record} currency={currency} />
-            </View>
-          </View>
-        ))}
-      </View>
-    </Pressable>
   );
 }
