@@ -16,6 +16,7 @@ import { formatDate, formatMoney, formatPercent, formatQuantity } from "@suite/s
 import { useSession } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { t } from "@suite/shared/i18n";
+import { DEFAULT_CURRENCY } from "@suite/shared/constants";
 
 type ReportInfo = {
   key: string;
@@ -74,7 +75,7 @@ const NUMERIC = ["money", "int", "percent", "quantity"];
 
 export default function ReportsPage() {
   const { data: session } = useSession();
-  const currency = session?.organization?.currency ?? "USD";
+  const currency = session?.organization?.currency ?? DEFAULT_CURRENCY;
 
   const [selected, setSelected] = React.useState<string | null>(null);
   // Default to the business's own financial year rather than a rolling twelve

@@ -1,13 +1,14 @@
 import * as React from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, Switch, View } from "react-native";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import DateTimePicker from "@react-native-community/datetimepicker";
 
 import { RefPicker } from "@/components/ref-picker";
 import { Body, Button, Input, Label, Picker } from "@/components/ui";
 import { ApiError } from "@/lib/api";
 import { useCreate, useUpdate, type Record_ } from "@/lib/queries";
-import { space, useTheme } from "@/lib/theme";
+import { radius, space, useTheme } from "@/lib/theme";
 import { optionsOf, type EntityMeta, type FieldDef } from "@suite/shared/meta";
-import { moneyToInput, percentToInput, qtyToInput } from "@suite/shared/format";
+import { formatDate, formatDateTime, moneyToInput, percentToInput, qtyToInput } from "@suite/shared/format";
 import { t } from "@suite/shared/i18n";
 
 /**
@@ -24,11 +25,18 @@ import { t } from "@suite/shared/i18n";
 export function RecordForm({
   meta,
   record,
+  fixed,
   onSaved,
   onCancel,
 }: {
   meta: EntityMeta;
   record?: Record_ | null;
+  /**
+   * Decided by where the form was opened rather than by the person filling it
+   * in — a line knows which document it belongs to. Seeded into the payload
+   * and not offered as a field, because there is nothing to choose.
+   */
+  fixed?: Record<string, unknown>;
   onSaved: (saved: Record_) => void;
   onCancel: () => void;
 }) {
@@ -39,7 +47,10 @@ export function RecordForm({
 
   // Totals, balances, stock levels and document numbers are the server's to
   // decide; it discards them on write, so asking for them would be a lie.
-  const editable = React.useMemo(() => meta.fields.filter((f) => !f.readonly), [meta.fields]);
+  const editable = React.useMemo(
+    () => meta.fields.filter((f) => !f.readonly && !(fixed && f.name in fixed)),
+    [meta.fields, fixed],
+  );
 
   const [values, setValues] = React.useState<Record<string, unknown>>(() => {
     const seed: Record<string, unknown> = {};
@@ -63,7 +74,7 @@ export function RecordForm({
 
     // Only what was actually filled in, so an untouched optional field falls
     // back to the column's default rather than being written as null.
-    const payload: Record<string, unknown> = {};
+    const payload: Record<string, unknown> = { ...fixed };
     for (const f of editable) {
       const v = values[f.name];
       if (editing) payload[f.name] = v;
@@ -220,17 +231,13 @@ function FieldInput({
         />
       );
 
-    // No date picker yet: the shape a date has to arrive in is the one the
-    // server reads, and typing it is honest about that until there is one.
     case "date":
+    case "date_time":
       return (
-        <Input
-          value={(value as string) ?? ""}
-          onChangeText={onChange}
-          placeholder="2026-09-16"
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType="numbers-and-punctuation"
+        <DateField
+          value={(value as string) ?? null}
+          onChange={onChange}
+          withTime={field.kind.type === "date_time"}
         />
       );
 
@@ -250,4 +257,97 @@ function numberText(field: FieldDef, value: unknown): string {
     case "quantity": return qtyToInput(n);
     default: return String(n);
   }
+}
+
+/**
+ * A date, chosen rather than typed.
+ *
+ * It was a text box wanting `2026-09-16`, which asks a person to know the
+ * server's format and to type it without a slip. The platform has a date
+ * picker and everyone already knows how to use it.
+ *
+ * A date-only field is built from the parts the wheel shows, not from
+ * `toISOString()`: the latter converts to UTC first, so an evening in
+ * Kathmandu is filed as the following morning — or the previous one, west of
+ * Greenwich. A moment in time is a different thing and does go as UTC, which
+ * is what a timestamp means.
+ */
+function DateField({
+  value,
+  onChange,
+  withTime,
+}: {
+  value: string | null;
+  onChange: (v: string) => void;
+  withTime: boolean;
+}) {
+  const c = useTheme();
+  const [open, setOpen] = React.useState(false);
+  const parsed = value ? new Date(value.length === 10 ? `${value}T00:00:00` : value) : null;
+  const shown = parsed && !Number.isNaN(parsed.getTime()) ? parsed : new Date();
+
+  const commit = (d: Date) => {
+    onChange(withTime ? d.toISOString() : localDate(d));
+    if (Platform.OS !== "ios") setOpen(false);
+  };
+
+  const picker = (
+    <DateTimePicker
+      value={shown}
+      mode={withTime ? "datetime" : "date"}
+      display={Platform.OS === "ios" ? "inline" : "default"}
+      onChange={(_, d) => {
+        if (d) commit(d);
+        else setOpen(false);
+      }}
+    />
+  );
+
+  return (
+    <>
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => setOpen(true)}
+        style={({ pressed }) => ({
+          minHeight: 48,
+          justifyContent: "center",
+          paddingHorizontal: space.md,
+          borderRadius: radius,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: c.border,
+          backgroundColor: pressed ? c.surfaceMuted : c.surface,
+        })}
+      >
+        <Text style={{ color: value ? c.foreground : c.subtleForeground, fontSize: 16 }}>
+          {value ? (withTime ? formatDateTime(value) : formatDate(value)) : t("record.select")}
+        </Text>
+      </Pressable>
+
+      {open && Platform.OS === "ios" ? (
+        <Modal visible animationType="slide" transparent onRequestClose={() => setOpen(false)}>
+          <Pressable style={{ flex: 1, backgroundColor: "#0006" }} onPress={() => setOpen(false)} />
+          <View
+            style={{
+              backgroundColor: c.surface,
+              borderTopLeftRadius: 18,
+              borderTopRightRadius: 18,
+              padding: space.lg,
+              gap: space.md,
+            }}
+          >
+            {picker}
+            <Button title={t("invite.done")} onPress={() => setOpen(false)} />
+          </View>
+        </Modal>
+      ) : null}
+
+      {open && Platform.OS !== "ios" ? picker : null}
+    </>
+  );
+}
+
+/** The day the wheel is showing, in the server's shape, without a timezone hop. */
+function localDate(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }

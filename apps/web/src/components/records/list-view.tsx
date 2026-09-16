@@ -27,6 +27,7 @@ import { entityPath, optionsOf, type EntityMeta, type FieldDef } from "@suite/sh
 import { useDelete, useList, useSession, type ListParams, type Record_ } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { plural, t } from "@suite/shared/i18n";
+import { DEFAULT_CURRENCY } from "@suite/shared/constants";
 
 const PER_PAGE = 25;
 
@@ -41,7 +42,7 @@ export function ListView({ meta, fixedFilters, embedded }: {
 }) {
   const router = useRouter();
   const { data: session } = useSession();
-  const currency = session?.organization?.currency ?? "USD";
+  const currency = session?.organization?.currency ?? DEFAULT_CURRENCY;
 
   // Seeded from the URL, because the app hands out links carrying these: the
   // palette's "see all N" link sets q, and the dashboard tiles link to a stage

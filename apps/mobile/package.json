@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@react-native-community/datetimepicker": "9.1.0",
     "@suite/shared": "workspace:*",
     "@tanstack/react-query": "5.102.8",
     "expo": "~57.0.23",

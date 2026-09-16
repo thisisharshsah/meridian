@@ -30,10 +30,13 @@ pub fn currency_field() -> FieldDef {
         "currency",
         "Currency",
         vec![
+            // Where the product is sold, first: nobody in Kathmandu should
+            // scroll past four currencies they will never use.
+            opt("NPR", "NPR — Nepalese Rupee", "neutral"),
+            opt("INR", "INR — Indian Rupee", "neutral"),
             opt("USD", "USD — US Dollar", "neutral"),
             opt("EUR", "EUR — Euro", "neutral"),
             opt("GBP", "GBP — British Pound", "neutral"),
-            opt("INR", "INR — Indian Rupee", "neutral"),
             opt("AUD", "AUD — Australian Dollar", "neutral"),
             opt("CAD", "CAD — Canadian Dollar", "neutral"),
             opt("SGD", "SGD — Singapore Dollar", "neutral"),

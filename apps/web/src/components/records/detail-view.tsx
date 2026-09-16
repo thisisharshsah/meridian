@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 import { LoadError } from "@/components/records/load-error";
 import { ApiError } from "@/lib/api";
 import { t } from "@suite/shared/i18n";
+import { DEFAULT_CURRENCY } from "@suite/shared/constants";
 
 /**
  * Record page: a header with the identifying fields, the full field list, the
@@ -33,7 +34,7 @@ import { t } from "@suite/shared/i18n";
 export function DetailView({ meta, id }: { meta: EntityMeta; id: string }) {
   const router = useRouter();
   const { data: session } = useSession();
-  const currency = session?.organization?.currency ?? "USD";
+  const currency = session?.organization?.currency ?? DEFAULT_CURRENCY;
 
   const { data: record, isLoading, isError, error, refetch } = useRecord(meta.key, id);
   const remove = useDelete(meta.key);

@@ -4,11 +4,13 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 
 import { RequireSession } from "@/components/guard";
 import { FieldValue } from "@/components/field-value";
+import { DocumentTotals, LineItems } from "@/components/line-items";
 import { Body, Button, Card, Loading, Problem, Title } from "@/components/ui";
 import { useDelete, useEntityMeta, useRecord, useSession } from "@/lib/queries";
 import { space, useTheme } from "@/lib/theme";
 import { entityKeyFrom, entityPath } from "@suite/shared/meta";
 import { t } from "@suite/shared/i18n";
+import { DEFAULT_CURRENCY } from "@suite/shared/constants";
 
 export default function Detail() {
   return (
@@ -34,14 +36,25 @@ function DetailScreen() {
   if (record.error) return <Problem error={record.error} onRetry={() => record.refetch()} />;
   if (!meta.data || !record.data) return null;
 
-  const currency = session.data?.organization?.currency ?? "USD";
+  const currency = session.data?.organization?.currency ?? DEFAULT_CURRENCY;
   const title = String(record.data[meta.data.title_field] ?? t("value.untitled"));
+  // One child can be declared inline: the lines that belong to this document
+  // rather than a related list that merely points at it.
+  const inline = meta.data.children.find((ch) => ch.inline);
 
   return (
     <>
       <Stack.Screen options={{ title: meta.data.label }} />
       <ScrollView contentContainerStyle={{ padding: space.lg, gap: space.lg }}>
         <Title>{title}</Title>
+
+        {/* A document's lines, where it has them: the thing an invoice is
+            actually billing for, above the fields that describe it. */}
+        {inline ? (
+          <LineItems parentId={id} child={inline} currency={currency} />
+        ) : null}
+
+        {inline ? <DocumentTotals meta={meta.data} record={record.data} currency={currency} /> : null}
 
         <Card>
           {meta.data.fields.map((f, i) => (

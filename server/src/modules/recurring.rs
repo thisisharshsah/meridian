@@ -15,6 +15,7 @@ use sqlx::{Row, SqlitePool};
 use crate::auth::ctx::{Action, Ctx};
 use crate::common::audit;
 use crate::engine::repo;
+use crate::common::DEFAULT_CURRENCY;
 use crate::error::{AppError, AppResult};
 use crate::modules::hooks;
 use crate::state::AppState;
@@ -249,7 +250,7 @@ async fn generate(
     body.insert("status".into(), json!("draft"));
     body.insert("invoice_date".into(), json!(billing_date));
     body.insert("due_date".into(), json!(due.to_string()));
-    body.insert("currency".into(), json!(text("currency").unwrap_or_else(|| "USD".into())));
+    body.insert("currency".into(), json!(text("currency").unwrap_or_else(|| DEFAULT_CURRENCY.into())));
     if let Some(o) = text("owner_id") {
         body.insert("owner_id".into(), json!(o));
     }

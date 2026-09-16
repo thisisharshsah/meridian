@@ -7,7 +7,7 @@ import { Body, Button, Input, Label, Picker, Title } from "@/components/ui";
 import { ApiError } from "@/lib/api";
 import { useSessionState } from "@/lib/session";
 import { space, useTheme } from "@/lib/theme";
-import { CURRENCIES } from "@suite/shared/constants";
+import { CURRENCIES, DEFAULT_CURRENCY } from "@suite/shared/constants";
 import { t } from "@suite/shared/i18n";
 
 export default function NewBusiness() {
@@ -28,7 +28,7 @@ function NewBusinessScreen() {
   const router = useRouter();
   const { createWorkspace } = useSessionState();
   const [name, setName] = React.useState("");
-  const [currency, setCurrency] = React.useState("USD");
+  const [currency, setCurrency] = React.useState(DEFAULT_CURRENCY);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 

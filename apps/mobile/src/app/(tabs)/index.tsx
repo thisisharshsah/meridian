@@ -12,6 +12,7 @@ import { radius, space, useTheme } from "@/lib/theme";
 import { entityPath } from "@suite/shared/meta";
 import { formatMoney, daysUntil } from "@suite/shared/format";
 import { plural, t } from "@suite/shared/i18n";
+import { DEFAULT_CURRENCY } from "@suite/shared/constants";
 
 export default function Home() {
   return (
@@ -51,7 +52,7 @@ function Dashboard() {
   const meta = useAppMeta();
 
   const organization = session.data?.organization;
-  const currency = organization?.currency ?? "USD";
+  const currency = organization?.currency ?? DEFAULT_CURRENCY;
   const today = new Date().toISOString().slice(0, 10);
 
   // A build or a business without a module has no figures from it, and asking

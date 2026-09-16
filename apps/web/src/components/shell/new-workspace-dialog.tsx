@@ -19,8 +19,8 @@ import { FieldRow, FormError } from "@/components/form/field";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { t } from "@suite/shared/i18n";
+import { CURRENCIES, DEFAULT_CURRENCY } from "@suite/shared/constants";
 
-const CURRENCIES = ["USD", "EUR", "GBP", "INR", "AUD", "CAD", "SGD", "AED", "JPY"];
 
 /**
  * Start a second business under the same login.
@@ -39,14 +39,14 @@ export function NewWorkspaceDialog({
   const router = useRouter();
   const qc = useQueryClient();
   const [name, setName] = React.useState("");
-  const [currency, setCurrency] = React.useState("USD");
+  const [currency, setCurrency] = React.useState(DEFAULT_CURRENCY);
   const [error, setError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
 
   React.useEffect(() => {
     if (open) {
       setName("");
-      setCurrency("USD");
+      setCurrency(DEFAULT_CURRENCY);
       setError(null);
     }
   }, [open]);
@@ -108,8 +108,8 @@ export function NewWorkspaceDialog({
                 </SelectTrigger>
                 <SelectContent>
                   {CURRENCIES.map((c) => (
-                    <SelectItem key={c} value={c}>
-                      {c}
+                    <SelectItem key={c.code} value={c.code}>
+                      {c.code} · {c.label}
                     </SelectItem>
                   ))}
                 </SelectContent>

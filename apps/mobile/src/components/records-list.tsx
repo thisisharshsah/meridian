@@ -10,6 +10,7 @@ import { useEntityMeta, useRecordList, useSession, type Record_ } from "@/lib/qu
 import { radius, space, useTheme } from "@/lib/theme";
 import { entityPath, type EntityMeta } from "@suite/shared/meta";
 import { plural, t } from "@suite/shared/i18n";
+import { DEFAULT_CURRENCY } from "@suite/shared/constants";
 
 /**
  * One entity's records, wherever they are shown.
@@ -48,7 +49,7 @@ function Records({ meta, initialSearch }: { meta: EntityMeta; initialSearch: str
 
   const list = useRecordList(meta.key, query, filters);
   const records = list.data?.pages.flatMap((p) => p.data) ?? [];
-  const currency = session.data?.organization?.currency ?? "USD";
+  const currency = session.data?.organization?.currency ?? DEFAULT_CURRENCY;
 
   // What a row says: the title field leads, then the next few list columns as
   // label-and-value pairs. The same choice the web makes on a narrow screen.

@@ -20,6 +20,7 @@ import { useAppMeta, useList, useSession, useStats } from "@/lib/queries";
 import { formatMoney, formatDate, daysUntil } from "@suite/shared/format";
 import { cn } from "@/lib/utils";
 import { plural, t } from "@suite/shared/i18n";
+import { DEFAULT_CURRENCY } from "@suite/shared/constants";
 
 /**
  * What to do first, per kind of business.
@@ -40,7 +41,7 @@ const SETUP_PLANS: Record<string, string[]> = {
 
 export default function DashboardPage() {
   const { data: session } = useSession();
-  const currency = session?.organization?.currency ?? "USD";
+  const currency = session?.organization?.currency ?? DEFAULT_CURRENCY;
   const today = new Date().toISOString().slice(0, 10);
 
   // The home page is the one screen everybody lands on, so it has to be about

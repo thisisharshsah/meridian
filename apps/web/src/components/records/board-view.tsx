@@ -21,6 +21,7 @@ import { useList, useSession, useUpdate, type Record_ } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { LoadError } from "@/components/records/load-error";
 import { t } from "@suite/shared/i18n";
+import { DEFAULT_CURRENCY } from "@suite/shared/constants";
 
 /**
  * Board view for any entity with a select field to group by — deals by stage,
@@ -30,7 +31,7 @@ import { t } from "@suite/shared/i18n";
  */
 export function BoardView({ meta, groupField }: { meta: EntityMeta; groupField: FieldDef }) {
   const { data: session } = useSession();
-  const currency = session?.organization?.currency ?? "USD";
+  const currency = session?.organization?.currency ?? DEFAULT_CURRENCY;
 
   // A board is only readable at a size a person can scan; beyond that the
   // table view is the honest tool, so say so rather than truncating silently.

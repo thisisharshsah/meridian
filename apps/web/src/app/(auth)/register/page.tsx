@@ -14,7 +14,7 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FieldRow, FormError } from "@/components/form/field";
 import { submitSession } from "@/lib/auth-client";
-import { CURRENCIES } from "@suite/shared/constants";
+import { CURRENCIES, DEFAULT_CURRENCY } from "@suite/shared/constants";
 import { t } from "@suite/shared/i18n";
 
 const schema = z.object({
@@ -36,7 +36,7 @@ export default function RegisterPage() {
 
   const form = useForm<Values>({
     resolver: zodResolver(schema),
-    defaultValues: { name: "", organization: "", email: "", password: "", currency: "USD" },
+    defaultValues: { name: "", organization: "", email: "", password: "", currency: DEFAULT_CURRENCY },
   });
 
   const onSubmit = form.handleSubmit(async (values) => {

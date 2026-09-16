@@ -14,6 +14,7 @@ use crate::auth::password::{
 };
 use crate::auth::roles::DEFAULT_ROLES;
 use crate::common::ids::new_id;
+use crate::common::DEFAULT_CURRENCY;
 use crate::error::{AppError, AppResult, FieldError};
 use crate::state::AppState;
 
@@ -134,7 +135,7 @@ async fn register(
     let ts = now();
 
     let user_id = new_id();
-    let currency = body.currency.clone().unwrap_or_else(|| "USD".into());
+    let currency = body.currency.clone().unwrap_or_else(|| DEFAULT_CURRENCY.into());
 
     sqlx::query(
         "INSERT INTO users (id, email, name, password_hash, created_at, updated_at)
@@ -384,7 +385,7 @@ async fn me(State(state): State<AppState>, ctx: UserCtx) -> AppResult<Json<serde
             "id": o.try_get::<String, _>("id").unwrap_or_default(),
             "name": o.try_get::<String, _>("name").unwrap_or_default(),
             "slug": o.try_get::<String, _>("slug").unwrap_or_default(),
-            "currency": o.try_get::<String, _>("currency").unwrap_or_else(|_| "USD".into()),
+            "currency": o.try_get::<String, _>("currency").unwrap_or_else(|_| DEFAULT_CURRENCY.into()),
             "timezone": o.try_get::<String, _>("timezone").unwrap_or_else(|_| "UTC".into()),
             // Carried on the session so every screen can bound a period by the
             // business's own year. It has been stored since the first migration
@@ -545,7 +546,7 @@ async fn create_workspace(
     }
 
     let ts = now();
-    let currency = body.currency.unwrap_or_else(|| "USD".into());
+    let currency = body.currency.unwrap_or_else(|| DEFAULT_CURRENCY.into());
     let mut tx = state.pool.begin().await?;
     let kind = body.business_type.as_deref().unwrap_or("general");
     let org_id =
@@ -673,7 +674,7 @@ async fn issue_session(
             "id": o.try_get::<String, _>("id").unwrap_or_default(),
             "name": o.try_get::<String, _>("name").unwrap_or_default(),
             "slug": o.try_get::<String, _>("slug").unwrap_or_default(),
-            "currency": o.try_get::<String, _>("currency").unwrap_or_else(|_| "USD".into()),
+            "currency": o.try_get::<String, _>("currency").unwrap_or_else(|_| DEFAULT_CURRENCY.into()),
         })).unwrap_or(Value::Null),
     })
 }

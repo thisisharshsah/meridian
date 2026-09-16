@@ -7,7 +7,7 @@ import { Body, Button, Choice, Input, Label, Picker } from "@/components/ui";
 import { ApiError } from "@/lib/api";
 import { useSessionState } from "@/lib/session";
 import { space, useTheme } from "@/lib/theme";
-import { CURRENCIES } from "@suite/shared/constants";
+import { CURRENCIES, DEFAULT_CURRENCY } from "@suite/shared/constants";
 import { t } from "@suite/shared/i18n";
 
 type Intent = "starting" | "invited";
@@ -28,7 +28,7 @@ export default function SignUp() {
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [organization, setOrganization] = React.useState("");
-  const [currency, setCurrency] = React.useState("USD");
+  const [currency, setCurrency] = React.useState(DEFAULT_CURRENCY);
   const [busy, setBusy] = React.useState(false);
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [formError, setFormError] = React.useState<string | null>(null);

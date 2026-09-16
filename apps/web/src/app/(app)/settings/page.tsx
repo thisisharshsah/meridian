@@ -21,7 +21,7 @@ import { RolesTab } from "@/components/settings/role-editor";
 import { BusinessShapeTab } from "@/components/settings/business-shape";
 import { IntegrationsTab } from "@/components/settings/integrations";
 import { ApiError, get, patch } from "@/lib/api";
-import { CURRENCIES } from "@suite/shared/constants";
+import { CURRENCIES, DEFAULT_CURRENCY } from "@suite/shared/constants";
 import { formatDate, relativeTime } from "@suite/shared/format";
 import { t } from "@suite/shared/i18n";
 
@@ -173,7 +173,7 @@ function OrganizationTab() {
                 hint={t("settings.currencyHint")}
               >
                 <Select
-                  value={form.currency ?? "USD"}
+                  value={form.currency ?? DEFAULT_CURRENCY}
                   onValueChange={(v) => setForm((s) => ({ ...s, currency: v }))}
                 >
                   <SelectTrigger id="org-currency" disabled={readOnly}>

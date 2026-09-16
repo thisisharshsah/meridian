@@ -17,6 +17,7 @@ use sqlx::Row;
 use crate::auth::ctx::{Action, Ctx};
 use crate::common::audit;
 use crate::engine::repo;
+use crate::common::DEFAULT_CURRENCY;
 use crate::error::{AppError, AppResult};
 use crate::modules::hooks;
 use crate::state::AppState;
@@ -424,7 +425,7 @@ async fn quote_to_order(
             ("quote_id", json!(id)),
             ("status", json!("open")),
             ("order_date", json!(today())),
-            ("currency", json!(text("currency").unwrap_or_else(|| "USD".into()))),
+            ("currency", json!(text("currency").unwrap_or_else(|| DEFAULT_CURRENCY.into()))),
             ("owner_id", text("owner_id").map(Value::from).unwrap_or(Value::Null)),
             ("notes", text("notes").map(Value::from).unwrap_or(Value::Null)),
         ]),
@@ -501,7 +502,7 @@ async fn order_to_invoice(
             ("status", json!("draft")),
             ("invoice_date", json!(today())),
             ("due_date", json!(due)),
-            ("currency", json!(text("currency").unwrap_or_else(|| "USD".into()))),
+            ("currency", json!(text("currency").unwrap_or_else(|| DEFAULT_CURRENCY.into()))),
             ("owner_id", text("owner_id").map(Value::from).unwrap_or(Value::Null)),
             ("terms", json!(format!("Net {terms}."))),
             ("notes", text("notes").map(Value::from).unwrap_or(Value::Null)),

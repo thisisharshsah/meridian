@@ -12,6 +12,7 @@ import { formatMoney, moneyToInput, MONEY_SCALE } from "@suite/shared/format";
 import { useList, useSession, useStats, type Record_ } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { t } from "@suite/shared/i18n";
+import { DEFAULT_CURRENCY } from "@suite/shared/constants";
 
 type Line = { itemId: string; name: string; unitMinor: number; qty: number };
 
@@ -32,7 +33,7 @@ const METHODS = [
  */
 export default function TillPage() {
   const { data: session } = useSession();
-  const currency = session?.organization?.currency ?? "USD";
+  const currency = session?.organization?.currency ?? DEFAULT_CURRENCY;
 
   const [term, setTerm] = React.useState("");
   const [debounced, setDebounced] = React.useState("");
