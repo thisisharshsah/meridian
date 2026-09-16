@@ -94,6 +94,24 @@ function MoreScreen() {
             <Icon name="ShoppingCart" size={16} color={c.brand} />
             <Body style={{ flex: 1 }}>{t("nav.till")}</Body>
           </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push("/settings")}
+            style={({ pressed }) => ({
+              flexDirection: "row",
+              alignItems: "center",
+              gap: space.md,
+              paddingHorizontal: space.lg,
+              minHeight: 52,
+              borderTopWidth: StyleSheet.hairlineWidth,
+              borderTopColor: c.border,
+              backgroundColor: pressed ? c.surfaceMuted : "transparent",
+            })}
+          >
+            <Icon name="Settings" size={16} color={c.brand} />
+            <Body style={{ flex: 1 }}>{t("nav.settings")}</Body>
+          </Pressable>
         </Card>
 
         {modules.map((m) => (
