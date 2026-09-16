@@ -98,6 +98,8 @@ const en: Messages = {
   "workspace.switchFailed": "Could not switch business. Nothing has changed — try again.",
   "workspace.current": "Current business",
   "workspace.create": "Start another business",
+  // The same row, said to someone who has none: "another" would be a lie.
+  "workspace.createFirst": "Start a business",
   "workspace.createLede": "You already have an account, so this only needs a name. Roles, numbering and ownership are set up for you.",
   "workspace.name": "Business name",
   "workspace.currency": "Currency",
