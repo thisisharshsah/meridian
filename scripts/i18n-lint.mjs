@@ -49,6 +49,11 @@ const PATTERNS = [
   // is read by everyone whose record has no name yet, and the catalogue has
   // carried `value.untitled` for it all along.
   { re: /(?:\|\||\?\?)\s*"([A-Z][^"\\\n]*)"/g, what: "fallback" },
+  // An English plural spelled by hand: `n === 1 ? "sale" : "sales"`. It is
+  // grammar rather than vocabulary, which is exactly what the catalogue's
+  // plural forms exist to carry — and it is invisible to every rule above,
+  // because neither half is capitalised or has a space in it.
+  { re: /\?\s*"([a-z]+)"\s*:\s*"\1(?:s|es)"/g, what: "inline plural" },
 ];
 
 /**

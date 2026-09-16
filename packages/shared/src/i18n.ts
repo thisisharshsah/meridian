@@ -501,6 +501,10 @@ const en: Messages = {
   "till.nothingFoundFor": "Nothing found for “{term}”",
   "till.oneLess": "One less {label}",
   "till.oneMore": "One more {label}",
+  "till.changeDue": "Change {amount}",
+  "till.saleCount.one": "{n} sale",
+  "till.saleCount.other": "{n} sales",
+  "till.takingsUnknown": "—",
   "chart.tooltip": "{label}: {value} · {count} · {share}% of total",
 
   // ---- fallbacks and small words ----

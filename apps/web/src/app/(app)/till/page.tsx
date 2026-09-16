@@ -11,7 +11,7 @@ import { post, patch } from "@/lib/api";
 import { formatMoney, moneyToInput, MONEY_SCALE } from "@suite/shared/format";
 import { useList, useSession, useStats, type Record_ } from "@/lib/queries";
 import { cn } from "@/lib/utils";
-import { t } from "@suite/shared/i18n";
+import { plural, t } from "@suite/shared/i18n";
 import { DEFAULT_CURRENCY } from "@suite/shared/constants";
 
 type Line = { itemId: string; name: string; unitMinor: number; qty: number };
@@ -46,10 +46,15 @@ export default function TillPage() {
 
   // What the drawer should hold. A shop counts up at close, and the figures
   // are already here -- there is no reason to make anyone add up receipts.
+  // Midnight where the shop is, as the instant the server stores.
+  //
+  // This was a bare `2026-09-16`, and `sold_at` is a timestamp: the engine
+  // refuses a date for one — "must be an RFC3339 timestamp" — so the request
+  // 400'd, the figure fell back to zero, and the till reported a day's takings
+  // of nothing. Loud on the wire, silent on the screen.
   const startOfToday = React.useMemo(() => {
     const d = new Date();
-    const pad = (n: number) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate()).toISOString();
   }, []);
   const takings = useStats("sales.counter_sales", {
     group_by: "payment_method",
@@ -215,11 +220,14 @@ export default function TillPage() {
           <span className="text-xs text-muted-foreground">
             {t("till.takenToday")}{" "}
             <span className="font-semibold tabular-nums text-foreground">
-              {formatMoney(takenToday, currency, { showZero: true })}
+              {/* A failed lookup is not a day with no takings in it. */}
+              {takings.isError
+                ? t("till.takingsUnknown")
+                : formatMoney(takenToday, currency, { showZero: true })}
             </span>
           </span>
           <span className="text-xs text-muted-foreground tabular-nums">
-            {salesToday} {salesToday === 1 ? "sale" : "sales"}
+            {plural("till.saleCount", salesToday)}
           </span>
         </div>
 
