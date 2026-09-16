@@ -197,3 +197,58 @@ export function useLookup(entity: string | undefined, search: string) {
     staleTime: 30_000,
   });
 }
+
+export type AuditEvent = {
+  id: string;
+  action: string;
+  summary: string | null;
+  created_at: string;
+  user_name: string | null;
+};
+
+/** What has happened to one record. The server keeps it; this only reads it. */
+export function useAuditTrail(entity: string | undefined, id: string | undefined) {
+  return useQuery({
+    queryKey: ["audit", entity, id],
+    queryFn: () => get<{ data: AuditEvent[] }>(`e/${entity}/${id}/audit`),
+    enabled: !!entity && !!id,
+  });
+}
+
+export type ApprovalRequest = {
+  id: string;
+  rule_name: string | null;
+  entity: string;
+  record_id: string;
+  record_title: string | null;
+  summary: string | null;
+  status: string;
+  requested_by_name: string | null;
+  decided_by_name: string | null;
+  decided_at: string | null;
+  comment: string | null;
+  created_at: string;
+};
+
+/** Decisions waiting on this person, what they asked for, and what is settled. */
+export function useApprovals(scope: "pending" | "mine" | "decided") {
+  return useQuery({
+    queryKey: ["approvals", scope],
+    queryFn: () => get<{ data: ApprovalRequest[] }>(`approvals${qs({ scope })}`),
+  });
+}
+
+export function useDecideApproval() {
+  const invalidate = useInvalidate();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, decision }: { id: string; decision: "approved" | "rejected" }) =>
+      post<{ ok: boolean }>(`approvals/${id}/decide`, { decision }),
+    onSuccess: () => {
+      // A decision writes a value back onto the record itself, so the record
+      // and anything counting it are both stale.
+      invalidate();
+      qc.invalidateQueries({ queryKey: ["approvals"] });
+    },
+  });
+}

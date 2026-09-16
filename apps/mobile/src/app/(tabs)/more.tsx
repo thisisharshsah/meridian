@@ -29,6 +29,7 @@ export default function More() {
  */
 function MoreScreen() {
   const c = useTheme();
+  const router = useRouter();
   const session = useSession();
   const meta = useAppMeta();
   const { signOut } = useSessionState();
@@ -40,6 +41,24 @@ function MoreScreen() {
       <ScrollView contentContainerStyle={{ padding: space.lg, gap: space.lg }}>
         {meta.isPending ? <Loading /> : null}
         {meta.error ? <Problem error={meta.error} onRetry={() => meta.refetch()} /> : null}
+
+        <Card>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push("/approvals")}
+            style={({ pressed }) => ({
+              flexDirection: "row",
+              alignItems: "center",
+              gap: space.md,
+              paddingHorizontal: space.lg,
+              minHeight: 52,
+              backgroundColor: pressed ? c.surfaceMuted : "transparent",
+            })}
+          >
+            <Icon name="CheckSquare" size={16} color={c.brand} />
+            <Body style={{ flex: 1 }}>{t("nav.approvals")}</Body>
+          </Pressable>
+        </Card>
 
         {modules.map((m) => (
           <ModuleSection key={m.key} module={m} />

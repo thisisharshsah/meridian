@@ -5,6 +5,8 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { RequireSession } from "@/components/guard";
 import { FieldValue } from "@/components/field-value";
 import { DocumentTotals, LineItems } from "@/components/line-items";
+import { RecordActions } from "@/components/record-actions";
+import { History, RelatedList } from "@/components/related";
 import { Body, Button, Card, Loading, Problem, Title } from "@/components/ui";
 import { useDelete, useEntityMeta, useRecord, useSession } from "@/lib/queries";
 import { space, useTheme } from "@/lib/theme";
@@ -41,6 +43,9 @@ function DetailScreen() {
   // One child can be declared inline: the lines that belong to this document
   // rather than a related list that merely points at it.
   const inline = meta.data.children.find((ch) => ch.inline);
+  // Everything else that points at this record: a customer's deals, an
+  // invoice's payments.
+  const related = meta.data.children.filter((ch) => !ch.inline);
 
   return (
     <>
@@ -73,6 +78,16 @@ function DetailScreen() {
             </View>
           ))}
         </Card>
+
+        {/* Moving the record along the chain — convert, invoice, issue —
+            above the ways to change or remove it. */}
+        <RecordActions meta={meta.data} record={record.data} onDone={() => record.refetch()} />
+
+        {related.map((ch) => (
+          <RelatedList key={ch.entity} child={ch} parentId={id} />
+        ))}
+
+        <History entity={key} id={id} />
 
         <Actions meta={meta.data} id={id} onGone={() => router.back()} />
 

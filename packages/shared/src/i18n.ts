@@ -419,6 +419,7 @@ const en: Messages = {
   "record.createInvoice": "Create invoice",
   "record.generateNow": "Generate now",
   "record.issueInvoice": "Issue invoice",
+  "record.acceptQuote": "Accept and create order",
   "record.alsoOpenDeal": "Also open a deal",
   "record.alsoOpenDealWhy": "Starts in Qualification so it shows on the pipeline board.",
   "record.cannotUndo": "This cannot be undone.",
@@ -461,6 +462,7 @@ const en: Messages = {
   "approvals.rejected": "Rejected",
   "approvals.decisionFailed": "Could not record that decision",
   "approvals.noneDecided": "Nothing decided yet",
+  "approvals.nothingWaiting": "Nothing waiting",
   "approvals.rulesNote": "Approval rules are configured under Settings.",
 
   // ---- built around a value ----
