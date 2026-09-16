@@ -15,6 +15,7 @@ import { SetupGuide, type SetupStep } from "@/components/dashboard/setup-guide";
 import { BusinessShapePrompt, useBusinessShape } from "@/components/settings/business-shape";
 import { ClockCard } from "@/components/dashboard/clock-card";
 import { ModuleLauncher } from "@/components/dashboard/module-launcher";
+import { WorkspaceSwitcher } from "@/components/shell/workspace-switcher";
 import { useAppMeta, useList, useSession, useStats } from "@/lib/queries";
 import { formatMoney, formatDate, daysUntil } from "@suite/shared/format";
 import { cn } from "@/lib/utils";
@@ -245,14 +246,16 @@ export default function DashboardPage() {
 
   return (
     <div className="p-5">
+      {/* The business's name is the heading, and the heading is the switcher:
+          this screen is about the business you are in, and choosing a
+          different one is a control on it rather than a screen in front of
+          it. */}
       <header className="mb-5">
-        <h1 className="text-xl font-semibold tracking-tight">
-          {greeting()}, {session?.user.name?.split(" ")[0] ?? "there"}
+        <h1>
+          <WorkspaceSwitcher session={session} variant="heading" />
         </h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          {t("dash.standsToday", undefined, {
-            name: session?.organization?.name ?? t("value.thisWorkspace"),
-          })}
+          {greeting()}, {session?.user.name?.split(" ")[0] ?? ""}
         </p>
       </header>
 
@@ -521,7 +524,7 @@ function stageTone(stage: string) {
 
 function greeting() {
   const h = new Date().getHours();
-  if (h < 12) return "Good morning";
-  if (h < 18) return "Good afternoon";
-  return "Good evening";
+  if (h < 12) return t("dash.morning");
+  if (h < 18) return t("dash.afternoon");
+  return t("dash.evening");
 }

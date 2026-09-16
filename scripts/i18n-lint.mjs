@@ -41,6 +41,10 @@ const PATTERNS = [
   { re: />\s*([A-Z][a-z]+(?:[ ,'’-][A-Za-z]+)*)\s+\{/g, what: "text" },
   { re: new RegExp(`\\b(?:${SPOKEN.join("|")})="([A-Z][^"]{2,})"`, "g"), what: "attribute" },
   { re: /toast\.(?:error|success|message|warning)\(\s*"([^"]+)"/g, what: "toast" },
+  // A sentence handed straight back: `return "Good morning";` reaches a screen
+  // as surely as one written into the JSX, and nothing before it looks like a
+  // call or an assignment for the rules above to catch.
+  { re: /\breturn\s+"([A-Z][^"\\\n]*)"/g, what: "returned" },
 ];
 
 /**

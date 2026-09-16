@@ -495,7 +495,9 @@ const en: Messages = {
   "mobile.offline": "No connection. Check your signal and try again.",
   "mobile.sessionUnreachable": "Could not reach your session. Try again in a moment.",
 
-  "dash.standsToday": "Here is where {name} stands today.",
+  "dash.morning": "Good morning",
+  "dash.afternoon": "Good afternoon",
+  "dash.evening": "Good evening",
   "dash.openDealCount.one": "{n} open deal",
   "dash.openDealCount.other": "{n} open deals",
   "dash.wonWhy": "Closed won, all time",

@@ -78,7 +78,13 @@ export function Topbar({ session, onSearch }: { session?: Session; onSearch: () 
 
   return (
     <header className="flex h-13 shrink-0 items-center gap-2 border-b border-border bg-surface px-3 sm:gap-3 sm:px-4">
-      <WorkspaceSwitcher session={session} />
+      {/* Hidden on a phone, where it had been squeezed to a single letter and
+          an arrow — and where the home screen's own title now does this job
+          properly. It stays on wider screens because inner pages have no
+          heading of their own to carry it. */}
+      <div className="hidden sm:contents">
+        <WorkspaceSwitcher session={session} />
+      </div>
       <span className="hidden h-5 w-px shrink-0 bg-border sm:block" aria-hidden="true" />
       <button
         type="button"

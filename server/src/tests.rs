@@ -3014,6 +3014,64 @@ async fn a_barcode_finds_the_item_the_way_a_scanner_would() {
     assert_eq!(by_sku["data"][0]["name"], json!("Tinned tomatoes"), "sku and barcode are different codes");
 }
 
+/// Signing in opens the business you were last in, not the oldest one you
+/// happen to belong to — the whole reason choosing is a control on the home
+/// screen now rather than a gate in front of it.
+#[tokio::test]
+async fn signing_in_again_opens_the_business_you_were_last_in() {
+    let (app, _state) = test_app().await;
+    let owner = new_org(&app, "gable").await;
+
+    let (_, second) = call(
+        &app,
+        send("POST", "/api/auth/workspaces", &owner, json!({ "organization": "Gable Rentals" })),
+    )
+    .await;
+    let second_org = second["organization"]["id"].as_str().unwrap().to_string();
+
+    // Two businesses, and the newer one is where they are working.
+    let sign_in = || {
+        anon("POST", "/api/auth/login", json!({
+            "email": "gable@example.test",
+            "password": "a-long-enough-password",
+        }))
+    };
+
+    let (status, landed) = call(&app, sign_in()).await;
+    assert!(status.is_success(), "sign in: {landed:?}");
+    assert_eq!(
+        landed["organization"]["id"].as_str(), Some(second_org.as_str()),
+        "the one just created is the one last opened, so it is the one to return to"
+    );
+
+    // Go back to the first, and that becomes the answer instead.
+    let (_, me) = call(&app, get("/api/auth/me", &owner)).await;
+    let first_org = me["organization"]["id"].as_str().unwrap().to_string();
+    let (_, _) = call(
+        &app,
+        send("POST", "/api/auth/switch", &owner, json!({ "organization_id": first_org })),
+    )
+    .await;
+
+    let (_, again) = call(&app, sign_in()).await;
+    assert_eq!(
+        again["organization"]["id"].as_str(), Some(first_org.as_str()),
+        "switching is what decides where the next sign-in lands"
+    );
+
+    // Asking for a particular one still wins over the memory.
+    let (_, asked) = call(
+        &app,
+        anon("POST", "/api/auth/login", json!({
+            "email": "gable@example.test",
+            "password": "a-long-enough-password",
+            "organization_id": second_org,
+        })),
+    )
+    .await;
+    assert_eq!(asked["organization"]["id"].as_str(), Some(second_org.as_str()));
+}
+
 #[tokio::test]
 async fn one_person_can_run_two_businesses_and_be_staff_in_both() {
     let (app, _state) = test_app().await;
@@ -3306,7 +3364,7 @@ async fn a_person_is_named_once_not_three_times() {
 }
 
 #[tokio::test]
-async fn signing_in_with_two_businesses_asks_which_one() {
+async fn signing_in_with_two_businesses_opens_the_one_you_were_in() {
     let (app, _state) = test_app().await;
     let owner = new_org(&app, "twoco").await;
 
@@ -3319,18 +3377,24 @@ async fn signing_in_with_two_businesses_asks_which_one() {
     )
     .await;
 
-    // Signing in without naming one must not guess. Landing in the oldest
-    // business is a decision the person did not make, and they may not notice
-    // which one they are looking at before they start entering data into it.
+    // This used to answer "none of them, pick one", on the grounds that
+    // landing in the oldest is a decision the person did not make. Correct
+    // about a guess, and it cost everyone with two businesses a screen every
+    // morning to avoid it. A memory is not a guess: the answer is the one they
+    // themselves last opened, and choosing another is a control on the home
+    // screen rather than a gate in front of it.
     let (status, login) = call(
         &app,
         send("POST", "/api/auth/login", "", json!({ "email": email, "password": "a-long-enough-password" })),
     )
     .await;
     assert!(status.is_success());
-    assert_eq!(login["organization"], Value::Null, "two businesses is a question, not a default");
+    assert_eq!(
+        login["organization"]["name"], json!("Second Co"),
+        "the business just opened is the one to return to"
+    );
 
-    // The picker has something to offer.
+    // And both are still there to choose between.
     let token = login["access_token"].as_str().unwrap().to_string();
     let (_, whoami) = call(&app, get("/api/auth/me", &token)).await;
     assert_eq!(whoami["organizations"].as_array().unwrap().len(), 2);

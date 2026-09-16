@@ -219,27 +219,28 @@ async fn login(
             }
             id.clone()
         }
-        // No organisation asked for, so the answer depends on how many they
-        // have. One: go straight in, because there is nothing to decide.
-        // Several: sign them in belonging to none of them yet and let them
-        // pick, rather than guessing the oldest and dropping them into a
-        // business they may not have meant to open. None: also a real state --
-        // an invited person may sign in before accepting.
+        // No organisation asked for, so open the one they were in last.
+        //
+        // This used to answer "none of them" for anyone with more than one, on
+        // the grounds that guessing the oldest would drop them somewhere they
+        // did not mean to be. True of a guess; not true of a memory. The
+        // membership records when it was last opened, so the answer is the
+        // business they themselves last chose, and choosing another is a
+        // control on the home screen rather than a gate in front of it.
+        //
+        // No membership at all is still a real state: an invited person may
+        // sign in before accepting.
         None => {
-            let mut mine = sqlx::query(
+            sqlx::query_scalar::<_, String>(
                 "SELECT org_id FROM memberships
                  WHERE user_id = ? AND status = 'active' AND deleted_at IS NULL
-                 ORDER BY created_at LIMIT 2",
+                 ORDER BY COALESCE(last_opened_at, created_at) DESC, created_at DESC
+                 LIMIT 1",
             )
             .bind(&user_id)
-            .fetch_all(&state.pool)
-            .await?;
-
-            if mine.len() == 1 {
-                mine.remove(0).try_get::<String, _>("org_id").unwrap_or_default()
-            } else {
-                String::new()
-            }
+            .fetch_optional(&state.pool)
+            .await?
+            .unwrap_or_default()
         }
     };
 
@@ -612,6 +613,26 @@ async fn issue_session(
         name,
         state.config.access_ttl_secs,
     )?;
+
+    // Opening a business is what makes it the one to open next time. Stamped
+    // here rather than in each caller, so signing in, switching, starting one
+    // and accepting an invitation all count, and none of them can forget to.
+    //
+    // Milliseconds, unlike everything else here, which keeps seconds: starting
+    // a business and landing in it are the same second, and at that resolution
+    // the ordering that decides where the next sign-in goes comes down to
+    // whichever row the database felt like returning.
+    if !org_id.is_empty() {
+        sqlx::query(
+            "UPDATE memberships SET last_opened_at = ?
+             WHERE user_id = ? AND org_id = ? AND deleted_at IS NULL",
+        )
+        .bind(Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true))
+        .bind(user_id)
+        .bind(org_id)
+        .execute(&state.pool)
+        .await?;
+    }
 
     let refresh_token = random_token();
     let expires_at = (Utc::now() + Duration::seconds(state.config.refresh_ttl_secs))
