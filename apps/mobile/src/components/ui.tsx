@@ -1,7 +1,9 @@
 import * as React from "react";
 import {
   ActivityIndicator,
+  Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -111,6 +113,122 @@ export function Input({ style, ...rest }: TextInputProps) {
         style,
       ]}
     />
+  );
+}
+
+/**
+ * Two ways in, side by side, each with a line saying what it means. The web
+ * asks the same question on its sign-up page: what someone is here to do
+ * decides what the form asks for next, so it is asked first rather than
+ * inferred from which fields they filled in.
+ */
+export function Choice<T extends string>({
+  value,
+  options,
+  onChange,
+}: {
+  value: T;
+  options: { value: T; label: string; hint: string }[];
+  onChange: (v: T) => void;
+}) {
+  const c = useTheme();
+  return (
+    <View style={{ flexDirection: "row", gap: space.sm }}>
+      {options.map((o) => {
+        const on = o.value === value;
+        return (
+          <Pressable
+            key={o.value}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: on }}
+            onPress={() => onChange(o.value)}
+            style={{
+              flex: 1,
+              minHeight: 64,
+              justifyContent: "center",
+              gap: 2,
+              padding: space.md,
+              borderRadius: radius,
+              borderWidth: on ? 2 : StyleSheet.hairlineWidth,
+              borderColor: on ? c.brand : c.border,
+              backgroundColor: on ? c.brandSubtle : c.surface,
+            }}
+          >
+            <Text style={{ color: on ? c.brandSubtleForeground : c.foreground, fontSize: 14, fontWeight: "600" }}>
+              {o.label}
+            </Text>
+            <Text style={{ color: on ? c.brandSubtleForeground : c.mutedForeground, fontSize: 12 }}>{o.hint}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+/**
+ * One of a list, chosen in a sheet. A phone has no room for a dropdown beside
+ * a field, and the OS picker is better at a long list than anything drawn here.
+ */
+export function Picker({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: { value: string; label: string }[];
+  onChange: (v: string) => void;
+}) {
+  const c = useTheme();
+  const [open, setOpen] = React.useState(false);
+  const chosen = options.find((o) => o.value === value);
+
+  return (
+    <>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        onPress={() => setOpen(true)}
+        style={{
+          minHeight: 48,
+          justifyContent: "center",
+          paddingHorizontal: space.md,
+          borderRadius: radius,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: c.border,
+          backgroundColor: c.surface,
+        }}
+      >
+        <Text style={{ color: c.foreground, fontSize: 16 }}>{chosen?.label ?? value}</Text>
+      </Pressable>
+
+      <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>
+        <Pressable style={{ flex: 1, backgroundColor: "#0006" }} onPress={() => setOpen(false)} />
+        <View style={{ maxHeight: "60%", backgroundColor: c.surface, borderTopLeftRadius: 16, borderTopRightRadius: 16 }}>
+          <ScrollView contentContainerStyle={{ paddingVertical: space.sm }}>
+            {options.map((o) => (
+              <Pressable
+                key={o.value}
+                accessibilityRole="button"
+                onPress={() => {
+                  onChange(o.value);
+                  setOpen(false);
+                }}
+                style={({ pressed }) => ({
+                  minHeight: 52,
+                  justifyContent: "center",
+                  paddingHorizontal: space.lg,
+                  backgroundColor: pressed ? c.surfaceMuted : "transparent",
+                })}
+              >
+                <Text style={{ color: o.value === value ? c.brand : c.foreground, fontSize: 16 }}>{o.label}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      </Modal>
+    </>
   );
 }
 

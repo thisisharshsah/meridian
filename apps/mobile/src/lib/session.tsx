@@ -2,8 +2,11 @@ import * as React from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import {
+  acceptPendingInvitation,
+  createWorkspaceRequest,
   loadStoredTokens,
   onSessionLost,
+  registerRequest,
   signInRequest,
   storeTokens,
   switchWorkspaceRequest,
@@ -14,8 +17,17 @@ type Status = "loading" | "signedOut" | "signedIn";
 type SessionState = {
   status: Status;
   signIn: (email: string, password: string) => Promise<void>;
+  signUp: (body: {
+    name: string;
+    email: string;
+    password: string;
+    organization?: string;
+    currency?: string;
+  }) => Promise<void>;
   signOut: () => Promise<void>;
   switchWorkspace: (organizationId: string) => Promise<void>;
+  createWorkspace: (organization: string, currency: string) => Promise<void>;
+  acceptInvitation: (id: string) => Promise<void>;
 };
 
 const Ctx = React.createContext<SessionState | null>(null);
@@ -59,6 +71,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         qc.clear();
         setStatus("signedIn");
       },
+      signUp: async (body) => {
+        await registerRequest(body);
+        qc.clear();
+        setStatus("signedIn");
+      },
       // Local only, deliberately: the API's logout revokes every refresh token
       // the person holds, which would sign them out of the browser on their
       // desk because they closed the app on their phone.
@@ -70,6 +87,19 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       switchWorkspace: async (organizationId) => {
         await switchWorkspaceRequest(organizationId);
         // Every cached answer belongs to the business being left.
+        qc.clear();
+      },
+      createWorkspace: async (organization, currency) => {
+        // The reply is already a session inside the new business, so there is
+        // nothing to switch to afterwards.
+        await createWorkspaceRequest(organization, currency);
+        qc.clear();
+      },
+      // Accepting says which business was joined; the session still belongs to
+      // whatever was open before, so it moves.
+      acceptInvitation: async (id) => {
+        const joined = await acceptPendingInvitation(id);
+        if (joined.organization_id) await switchWorkspaceRequest(joined.organization_id);
         qc.clear();
       },
     }),

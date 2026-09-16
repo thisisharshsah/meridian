@@ -207,3 +207,57 @@ export async function switchWorkspaceRequest(organizationId: string) {
   await storeTokens({ access: res.access_token, refresh: res.refresh_token });
   return res;
 }
+
+/**
+ * A new account. `organization` is what separates the two intents: with a name
+ * the person owns a business from this moment, without one they have an
+ * account and nothing else — which is the right state for someone about to
+ * accept an invitation.
+ */
+export async function registerRequest(body: {
+  name: string;
+  email: string;
+  password: string;
+  organization?: string;
+  currency?: string;
+}) {
+  const res = await post<AuthResponse>("auth/register", {
+    ...body,
+    email: body.email.trim(),
+    name: body.name.trim(),
+  });
+  await storeTokens({ access: res.access_token, refresh: res.refresh_token });
+  return res;
+}
+
+/** Another business under the same login. The reply is a session inside it. */
+export async function createWorkspaceRequest(organization: string, currency: string) {
+  const res = await post<AuthResponse>("auth/workspaces", { organization, currency });
+  await storeTokens({ access: res.access_token, refresh: res.refresh_token });
+  return res;
+}
+
+export type InvitePreview = {
+  email: string;
+  organization: string;
+  role_name: string;
+  /** Whether the address already has an account, which decides what to ask for. */
+  has_account: boolean;
+};
+
+/** What the link reveals before anyone authenticates: no session needed. */
+export const previewInvitation = (token: string) =>
+  get<InvitePreview>(`invitations/${encodeURIComponent(token)}`);
+
+/**
+ * Accepting turns the link into a membership; it does not sign anyone in, so
+ * the caller signs in afterwards with the same credentials. For an address that
+ * already has an account the password must be that account's — an invitation
+ * admits someone to a business, it is not a way to take over their login.
+ */
+export const acceptInvitation = (token: string, body: { name?: string; password: string }) =>
+  post<{ organization_id?: string }>(`invitations/${encodeURIComponent(token)}/accept`, body);
+
+/** Invitations already waiting for the signed-in address. */
+export const acceptPendingInvitation = (id: string) =>
+  post<{ organization_id: string }>(`my-invitations/${encodeURIComponent(id)}/accept`, {});

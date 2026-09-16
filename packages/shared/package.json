@@ -4,6 +4,7 @@
   "private": true,
   "description": "Plain TypeScript both clients import: API metadata types, number and date formatting, the word catalogue",
   "exports": {
+    "./constants": "./src/constants.ts",
     "./meta": "./src/meta.ts",
     "./format": "./src/format.ts",
     "./i18n": "./src/i18n.ts"

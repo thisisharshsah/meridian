@@ -4,7 +4,7 @@ import { Stack, useRouter } from "expo-router";
 
 import { RequireSession } from "@/components/guard";
 import { Body, Button, Card, Empty, Loading, Problem, Title } from "@/components/ui";
-import { useSession } from "@/lib/queries";
+import { usePendingInvitations, useSession } from "@/lib/queries";
 import { useSessionState } from "@/lib/session";
 import { radius, space, useTheme } from "@/lib/theme";
 import { t } from "@suite/shared/i18n";
@@ -21,7 +21,8 @@ function WorkspacesScreen() {
   const c = useTheme();
   const router = useRouter();
   const session = useSession();
-  const { switchWorkspace, signOut } = useSessionState();
+  const invitations = usePendingInvitations();
+  const { switchWorkspace, acceptInvitation, signOut } = useSessionState();
   const [busy, setBusy] = React.useState<string | null>(null);
   const [error, setError] = React.useState<unknown>(null);
 
@@ -38,11 +39,25 @@ function WorkspacesScreen() {
     }
   };
 
+  const join = async (id: string) => {
+    if (busy) return;
+    setBusy(id);
+    setError(null);
+    try {
+      await acceptInvitation(id);
+      router.replace("/");
+    } catch (e) {
+      setError(e);
+      setBusy(null);
+    }
+  };
+
   if (session.isPending) return <Loading />;
   if (session.error) return <Problem error={session.error} onRetry={() => session.refetch()} />;
 
   const mine = session.data?.organizations ?? [];
   const current = session.data?.organization?.id;
+  const waiting = invitations.data?.data ?? [];
 
   return (
     <>
@@ -80,8 +95,34 @@ function WorkspacesScreen() {
           </Card>
         )}
 
+        {waiting.length ? (
+          <View style={{ gap: space.sm }}>
+            <Title>{t("choose.invited")}</Title>
+            <Card>
+              {waiting.map((inv, i) => (
+                <View
+                  key={inv.id}
+                  style={{
+                    padding: space.lg,
+                    gap: space.sm,
+                    borderTopWidth: i === 0 ? 0 : StyleSheet.hairlineWidth,
+                    borderTopColor: c.border,
+                  }}
+                >
+                  <Body style={{ fontWeight: "600" }}>{inv.organization}</Body>
+                  <Body muted style={{ fontSize: 13 }}>
+                    {t("auth.invitedAs", undefined, { role: inv.role_name })}
+                  </Body>
+                  <Button title={t("choose.accept")} onPress={() => void join(inv.id)} busy={busy === inv.id} />
+                </View>
+              ))}
+            </Card>
+          </View>
+        ) : null}
+
         {error ? <Problem error={error} /> : null}
 
+        <Button title={t("workspace.create")} variant="quiet" onPress={() => router.push("/new-business")} />
         <Button title={t("action.signOut")} variant="quiet" onPress={() => void signOut()} />
       </ScrollView>
     </>

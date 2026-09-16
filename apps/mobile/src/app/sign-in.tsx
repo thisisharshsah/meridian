@@ -1,5 +1,5 @@
 import * as React from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from "react-native";
 import { Redirect, useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 
@@ -97,6 +97,26 @@ export default function SignIn() {
         {error ? <Body style={{ color: c.dangerStrong }}>{error}</Body> : null}
 
         <Button title={t("auth.signIn")} onPress={submit} busy={busy} disabled={!email || !password} />
+
+        <View style={{ gap: space.xs, alignItems: "center" }}>
+          <Body muted style={{ fontSize: 13 }}>{t("auth.firstTime")}</Body>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push("/sign-up")}
+            style={{ minHeight: 44, justifyContent: "center" }}
+          >
+            <Body style={{ color: c.brand }}>{t("auth.createAccount")}</Body>
+          </Pressable>
+          {/* Someone handed a link rather than an account: the way in that
+              needs no password of their own yet. */}
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push("/invite")}
+            style={{ minHeight: 44, justifyContent: "center" }}
+          >
+            <Body style={{ color: c.brand }}>{t("mobile.openInvite")}</Body>
+          </Pressable>
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
