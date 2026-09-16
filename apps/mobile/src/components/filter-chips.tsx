@@ -43,7 +43,17 @@ export function FilterChips({
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: space.md, gap: space.xs, paddingBottom: space.xs }}
+        // A horizontal ScrollView stretches its children to its own height and
+        // takes whatever vertical space the column has spare — which turned
+        // three chips into three pills half a screen tall. It is as tall as a
+        // chip, and the chips sit in the middle of it.
+        style={{ flexGrow: 0, flexShrink: 0 }}
+        contentContainerStyle={{
+          alignItems: "center",
+          paddingHorizontal: space.md,
+          gap: space.xs,
+          paddingBottom: space.xs,
+        }}
       >
         {selects.map((f) => {
           const picked = value[f.name];

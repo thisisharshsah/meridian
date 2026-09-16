@@ -83,6 +83,7 @@ function Records({ meta, initialSearch }: { meta: EntityMeta; initialSearch: str
       {list.error ? <Problem error={list.error} onRetry={() => list.refetch()} /> : null}
 
       <FlatList
+        style={{ flex: 1 }}
         data={records}
         keyExtractor={(r) => r.id}
         onRefresh={() => list.refetch()}
