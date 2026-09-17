@@ -2,6 +2,7 @@ import * as React from "react";
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 
+import { ChipSelect, SuggestChips } from "@/components/field-chips";
 import { RefPicker } from "@/components/ref-picker";
 import { Body, Button, Input, Label, Picker } from "@/components/ui";
 import { ApiError } from "@/lib/api";
@@ -54,7 +55,20 @@ export function RecordForm({
 
   const [values, setValues] = React.useState<Record<string, unknown>>(() => {
     const seed: Record<string, unknown> = {};
-    for (const f of editable) seed[f.name] = record ? (record[f.name] ?? null) : (f.default ?? null);
+    for (const f of editable) {
+      if (record) {
+        seed[f.name] = record[f.name] ?? null;
+        continue;
+      }
+      // The column's own default first — it is what the server would have
+      // written anyway. Failing that, a required choice starts on its first
+      // option rather than on nothing: a new deal is at the first stage and a
+      // new invoice is a draft, and making somebody tap to say so is asking a
+      // question whose answer is already known.
+      const fallback =
+        f.required && f.kind.type === "select" ? (optionsOf(f)[0]?.value ?? null) : null;
+      seed[f.name] = f.default ?? fallback;
+    }
     return seed;
   });
   const [errors, setErrors] = React.useState<Record<string, string>>({});
@@ -102,7 +116,12 @@ export function RecordForm({
               {f.label}
               {f.required ? " *" : ""}
             </Label>
-            <FieldInput field={f} value={values[f.name]} onChange={(v) => setValue(f.name, v)} />
+            <FieldInput
+              field={f}
+              entity={meta.key}
+              value={values[f.name]}
+              onChange={(v) => setValue(f.name, v)}
+            />
             {f.help ? <Body subtle style={{ fontSize: 12 }}>{f.help}</Body> : null}
             {errors[f.name] ? (
               <Body style={{ color: c.dangerStrong, fontSize: 13 }}>{errors[f.name]}</Body>
@@ -124,6 +143,14 @@ export function RecordForm({
 }
 
 /**
+ * The line past which a list of options stops being chips.
+ *
+ * Seven, as on the web: thirty-three of the schema's thirty-five selects have
+ * five or fewer, and past seven the chips wrap into a block nobody can read.
+ */
+const CHIP_LIMIT = 7;
+
+/**
  * One field, as the control its kind deserves.
  *
  * Money, quantities and percentages are scaled integers on the wire and typed
@@ -134,10 +161,12 @@ export function RecordForm({
  */
 function FieldInput({
   field,
+  entity,
   value,
   onChange,
 }: {
   field: FieldDef;
+  entity: string;
   value: unknown;
   onChange: (v: unknown) => void;
 }) {
@@ -158,6 +187,16 @@ function FieldInput({
 
     case "select": {
       const options = optionsOf(field);
+      if (options.length <= CHIP_LIMIT) {
+        return (
+          <ChipSelect
+            options={options}
+            value={(value as string) ?? null}
+            onChange={onChange}
+            clearable={!field.required}
+          />
+        );
+      }
       return (
         <Picker
           label={field.label}
@@ -242,6 +281,19 @@ function FieldInput({
       );
 
     default:
+      if (field.suggest && entity) {
+        return (
+          <View style={{ gap: space.sm }}>
+            <Input value={(value as string) ?? ""} onChangeText={onChange} />
+            <SuggestChips
+              entity={entity}
+              field={field.name}
+              value={(value as string) ?? ""}
+              onChange={onChange}
+            />
+          </View>
+        );
+      }
       return <Input value={(value as string) ?? ""} onChangeText={onChange} />;
   }
 }

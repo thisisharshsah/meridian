@@ -394,6 +394,7 @@ const en: Messages = {
   "record.deleteFailed": "Could not delete this record",
   "record.backHome": "Back to home",
   "record.select": "Select…",
+  "record.inUse": "Already in use",
   "record.searchPlaceholder": "Search…",
   "record.searching": "Searching…",
   "record.all": "All",

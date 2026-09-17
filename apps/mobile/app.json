@@ -8,11 +8,13 @@
     "scheme": "aurovie-business",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.aurovie.business"
     },
     "android": {
+      "package": "com.aurovie.business",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#2068cb",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -22,7 +24,16 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 160,
+          "backgroundColor": "#e7f1ff",
+          "dark": { "backgroundColor": "#213654" }
+        }
+      ]
     ]
   }
 }
