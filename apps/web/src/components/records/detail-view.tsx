@@ -136,7 +136,10 @@ export function DetailView({ meta, id }: { meta: EntityMeta; id: string }) {
           )}
         </div>
 
-        <div className="flex gap-2">
+        {/* `w-full` below `sm` forces these onto their own row. Without it the
+            title block, being `flex-1`, shrank to make room and an invoice
+            number rendered as "I…" underneath the buttons. */}
+        <div className="order-last flex w-full flex-wrap gap-2 sm:order-none sm:w-auto">
           <RecordActions meta={meta} record={record} currency={currency} />
           {meta.permissions.edit && (
             <Button variant="secondary" onClick={() => setEditing(true)}>

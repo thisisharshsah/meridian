@@ -112,6 +112,10 @@ export function LineItems({
             }
           />
         ) : (
+          // Wider than a phone by nature — item, description, quantity, price,
+          // amount — so it scrolls sideways rather than squeezing every column
+          // into something unreadable.
+          <div className="overflow-x-auto">
           <Table>
             <THead>
               <TR className="hover:bg-transparent">
@@ -172,6 +176,7 @@ export function LineItems({
               ))}
             </TBody>
           </Table>
+          </div>
         )}
       </CardContent>
     </Card>

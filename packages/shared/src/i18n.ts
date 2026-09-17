@@ -387,6 +387,7 @@ const en: Messages = {
 
   // ---- records ----
   "record.details": "Details",
+  "record.related": "Related",
   "record.history": "History",
   "record.totals": "Totals",
   "record.gone": "It may have been deleted, or you may not have access to it.",

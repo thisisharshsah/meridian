@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Alert, ScrollView, StyleSheet, View } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 
 import { RequireSession } from "@/components/guard";
@@ -47,60 +47,124 @@ function DetailScreen() {
   // invoice's payments.
   const related = meta.data.children.filter((ch) => !ch.inline);
 
+  // Sections, not a scroll. A document carries its fields, its lines, what
+  // points at it and what has happened to it; stacked they are several screens
+  // of scrolling to reach the history. Tabs are what the web uses for the
+  // related lists, and the same idea covers all four.
+  const sections = [
+    { key: "details", label: t("record.details") },
+    ...(inline ? [{ key: "lines", label: inline.label }] : []),
+    ...(related.length ? [{ key: "related", label: t("record.related") }] : []),
+    { key: "history", label: t("record.history") },
+  ];
+  const [section, setSection] = React.useState("details");
+  const showing = sections.some((x) => x.key === section) ? section : "details";
+
   return (
     <>
       <Stack.Screen options={{ title: meta.data.label }} />
-      <ScrollView contentContainerStyle={{ padding: space.lg, gap: space.lg }}>
-        <Title>{title}</Title>
+      <View style={{ flex: 1 }}>
+        <View style={{ paddingHorizontal: space.lg, paddingTop: space.lg, gap: space.sm }}>
+          <Title>{title}</Title>
 
-        {/* A document's lines, where it has them: the thing an invoice is
-            actually billing for, above the fields that describe it. */}
-        {inline ? (
-          <LineItems parentId={id} child={inline} currency={currency} />
+          {/* What identifies this record at a glance, before any tab. */}
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.md }}>
+            {meta.data.fields
+              .filter((f) => ["status", "stage", "total", "balance_due", "amount"].includes(f.name))
+              .slice(0, 3)
+              .map((f) => (
+                <View key={f.name} style={{ flexDirection: "row", alignItems: "center", gap: space.xs }}>
+                  <Body subtle style={{ fontSize: 12 }}>{f.label}</Body>
+                  <FieldValue field={f} record={record.data!} currency={currency} strong />
+                </View>
+              ))}
+          </View>
+
+          <RecordActions meta={meta.data} record={record.data} onDone={() => record.refetch()} />
+        </View>
+
+        {sections.length > 1 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={{ flexGrow: 0, flexShrink: 0, marginTop: space.md }}
+            contentContainerStyle={{ alignItems: "center", gap: space.xs, paddingHorizontal: space.md }}
+          >
+            {sections.map((x) => {
+              const on = x.key === showing;
+              return (
+                <Pressable
+                  key={x.key}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: on }}
+                  onPress={() => setSection(x.key)}
+                  style={({ pressed }) => ({
+                    minHeight: 40,
+                    justifyContent: "center",
+                    paddingHorizontal: space.sm,
+                    borderBottomWidth: 2,
+                    borderBottomColor: on ? c.brand : "transparent",
+                    opacity: pressed ? 0.6 : 1,
+                  })}
+                >
+                  <Body style={{ fontSize: 14, fontWeight: on ? "700" : "500", color: on ? c.brand : c.mutedForeground }}>
+                    {x.label}
+                  </Body>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
         ) : null}
 
-        {inline ? <DocumentTotals meta={meta.data} record={record.data} currency={currency} /> : null}
+        <ScrollView contentContainerStyle={{ padding: space.lg, gap: space.lg }}>
+          {showing === "details" ? (
+            <>
+              <Card>
+                {meta.data.fields.map((f, i) => (
+                  <View
+                    key={f.name}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "flex-start",
+                      gap: space.md,
+                      paddingHorizontal: space.lg,
+                      paddingVertical: space.md,
+                      borderTopWidth: i === 0 ? 0 : StyleSheet.hairlineWidth,
+                      borderTopColor: c.border,
+                    }}
+                  >
+                    <Body subtle style={{ fontSize: 12, width: 110 }}>{f.label}</Body>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <FieldValue field={f} record={record.data!} currency={currency} />
+                    </View>
+                  </View>
+                ))}
+              </Card>
 
-        <Card>
-          {meta.data.fields.map((f, i) => (
-            <View
-              key={f.name}
-              style={{
-                paddingHorizontal: space.lg,
-                paddingVertical: space.md,
-                gap: space.xs,
-                borderTopWidth: i === 0 ? 0 : StyleSheet.hairlineWidth,
-                borderTopColor: c.border,
-              }}
-            >
-              <Body subtle style={{ fontSize: 12 }}>{f.label}</Body>
-              <FieldValue field={f} record={record.data} currency={currency} />
-            </View>
-          ))}
-        </Card>
+              <Actions meta={meta.data} id={id} onGone={() => router.back()} />
+            </>
+          ) : null}
 
-        {/* Moving the record along the chain — convert, invoice, issue —
-            above the ways to change or remove it. */}
-        <RecordActions meta={meta.data} record={record.data} onDone={() => record.refetch()} />
+          {showing === "lines" && inline ? (
+            <>
+              <LineItems parentId={id} child={inline} currency={currency} />
+              <DocumentTotals meta={meta.data} record={record.data} currency={currency} />
+            </>
+          ) : null}
 
-        {related.map((ch) => (
-          <RelatedList key={ch.entity} child={ch} parentId={id} />
-        ))}
+          {showing === "related"
+            ? related.map((ch) => <RelatedList key={ch.entity} child={ch} parentId={id} />)
+            : null}
 
-        <History entity={key} id={id} />
+          {showing === "history" ? <History entity={key} id={id} /> : null}
 
-        <Actions meta={meta.data} id={id} onGone={() => router.back()} />
-
-        <View style={{ height: space.xl }} />
-      </ScrollView>
+          <View style={{ height: space.xl }} />
+        </ScrollView>
+      </View>
     </>
   );
 }
 
-/**
- * What can be done to this record, as the metadata says — a role without
- * permission is not shown a button that would answer 403.
- */
 function Actions({
   meta,
   id,
