@@ -468,6 +468,8 @@ const en: Messages = {
   "settings.onTheWeb": "Roles, automations and integrations are on the web",
   "settings.onTheWebWhy": "A permission matrix squeezed onto a phone is how a role ends up granting something nobody meant to grant. Open the workspace in a browser for those.",
   "invite.expires": "Expires {date}",
+  "board.emptyStage": "Nothing at this stage",
+  "board.emptyStageWhy": "Records move here as their stage changes.",
   "reports.none": "No reports for this business",
   "reports.noRows": "Nothing to report",
   "reports.noRowsWhy": "There are no records in this period yet.",

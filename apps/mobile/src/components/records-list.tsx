@@ -1,9 +1,10 @@
 import * as React from "react";
 import { FlatList, Pressable, StyleSheet, View } from "react-native";
 import { useRouter } from "expo-router";
-import { Plus } from "lucide-react-native";
+import { Columns3, Plus, Rows3 } from "lucide-react-native";
 
 import { FieldValue } from "@/components/field-value";
+import { BoardView, boardFieldFor } from "@/components/board-view";
 import { FilterChips } from "@/components/filter-chips";
 import { Body, Empty, Input, Loading, Problem } from "@/components/ui";
 import { useEntityMeta, useRecordList, useSession, type Record_ } from "@/lib/queries";
@@ -34,6 +35,10 @@ export function RecordsList({ entityKey, initialSearch = "" }: { entityKey: stri
 function Records({ meta, initialSearch }: { meta: EntityMeta; initialSearch: string }) {
   const c = useTheme();
   const router = useRouter();
+  // An entity with a stage can be looked at as a board; one without cannot,
+  // and is not offered the choice.
+  const boardField = React.useMemo(() => boardFieldFor(meta), [meta]);
+  const [view, setView] = React.useState<"list" | "board">("list");
   const session = useSession();
   const [search, setSearch] = React.useState(initialSearch);
   const [query, setQuery] = React.useState(initialSearch);
@@ -59,7 +64,44 @@ function Records({ meta, initialSearch }: { meta: EntityMeta; initialSearch: str
 
   return (
     <View style={{ flex: 1 }}>
-      {meta.fields.some((f) => f.searchable) ? (
+      {boardField ? (
+        <View style={{ flexDirection: "row", gap: space.xs, paddingHorizontal: space.md, paddingTop: space.md }}>
+          {([
+            ["list", Rows3, t("action.viewTable")],
+            ["board", Columns3, t("action.viewBoard")],
+          ] as const).map(([key, Glyph, label]) => {
+            const on = key === view;
+            return (
+              <Pressable
+                key={key}
+                accessibilityRole="button"
+                accessibilityState={{ selected: on }}
+                onPress={() => setView(key)}
+                style={({ pressed }) => ({
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: space.xs,
+                  minHeight: 32,
+                  paddingHorizontal: space.md,
+                  borderRadius: 999,
+                  borderWidth: StyleSheet.hairlineWidth,
+                  borderColor: on ? c.brand : c.border,
+                  backgroundColor: pressed ? c.surfaceMuted : on ? c.brandSubtle : c.surface,
+                })}
+              >
+                <Glyph size={13} color={on ? c.brandSubtleForeground : c.mutedForeground} />
+                <Body style={{ fontSize: 12, fontWeight: on ? "700" : "500", color: on ? c.brandSubtleForeground : c.mutedForeground }}>
+                  {label}
+                </Body>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
+
+      {view === "board" && boardField ? <BoardView meta={meta} groupField={boardField} /> : null}
+
+      {view === "board" ? null : meta.fields.some((f) => f.searchable) ? (
         <View style={{ padding: space.md }}>
           <Input
             value={search}
@@ -73,18 +115,19 @@ function Records({ meta, initialSearch }: { meta: EntityMeta; initialSearch: str
         </View>
       ) : null}
 
-      <FilterChips fields={meta.fields} value={filters} onChange={setFilters} />
+      {view === "board" ? null : <FilterChips fields={meta.fields} value={filters} onChange={setFilters} />}
 
       {/* How many there are, which a list that pages as you scroll cannot
           otherwise say. */}
-      {list.data ? (
+      {view === "board" ? null : list.data ? (
         <Body muted style={{ fontSize: 12, paddingHorizontal: space.lg, paddingBottom: space.sm }}>
           {plural("record.countRecords", list.data.pages[0]?.total ?? 0)}
         </Body>
       ) : null}
 
-      {list.error ? <Problem error={list.error} onRetry={() => list.refetch()} /> : null}
+      {view === "board" ? null : list.error ? <Problem error={list.error} onRetry={() => list.refetch()} /> : null}
 
+      {view === "board" ? null : (
       <FlatList
         style={{ flex: 1 }}
         data={records}
@@ -117,6 +160,7 @@ function Records({ meta, initialSearch }: { meta: EntityMeta; initialSearch: str
           />
         )}
       />
+      )}
 
       {/* Reachable with the thumb that is already holding the phone, and only
           where the person may actually create one. */}

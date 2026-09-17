@@ -5,6 +5,7 @@ import { useRouter } from "expo-router";
 import { AuthShell } from "@/components/auth-shell";
 import { BusinessList } from "@/components/business-list";
 import { RequireSession } from "@/components/guard";
+import { SetupGuide, StageBars } from "@/components/setup-guide";
 import { Body, Card, Empty, Label, Loading, Problem, Title } from "@/components/ui";
 import { useAppMeta, useSession, useShortList, useStats, type Record_ } from "@/lib/queries";
 import { useSessionState } from "@/lib/session";
@@ -90,6 +91,10 @@ function Dashboard() {
 
         {meta.isPending ? <Loading /> : null}
 
+        {/* A new business is all zeroes, and a grid of zeroes says nothing
+            about what to do next. This goes away once it is all done. */}
+        <SetupGuide modules={(meta.data?.modules ?? []).map((m) => m.key)} />
+
         <View style={{ flexDirection: "row", gap: space.md }}>
           {bills ? (
             <Figure
@@ -126,6 +131,10 @@ function Dashboard() {
               )}
             </Card>
           </View>
+        ) : null}
+
+        {sells ? (
+          <StageBars entity="crm.deals" groupBy="stage" title={t("dash.pipelineByStage")} />
         ) : null}
 
         <View style={{ height: space.xl }} />
